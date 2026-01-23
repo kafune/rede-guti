@@ -260,8 +260,8 @@ const App: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen md:pl-24 transition-colors duration-500 pb-24 md:pb-0 ${
-        isMapView ? 'md:overflow-hidden' : ''
+      className={`min-h-screen md:pl-24 transition-colors duration-500 ${
+        isMapView ? 'pb-0' : 'pb-24 md:pb-0'
       }`}
     >
       {/* Header */}
@@ -281,7 +281,7 @@ const App: React.FC = () => {
       <main
         className={`w-full mx-auto ${mainWidthClass} ${
           isMapView
-            ? 'pt-24 pb-24 md:pb-4 min-h-[calc(100vh-6rem)] overflow-y-auto md:overflow-hidden md:h-[calc(100vh-6rem)]'
+            ? 'mt-20 h-[calc(100vh-10rem)] md:h-[calc(100vh-5rem)] overflow-hidden'
             : 'p-6 pt-28'
         }`}
       >

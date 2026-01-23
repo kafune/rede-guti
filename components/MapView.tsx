@@ -117,7 +117,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
   const hasSelection = Boolean(selectedMunicipality);
 
   return (
-    <div className="min-h-0 flex flex-col gap-6 animate-fade-up">
+    <div className="h-full min-h-0 flex flex-col gap-4 animate-fade-up">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">Visualização do Estado</p>
@@ -145,15 +145,15 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
       </div>
 
       <div
-        className={`grid grid-cols-1 gap-6 flex-1 min-h-0 ${
+        className={`grid grid-cols-1 gap-4 flex-1 min-h-0 ${
           hasSelection
             ? 'lg:grid-cols-[1.4fr_1.6fr] xl:grid-cols-[1.2fr_1.8fr]'
             : 'lg:grid-cols-[3fr_1fr] xl:grid-cols-[3.5fr_1fr]'
         } transition-all duration-700 ease-out`}
       >
-        <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-950 p-6 rounded-[2rem] border dark:border-gray-800 shadow-sm relative overflow-hidden flex flex-col transition-all duration-700 ease-out">
+        <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-950 p-6 rounded-[2rem] border dark:border-gray-800 shadow-sm relative overflow-hidden flex flex-col min-h-0 transition-all duration-700 ease-out">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.18),_transparent_60%)]" />
-          <div className="relative h-full flex flex-col transition-all duration-700 ease-out">
+          <div className="relative flex-1 min-h-0 flex flex-col transition-all duration-700 ease-out">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Total na Rede</p>
@@ -165,14 +165,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
               </div>
             </div>
 
-            <div
-              className={`relative w-full transition-all duration-700 ease-out ${
-                hasSelection
-                  ? 'min-h-[240px] sm:min-h-[320px] lg:min-h-[420px]'
-                  : 'min-h-[280px] sm:min-h-[360px] lg:min-h-[480px]'
-              }`}
-              style={{ aspectRatio: '4 / 3', maxHeight: '70vh' }}
-            >
+            <div className="relative w-full flex-1 min-h-0 transition-all duration-700 ease-out">
               <svg
                 viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`}
                 preserveAspectRatio="xMidYMid meet"
@@ -257,9 +250,9 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
           </div>
         </div>
 
-        <div className={`space-y-4 h-full flex flex-col transition-all duration-700 ease-out ${hasSelection ? 'lg:pr-4' : ''}`}>
+        <div className={`space-y-4 h-full flex flex-col min-h-0 transition-all duration-700 ease-out ${hasSelection ? 'lg:pr-4' : ''}`}>
           {!hasSelection && (
-            <div className="bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm flex-1 animate-soft-pop">
+            <div className="bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm flex-1 min-h-0 animate-soft-pop">
               <h3 className="text-sm font-black uppercase tracking-widest opacity-40 mb-3">Top Municípios</h3>
               <div className="space-y-3">
                 {topMunicipalities.map((city, index) => (
@@ -288,8 +281,8 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
           )}
 
           <div
-            className={`bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm ${
-              hasSelection ? 'flex-1 ring-2 ring-blue-100 dark:ring-blue-500/20' : 'flex-1'
+            className={`bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm flex-1 min-h-0 ${
+              hasSelection ? 'ring-2 ring-blue-100 dark:ring-blue-500/20' : ''
             } transition-all duration-700 ease-out`}
           >
             <div className="flex items-center justify-between mb-3">

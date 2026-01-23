@@ -4,16 +4,16 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
-echo "==> Atualizando c?digo"
+echo "==> Atualizando codigo"
 git fetch --all --prune
-git pull --rebase
+git pull --rebase --autostash
 
 if command -v docker-compose >/dev/null 2>&1; then
   DC="docker-compose"
 elif docker compose version >/dev/null 2>&1; then
   DC="docker compose"
 else
-  echo "Docker Compose n?o encontrado." >&2
+  echo "Docker Compose nao encontrado." >&2
   exit 1
 fi
 
@@ -42,7 +42,7 @@ if command -v bun >/dev/null 2>&1 && [ -f bun.lock ]; then
   bun install
   bun run build
 else
-  npm install
+  npm install --no-package-lock
   npm run build
 fi
 
@@ -54,4 +54,4 @@ echo "==> Recarregando nginx"
 sudo nginx -t
 sudo systemctl reload nginx
 
-echo "Redeploy conclu?do."
+echo "Redeploy concluido."

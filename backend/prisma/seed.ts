@@ -1,6 +1,6 @@
 import { Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { prisma } from '../src/db.js';
+import { prisma } from '../src/db.ts';
 
 const getRequiredEnv = (key: string) => {
   const value = process.env[key];

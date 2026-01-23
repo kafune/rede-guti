@@ -24,5 +24,6 @@ RUN npm install --omit=dev
 COPY --from=build /app/node_modules/.prisma /app/node_modules/.prisma
 COPY --from=build /app/dist /app/dist
 COPY prisma ./prisma
+COPY prisma.config.ts ./
 
 CMD ["node", "dist/server.js"]

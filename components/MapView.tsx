@@ -117,7 +117,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
   const hasSelection = Boolean(selectedMunicipality);
 
   return (
-    <div className="h-full flex flex-col gap-6 animate-fade-up">
+    <div className="min-h-0 flex flex-col gap-6 animate-fade-up">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">Visualização do Estado</p>
@@ -151,7 +151,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
             : 'lg:grid-cols-[3fr_1fr] xl:grid-cols-[3.5fr_1fr]'
         } transition-all duration-700 ease-out`}
       >
-        <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-950 p-6 rounded-[2rem] border dark:border-gray-800 shadow-sm relative overflow-hidden h-full flex flex-col transition-all duration-700 ease-out">
+        <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-950 p-6 rounded-[2rem] border dark:border-gray-800 shadow-sm relative overflow-hidden flex flex-col transition-all duration-700 ease-out">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.18),_transparent_60%)]" />
           <div className="relative h-full flex flex-col transition-all duration-700 ease-out">
             <div className="flex items-center justify-between mb-4">
@@ -166,13 +166,18 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
             </div>
 
             <div
-              className={`relative w-full flex-1 transition-all duration-700 ease-out ${
+              className={`relative w-full transition-all duration-700 ease-out ${
                 hasSelection
-                  ? 'min-h-[280px] lg:min-h-[420px] xl:min-h-[520px]'
-                  : 'min-h-[360px] lg:min-h-[560px] xl:min-h-[680px]'
+                  ? 'min-h-[240px] sm:min-h-[320px] lg:min-h-[420px]'
+                  : 'min-h-[280px] sm:min-h-[360px] lg:min-h-[480px]'
               }`}
+              style={{ aspectRatio: '4 / 3', maxHeight: '70vh' }}
             >
-              <svg viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} className="w-full h-full">
+              <svg
+                viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`}
+                preserveAspectRatio="xMidYMid meet"
+                className="w-full h-full"
+              >
                 <defs>
                   <linearGradient id="sp-fill" x1="0" y1="0" x2="1" y2="1">
                     <stop offset="0%" stopColor="#93C5FD" stopOpacity="0.2" />

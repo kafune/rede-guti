@@ -13,6 +13,8 @@
   api:
     build:
       context: ./backend
+      args:
+        DATABASE_URL: postgres://postgres:postgres@db:5432/rede_evangelica?schema=public
     env_file:
       - ./backend/.env
     environment:

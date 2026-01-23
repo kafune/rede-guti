@@ -8,6 +8,8 @@ COPY prisma ./prisma
 COPY tsconfig.json ./
 COPY src ./src
 COPY prisma.config.ts ./
+ARG DATABASE_URL
+ENV DATABASE_URL=${DATABASE_URL}
 
 RUN npx prisma generate
 RUN npm run build

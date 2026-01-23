@@ -1,0 +1,51 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rede Evangélica – SP (Guti 2026)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+      body {
+        font-family: 'Inter', sans-serif;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes softPop {
+        from { opacity: 0; transform: scale(0.985); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      .animate-fade-up {
+        animation: fadeUp 0.6s ease-out both;
+      }
+      .animate-soft-pop {
+        animation: softPop 0.55s ease-out both;
+      }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "recharts": "https://esm.sh/recharts@^3.6.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-300">
+    <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
+

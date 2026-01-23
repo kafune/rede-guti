@@ -1,0 +1,25 @@
+{
+  "name": "rede-evangélica-–-sp-(guti-2026)",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@openai/codex": "^0.87.0",
+    "d3-geo": "^3.1.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "recharts": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/d3-geo": "^3.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

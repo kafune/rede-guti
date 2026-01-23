@@ -1,0 +1,26 @@
+﻿services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: rede_evangelica
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/rede_evangelica?schema=public
+    depends_on:
+      - db
+    ports:
+      - "4000:4000"
+
+volumes:
+  db_data:

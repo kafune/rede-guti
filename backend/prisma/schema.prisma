@@ -1,0 +1,69 @@
+// Prisma schema for Rede Evangelica SP
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+enum Role {
+  ADMIN
+  VIEWER
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String?      @map("name")
+  devzappLink  String?      @map("devzapp_link")
+  passwordHash String       @map("password_hash")
+  role         Role         @default(VIEWER)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  indications  Indication[] @relation("CreatedBy")
+
+  @@map("users")
+}
+
+model Church {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  createdAt DateTime     @default(now()) @map("created_at")
+  indications Indication[]
+
+  @@map("churches")
+}
+
+model Municipality {
+  id        String       @id @default(cuid())
+  name      String
+  stateCode String       @default("SP") @map("state_code")
+  createdAt DateTime     @default(now()) @map("created_at")
+  indications Indication[]
+
+  @@unique([name, stateCode])
+  @@map("municipalities")
+}
+
+model Indication {
+  id             String       @id @default(cuid())
+  name           String
+  phone          String?
+  email          String?
+  indicatedBy    String       @map("indicated_by")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  createdById    String       @map("created_by_id")
+  churchId       String       @map("church_id")
+  municipalityId String       @map("municipality_id")
+
+  createdBy    User         @relation("CreatedBy", fields: [createdById], references: [id])
+  church       Church       @relation(fields: [churchId], references: [id])
+  municipality Municipality @relation(fields: [municipalityId], references: [id])
+
+  @@index([createdAt])
+  @@index([churchId])
+  @@index([municipalityId])
+  @@map("indications")
+}

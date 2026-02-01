@@ -13,7 +13,10 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
   const [copyLabel, setCopyLabel] = useState('Copiar link');
   const baseUrl = `${window.location.origin}${window.location.pathname}#/cadastro`;
   const indicatorName = currentUser?.name?.trim();
-  const shareUrl = indicatorName ? `${baseUrl}?indicador=${encodeURIComponent(indicatorName)}` : baseUrl;
+  const devzappLink = currentUser?.devzappLink?.trim();
+  const shareUrl = indicatorName
+    ? `${baseUrl}?indicador=${encodeURIComponent(indicatorName)}${devzappLink ? `&devzapp=${encodeURIComponent(devzappLink)}` : ''}`
+    : baseUrl;
 
   const handleCopy = async () => {
     try {

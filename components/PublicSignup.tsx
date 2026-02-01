@@ -9,6 +9,14 @@ const getIndicatorFromHash = () => {
   return params.get('indicador') || params.get('indicado') || params.get('ref') || '';
 };
 
+const getGroupLinkFromHash = () => {
+  const hash = window.location.hash || '';
+  const queryIndex = hash.indexOf('?');
+  if (queryIndex === -1) return '';
+  const params = new URLSearchParams(hash.slice(queryIndex + 1));
+  return params.get('devzapp') || params.get('grupo') || '';
+};
+
 const normalizePhone = (value: string) => {
   const digits = value.replace(/\D/g, '');
   if (!digits) return '';
@@ -58,6 +66,7 @@ const PublicSignup: React.FC = () => {
   }, []);
 
   const refIndicator = useMemo(() => getIndicatorFromHash(), []);
+  const refGroupLink = useMemo(() => getGroupLinkFromHash(), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +86,11 @@ const PublicSignup: React.FC = () => {
 
       await createPublicIndication(payload);
       sessionStorage.setItem('guti_public_name', payload.name);
+      if (refGroupLink.trim()) {
+        sessionStorage.setItem('guti_public_group_link', refGroupLink.trim());
+      } else {
+        sessionStorage.removeItem('guti_public_group_link');
+      }
       setSuccessMessage('Cadastro enviado com sucesso. Obrigado por apoiar!');
       setName('');
       setPhone('');

@@ -22,6 +22,7 @@ import Login from './components/Login';
 import MapView from './components/MapView';
 import PublicSignup from './components/PublicSignup';
 import PublicThanks from './components/PublicThanks';
+import WelcomeLanding from './WelcomeLanding';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -34,6 +35,7 @@ const App: React.FC = () => {
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   const [view, setView] = useState<'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map'>('dashboard');
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
@@ -59,11 +61,15 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
+    setShowWelcome(true);
+    setView('dashboard');
     localStorage.setItem('guti_user', JSON.stringify(user));
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
+    setShowWelcome(false);
+    setView('dashboard');
     localStorage.removeItem('guti_user');
     localStorage.removeItem('guti_token');
   };
@@ -253,6 +259,23 @@ const App: React.FC = () => {
 
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
+  }
+
+  const indicatorName = currentUser?.name?.trim();
+  const baseUrl = `${window.location.origin}${window.location.pathname}#/cadastro`;
+  const shareUrl = indicatorName ? `${baseUrl}?indicador=${encodeURIComponent(indicatorName)}` : baseUrl;
+
+  if (showWelcome) {
+    return (
+      <WelcomeLanding
+        name={currentUser.name}
+        shareUrl={shareUrl}
+        onFinish={() => {
+          setShowWelcome(false);
+          setView('dashboard');
+        }}
+      />
+    );
   }
 
   const isMapView = view === 'map';

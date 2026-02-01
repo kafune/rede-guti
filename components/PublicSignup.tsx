@@ -76,6 +76,7 @@ const PublicSignup: React.FC = () => {
       };
 
       await createPublicIndication(payload);
+      sessionStorage.setItem('guti_public_name', payload.name);
       setSuccessMessage('Cadastro enviado com sucesso. Obrigado por apoiar!');
       setName('');
       setPhone('');

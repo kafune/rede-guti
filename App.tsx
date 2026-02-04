@@ -37,9 +37,9 @@ const loadLocalPastors = (): Supporter[] => {
       .filter(Boolean)
       .map((item) => ({
         ...item,
-        type: item.type ?? SupporterType.PASTOR,
-        status: item.status ?? SupportStatus.ACTIVE,
-        createdAt: item.createdAt ?? new Date().toISOString()
+        type: item.type ? SupporterType.PASTOR,
+        status: item.status ? SupportStatus.ACTIVE,
+        createdAt: item.createdAt ? new Date().toISOString()
       }));
   } catch {
     return [];
@@ -126,12 +126,12 @@ const App: React.FC = () => {
       id: indication.id,
       name: indication.name,
       whatsapp: indication.phone ? normalizePhone(indication.phone) : '',
-      church: indication.church?.name ?? '',
+      church: indication.church?.name ? '',
       region: 'Interior (outros)' as Region,
       createdAt: indication.createdAt,
-      createdBy: indication.createdBy?.id ?? indication.createdById ?? 'system',
+      createdBy: indication.createdBy?.id ? indication.createdById ? 'system',
       status: SupportStatus.ACTIVE,
-      notes: indication.municipality?.name ?? '',
+      notes: indication.municipality?.name ? '',
       indicatedBy: indication.indicatedBy,
       type: SupporterType.SUPPORTER
     };
@@ -287,13 +287,13 @@ const App: React.FC = () => {
 
     const normalizedPhone = data.whatsapp ? normalizePhone(data.whatsapp) : '';
     if (!normalizedPhone) {
-      alert('WhatsApp invÃ¡lido.');
+      alert('WhatsApp inválido.');
       return false;
     }
 
     const existing = allSupporters.find(s => s.whatsapp === normalizedPhone);
     if (existing) {
-      if (confirm('WhatsApp jÃ¡ cadastrado. Visualizar?')) {
+      if (confirm('WhatsApp já cadastrado. Visualizar?')) {
         setSelectedSupporter(existing);
         setView('detail');
       }
@@ -302,13 +302,13 @@ const App: React.FC = () => {
 
     const referrer = data.referredBy ? allSupporters.find(s => s.id === data.referredBy) : undefined;
     const createdAt = new Date().toISOString();
-    const municipalityNote = data.notes ?? (data as { municipality?: string }).municipality ?? '';
+    const municipalityNote = data.notes ? (data as { municipality?: string }).municipality ? '';
     const newPastor: Supporter = {
       id: createLocalId(),
-      name: (data.name ?? '').trim(),
+      name: (data.name ? '').trim(),
       whatsapp: normalizedPhone,
-      church: (data.church ?? '').trim(),
-      region: (data.region ?? 'Interior (outros)') as Region,
+      church: (data.church ? '').trim(),
+      region: (data.region ? 'Interior (outros)') as Region,
       createdAt,
       createdBy: currentUser.id,
       status: SupportStatus.ACTIVE,

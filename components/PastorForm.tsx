@@ -9,9 +9,11 @@ interface Props {
 }
 
 const MUNICIPALITIES_API = 'https://servicodados.ibge.gov.br/api/v1/localidades/estados/SP/municipios';
+const CEP_API_BASE = 'https://viacep.com.br/ws';
 
 const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastCepRef = useRef<string | null>(null);
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     name: '',
@@ -23,17 +25,23 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
     isMainBranch: true,
     ministryRole: 'Pastor Titular',
     municipality: '',
-    churchAddress: '',
     churchSocialMedia: '',
-    churchMembersCount: 'AtÃ© 100',
+    churchMembersCount: 'Até 100',
     referredBy: '',
     photo: '',
   });
+  const [cep, setCep] = useState('');
+  const [addressStreet, setAddressStreet] = useState('');
+  const [addressNumber, setAddressNumber] = useState('');
+  const [addressNeighborhood, setAddressNeighborhood] = useState('');
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
   const [municipalities, setMunicipalities] = useState<string[]>([]);
   const [municipalitiesLoading, setMunicipalitiesLoading] = useState(false);
   const [municipalitiesError, setMunicipalitiesError] = useState<string | null>(null);
   const [municipalitiesOpen, setMunicipalitiesOpen] = useState(false);
   const [debouncedMunicipality, setDebouncedMunicipality] = useState('');
+  const [debouncedCep, setDebouncedCep] = useState('');
 
   const loadMunicipalities = async () => {
     if (municipalitiesLoading || municipalities.length) return;
@@ -57,12 +65,79 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
     }
   };
 
+  const normalizeCep = (value: string) => value.replace(/\D/g, '').slice(0, 8);
+
+  const formatCep = (digits: string) => {
+    if (digits.length <= 5) return digits;
+    return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  };
+
+  const handleCepChange = (value: string) => {
+    const digits = normalizeCep(value);
+    setCep(formatCep(digits));
+    setCepError(null);
+  };
+
+  const lookupCep = async (digits: string) => {
+    if (cepLoading || digits.length !== 8) return;
+    if (lastCepRef.current === digits) return;
+    lastCepRef.current = digits;
+    setCepLoading(true);
+    setCepError(null);
+    try {
+      const response = await fetch(`${CEP_API_BASE}/${digits}/json/`);
+      if (!response.ok) {
+        throw new Error('Falha ao consultar CEP.');
+      }
+      const data = (await response.json()) as {
+        erro?: boolean;
+        logradouro?: string;
+        bairro?: string;
+        localidade?: string;
+      };
+      if (data.erro) {
+        setCepError('CEP não encontrado.');
+        return;
+      }
+      setAddressStreet(data.logradouro ?? '');
+      setAddressNeighborhood(data.bairro ?? '');
+      if (data.localidade) {
+        setFormData((prev) => ({
+          ...prev,
+          municipality: data.localidade ?? prev.municipality
+        }));
+      }
+    } catch {
+      setCepError('Não foi possível consultar o CEP.');
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
   useEffect(() => {
     const handle = window.setTimeout(() => {
       setDebouncedMunicipality(formData.municipality);
     }, 150);
     return () => window.clearTimeout(handle);
   }, [formData.municipality]);
+
+  useEffect(() => {
+    const digits = normalizeCep(cep);
+    if (!digits) {
+      setDebouncedCep('');
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      setDebouncedCep(digits);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [cep]);
+
+  useEffect(() => {
+    if (debouncedCep.length === 8) {
+      void lookupCep(debouncedCep);
+    }
+  }, [debouncedCep]);
 
   const filteredMunicipalities = useMemo(() => {
     if (!municipalities.length) return [];
@@ -91,18 +166,29 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
       return;
     }
 
+    const cepDigits = normalizeCep(cep);
+    const formattedCep = cepDigits ? formatCep(cepDigits) : '';
+    const baseAddress = [addressStreet, addressNumber].filter(Boolean).join(', ');
+    const withNeighborhood = addressNeighborhood
+      ? `${baseAddress}${baseAddress ? ' - ' : ''}${addressNeighborhood}`
+      : baseAddress;
+    const fullAddress = formattedCep
+      ? `${withNeighborhood}${withNeighborhood ? ' ' : ''}(CEP ${formattedCep})`
+      : withNeighborhood;
+
     onSave({
       ...formData,
       type: SupporterType.PASTOR,
       notes: formData.municipality,
+      churchAddress: fullAddress || undefined,
       whatsapp: formData.whatsapp.replace(/\D/g, '').startsWith('55') ? formData.whatsapp.replace(/\D/g, '') : '55' + formData.whatsapp.replace(/\D/g, '')
     });
   };
 
   const denominations = [
     "Assembleia de Deus", "Batista", "Quadrangular", "Presbiteriana", 
-    "Metodista", "CongregaÃ§Ã£o CristÃ£", "Universal", "Mundial", 
-    "Adventista", "Comunidade EvangÃ©lica", "Igreja Local Independente", "Outra"
+    "Metodista", "Congregação Cristã", "Universal", "Mundial", 
+    "Adventista", "Comunidade Evangélica", "Igreja Local Independente", "Outra"
   ];
 
   return (
@@ -111,7 +197,7 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
         <button onClick={onCancel} className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm"><i className="fa-solid fa-arrow-left text-xl"></i></button>
         <div>
            <h2 className="text-3xl font-black tracking-tight">Mapeamento Pastoral</h2>
-           <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">Rede ConexÃ£o SP â€¢ Guti 2026</p>
+           <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">Rede Conexão SP â€¢ Guti 2026</p>
         </div>
       </div>
 
@@ -174,7 +260,7 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">DenominaÃ§Ã£o / ConvenÃ§Ã£o</label>
+                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">Denominação / Convenção</label>
                 <select className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none shadow-inner font-bold" value={formData.churchDenomination} onChange={e => setFormData({...formData, churchDenomination: e.target.value})}>
                   <option value="">Selecione...</option>
                   {denominations.map(d => <option key={d} value={d}>{d}</option>)}
@@ -183,7 +269,7 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
 
               <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl flex items-center justify-between border dark:border-gray-700">
                 <div>
-                   <p className="font-black text-sm">Esta Ã© a Igreja Sede?</p>
+                   <p className="font-black text-sm">Esta ? a Igreja Sede?</p>
                    <p className="text-[10px] opacity-50 uppercase font-bold tracking-tighter">Campo ou Matriz Principal</p>
                 </div>
                 <button 
@@ -206,7 +292,7 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center text-indigo-600"><i className="fa-solid fa-map-location-dot"></i></div>
-                <h3 className="text-xl font-black">LocalizaÃ§Ã£o e Impacto</h3>
+                <h3 className="text-xl font-black">Localização e Impacto</h3>
               </div>
 
               <div>
@@ -256,9 +342,59 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
                 </div>
               </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">EndereÃ§o Completo</label>
-                <input type="text" placeholder="Rua, NÃºmero, Bairro" className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner" value={formData.churchAddress} onChange={e => setFormData({...formData, churchAddress: e.target.value})} />
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">CEP</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="00000-000"
+                      className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner"
+                      value={cep}
+                      onChange={(e) => handleCepChange(e.target.value)}
+                    />
+                    {cepLoading && (
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold opacity-60">
+                        Buscando...
+                      </span>
+                    )}
+                  </div>
+                  {cepError && <p className="text-[10px] text-red-500 font-bold mt-2 ml-2">{cepError}</p>}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">Rua</label>
+                    <input
+                      type="text"
+                      placeholder="Rua, Avenida..."
+                      className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner"
+                      value={addressStreet}
+                      onChange={(e) => setAddressStreet(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">Número</label>
+                    <input
+                      type="text"
+                      placeholder="Nº"
+                      className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner"
+                      value={addressNumber}
+                      onChange={(e) => setAddressNumber(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">Bairro</label>
+                  <input
+                    type="text"
+                    placeholder="Bairro"
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner"
+                    value={addressNeighborhood}
+                    onChange={(e) => setAddressNeighborhood(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="flex gap-2">
@@ -284,7 +420,7 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center text-indigo-600"><i className="fa-solid fa-share-nodes"></i></div>
-                <h3 className="text-xl font-black">Redes e ConexÃµes</h3>
+                <h3 className="text-xl font-black">Redes e Conexões</h3>
               </div>
 
               <div>
@@ -296,9 +432,9 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">NÂº Estimado de Membros</label>
+                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">N? Estimado de Membros</label>
                 <select className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none shadow-inner font-bold" value={formData.churchMembersCount} onChange={e => setFormData({...formData, churchMembersCount: e.target.value})}>
-                  <option value="AtÃ© 50">AtÃ© 50</option>
+                  <option value="Até 50">Até 50</option>
                   <option value="50 a 200">50 a 200</option>
                   <option value="200 a 500">200 a 500</option>
                   <option value="500 a 1000">500 a 1000</option>

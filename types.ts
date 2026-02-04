@@ -6,7 +6,7 @@
 
 export enum SupportStatus {
   ACTIVE = 'Ativo',
-  VALIDATING = 'Em validaÃ§Ã£o',
+  VALIDATING = 'Em validação',
   INACTIVE = 'Inativo'
 }
 
@@ -19,11 +19,11 @@ export type Region =
   | 'Capital'
   | 'RMSP'
   | 'Campinas/RMC'
-  | 'Vale do ParaÃ­ba'
+  | 'Vale do Paraíba'
   | 'Sorocaba'
-  | 'RibeirÃ£o Preto'
-  | 'SÃ£o JosÃ© do Rio Preto'
-  | 'Bauru/MarÃ­lia'
+  | 'Ribeirão Preto'
+  | 'São Jos? do Rio Preto'
+  | 'Bauru/Marília'
   | 'Presidente Prudente'
   | 'Baixada Santista'
   | 'Litoral Norte'

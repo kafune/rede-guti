@@ -77,12 +77,12 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
              <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-[0.2em] mb-4">Mapeamento da Igreja</h4>
              <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
-                  <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">DenominaÃ§Ã£o</p>
+                  <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Denominação</p>
                   <p className="font-bold text-sm">{supporter.churchDenomination || 'Livre / Independente'}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
                   <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Tipo Unidade</p>
-                  <p className="font-bold text-sm">{supporter.isMainBranch ? 'Sede / Campo' : 'CongregaÃ§Ã£o'}</p>
+                  <p className="font-bold text-sm">{supporter.isMainBranch ? 'Sede / Campo' : 'Congregação'}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
                   <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Membros</p>
@@ -96,7 +96,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
 
              {supporter.churchAddress && (
                <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
-                  <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">EndereÃ§o Ministerial</p>
+                  <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Endereço Ministerial</p>
                   <div className="flex items-start gap-2">
                     <i className="fa-solid fa-location-dot text-indigo-600 mt-1"></i>
                     <p className="font-bold text-xs leading-relaxed">{supporter.churchAddress}</p>
@@ -136,7 +136,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
 
           {/* Connections Network */}
           <div className="border-t dark:border-gray-700 pt-8">
-            <h4 className="text-[10px] font-black uppercase text-blue-600 tracking-[0.2em] mb-6">Rede de ConexÃµes</h4>
+            <h4 className="text-[10px] font-black uppercase text-blue-600 tracking-[0.2em] mb-6">Rede de Conexões</h4>
             
             <div className="space-y-6">
               <div>
@@ -153,7 +153,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
                   </div>
                 ) : (
                   <p className="text-xs font-bold text-gray-400 italic">
-                    {supporter.indicatedBy || 'LideranÃ§a Direta (Rede Guti)'}
+                    {supporter.indicatedBy || 'Liderança Direta (Rede Guti)'}
                   </p>
                 )}
               </div>
@@ -169,7 +169,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
                       {r.name}
                     </div>
                   )) : (
-                    <p className="text-xs font-bold text-gray-400 italic">Ainda nÃ£o possui indicaÃ§Ãµes cadastradas</p>
+                    <p className="text-xs font-bold text-gray-400 italic">Ainda não possui indicações cadastradas</p>
                   )}
                 </div>
               </div>
@@ -198,7 +198,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
               <div className="fixed inset-0 z-[100] flex items-end p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
                 <div className="w-full bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom-10">
                   <h5 className="text-xl font-black text-center mb-2">Excluir Registro?</h5>
-                  <p className="text-sm text-center opacity-50 mb-8 font-medium">Esta aÃ§Ã£o nÃ£o pode ser desfeita. O pastor e suas referÃªncias serÃ£o afetados.</p>
+                  <p className="text-sm text-center opacity-50 mb-8 font-medium">Esta ação não pode ser desfeita. O pastor e suas referências serão afetados.</p>
                   <div className="flex gap-3">
                     <button onClick={() => setIsConfirmingDelete(false)} className="flex-1 py-4 bg-gray-100 dark:bg-gray-700 rounded-2xl font-black text-sm">CANCELAR</button>
                     <button onClick={() => onDelete(supporter.id)} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-sm">SIM, EXCLUIR</button>

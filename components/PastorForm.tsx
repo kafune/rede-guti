@@ -1,13 +1,14 @@
-
-import React, { useState, useRef } from 'react';
-import { Region, Supporter, SupporterType } from '../types';
-import { REGIONS, SP_MUNICIPALITIES } from '../constants';
+﻿
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Supporter, SupporterType } from '../types';
 
 interface Props {
   supporters: Supporter[];
   onSave: (data: Partial<Supporter>) => boolean;
   onCancel: () => void;
 }
+
+const MUNICIPALITIES_API = 'https://servicodados.ibge.gov.br/api/v1/localidades/estados/SP/municipios';
 
 const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -21,17 +22,57 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
     churchDenomination: '',
     isMainBranch: true,
     ministryRole: 'Pastor Titular',
-    region: '' as Region | '',
     municipality: '',
     churchAddress: '',
-    churchCNPJ: '',
     churchSocialMedia: '',
-    churchMembersCount: 'Até 100',
-    hasSocialProjects: false,
-    socialProjectsDescription: '',
+    churchMembersCount: 'AtÃ© 100',
     referredBy: '',
     photo: '',
   });
+  const [municipalities, setMunicipalities] = useState<string[]>([]);
+  const [municipalitiesLoading, setMunicipalitiesLoading] = useState(false);
+  const [municipalitiesError, setMunicipalitiesError] = useState<string | null>(null);
+  const [municipalitiesOpen, setMunicipalitiesOpen] = useState(false);
+  const [debouncedMunicipality, setDebouncedMunicipality] = useState('');
+
+  const loadMunicipalities = async () => {
+    if (municipalitiesLoading || municipalities.length) return;
+    setMunicipalitiesLoading(true);
+    setMunicipalitiesError(null);
+    try {
+      const response = await fetch(MUNICIPALITIES_API);
+      if (!response.ok) {
+        throw new Error('Falha ao carregar cidades.');
+      }
+      const data = (await response.json()) as Array<{ nome?: string }>;
+      const names = data
+        .map((item) => (item?.nome ?? '').trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
+      setMunicipalities(names);
+    } catch {
+      setMunicipalitiesError('Nao foi possivel carregar cidades.');
+    } finally {
+      setMunicipalitiesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedMunicipality(formData.municipality);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [formData.municipality]);
+
+  const filteredMunicipalities = useMemo(() => {
+    if (!municipalities.length) return [];
+    const query = debouncedMunicipality.trim().toLowerCase();
+    const list = query
+      ? municipalities.filter((name) => name.toLowerCase().includes(query))
+      : municipalities;
+    return list.slice(0, 12);
+  }, [municipalities, formData.municipality]);
+
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -45,15 +86,14 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.whatsapp || !formData.church) {
-      alert('Dados essenciais faltando.');
+    if (!formData.name || !formData.whatsapp || !formData.church || !formData.municipality.trim()) {
+      alert('Preencha nome, WhatsApp, igreja e cidade.');
       return;
     }
 
     onSave({
       ...formData,
       type: SupporterType.PASTOR,
-      region: formData.region as Region,
       notes: formData.municipality,
       whatsapp: formData.whatsapp.replace(/\D/g, '').startsWith('55') ? formData.whatsapp.replace(/\D/g, '') : '55' + formData.whatsapp.replace(/\D/g, '')
     });
@@ -61,8 +101,8 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
 
   const denominations = [
     "Assembleia de Deus", "Batista", "Quadrangular", "Presbiteriana", 
-    "Metodista", "Congregação Cristã", "Universal", "Mundial", 
-    "Adventista", "Comunidade Evangélica", "Igreja Local Independente", "Outra"
+    "Metodista", "CongregaÃ§Ã£o CristÃ£", "Universal", "Mundial", 
+    "Adventista", "Comunidade EvangÃ©lica", "Igreja Local Independente", "Outra"
   ];
 
   return (
@@ -71,7 +111,7 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
         <button onClick={onCancel} className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm"><i className="fa-solid fa-arrow-left text-xl"></i></button>
         <div>
            <h2 className="text-3xl font-black tracking-tight">Mapeamento Pastoral</h2>
-           <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">Rede Conexão SP • Guti 2026</p>
+           <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em]">Rede ConexÃ£o SP â€¢ Guti 2026</p>
         </div>
       </div>
 
@@ -134,7 +174,7 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">Denominação / Convenção</label>
+                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">DenominaÃ§Ã£o / ConvenÃ§Ã£o</label>
                 <select className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none shadow-inner font-bold" value={formData.churchDenomination} onChange={e => setFormData({...formData, churchDenomination: e.target.value})}>
                   <option value="">Selecione...</option>
                   {denominations.map(d => <option key={d} value={d}>{d}</option>)}
@@ -143,7 +183,7 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
 
               <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl flex items-center justify-between border dark:border-gray-700">
                 <div>
-                   <p className="font-black text-sm">Esta é a Igreja Sede?</p>
+                   <p className="font-black text-sm">Esta Ã© a Igreja Sede?</p>
                    <p className="text-[10px] opacity-50 uppercase font-bold tracking-tighter">Campo ou Matriz Principal</p>
                 </div>
                 <button 
@@ -153,11 +193,6 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
                 >
                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${formData.isMainBranch ? 'left-7' : 'left-1 shadow-sm'}`}></div>
                 </button>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">CNPJ (Opcional)</label>
-                <input type="text" placeholder="00.000.000/0000-00" className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner" value={formData.churchCNPJ} onChange={e => setFormData({...formData, churchCNPJ: e.target.value})} />
               </div>
 
               <div className="flex gap-2">
@@ -171,56 +206,76 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center text-indigo-600"><i className="fa-solid fa-map-location-dot"></i></div>
-                <h3 className="text-xl font-black">Localização e Impacto</h3>
+                <h3 className="text-xl font-black">LocalizaÃ§Ã£o e Impacto</h3>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">Região SP</label>
-                  <select className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none shadow-inner font-bold" value={formData.region} onChange={e => setFormData({...formData, region: e.target.value as Region})}>
-                    <option value="">Região...</option>
-                    {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">Cidade</label>
-                  <select className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none shadow-inner font-bold" value={formData.municipality} onChange={e => setFormData({...formData, municipality: e.target.value})}>
-                    <option value="">Cidade...</option>
-                    {SP_MUNICIPALITIES.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
+              <div>
+                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">Cidade</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Digite para buscar..."
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner"
+                    value={formData.municipality}
+                    onChange={e => setFormData({ ...formData, municipality: e.target.value })}
+                    onFocus={() => {
+                      setMunicipalitiesOpen(true);
+                      void loadMunicipalities();
+                    }}
+                    onBlur={() => {
+                      window.setTimeout(() => setMunicipalitiesOpen(false), 150);
+                    }}
+                  />
+                  {municipalitiesOpen && (
+                    <div className="absolute z-20 mt-2 w-full max-h-60 overflow-auto bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl p-2 space-y-1">
+                      {municipalitiesLoading && (
+                        <p className="text-xs font-bold opacity-60 px-3 py-2">Carregando cidades...</p>
+                      )}
+                      {!municipalitiesLoading && municipalitiesError && (
+                        <p className="text-xs font-bold text-red-500 px-3 py-2">{municipalitiesError}</p>
+                      )}
+                      {!municipalitiesLoading && !municipalitiesError && filteredMunicipalities.length === 0 && (
+                        <p className="text-xs font-bold opacity-50 px-3 py-2">Nenhuma cidade encontrada.</p>
+                      )}
+                      {!municipalitiesLoading && !municipalitiesError && filteredMunicipalities.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            setFormData({ ...formData, municipality: name });
+                            setMunicipalitiesOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">Endereço Completo</label>
-                <input type="text" placeholder="Rua, Número, Bairro" className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner" value={formData.churchAddress} onChange={e => setFormData({...formData, churchAddress: e.target.value})} />
-              </div>
-
-              <div className="bg-indigo-50 dark:bg-indigo-900/10 p-5 rounded-3xl border border-indigo-100 dark:border-indigo-800">
-                <div className="flex items-center justify-between mb-3">
-                   <p className="font-black text-sm">Projetos Sociais?</p>
-                   <button 
-                     type="button"
-                     onClick={() => setFormData({...formData, hasSocialProjects: !formData.hasSocialProjects})}
-                     className={`w-12 h-6 rounded-full transition-all relative ${formData.hasSocialProjects ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-700'}`}
-                   >
-                     <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all ${formData.hasSocialProjects ? 'left-6.5' : 'left-0.5'}`}></div>
-                   </button>
-                </div>
-                {formData.hasSocialProjects && (
-                  <textarea 
-                    placeholder="Quais projetos a igreja realiza na comunidade? (Ex: Sopão, Cestas Básicas, Reforço escolar)"
-                    className="w-full bg-white dark:bg-gray-900 border-none rounded-2xl px-4 py-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    rows={3}
-                    value={formData.socialProjectsDescription}
-                    onChange={e => setFormData({...formData, socialProjectsDescription: e.target.value})}
-                  />
-                )}
+                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">EndereÃ§o Completo</label>
+                <input type="text" placeholder="Rua, NÃºmero, Bairro" className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner" value={formData.churchAddress} onChange={e => setFormData({...formData, churchAddress: e.target.value})} />
               </div>
 
               <div className="flex gap-2">
                  <button type="button" onClick={() => setStep(2)} className="px-6 py-5 bg-gray-100 dark:bg-gray-700 rounded-3xl font-black text-gray-500">Voltar</button>
-                 <button type="button" onClick={() => setStep(4)} className="flex-1 py-5 bg-indigo-600 text-white rounded-3xl font-black text-lg shadow-xl shadow-indigo-500/20">Continuar</button>
+                 <button
+                   type="button"
+                   onClick={() => {
+                     if (!formData.municipality.trim()) {
+                       alert('Informe a cidade.');
+                       return;
+                     }
+                     setStep(4);
+                   }}
+                   className="flex-1 py-5 bg-indigo-600 text-white rounded-3xl font-black text-lg shadow-xl shadow-indigo-500/20"
+                 >
+                   Continuar
+                 </button>
               </div>
             </div>
           )}
@@ -229,7 +284,7 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center text-indigo-600"><i className="fa-solid fa-share-nodes"></i></div>
-                <h3 className="text-xl font-black">Redes e Conexões</h3>
+                <h3 className="text-xl font-black">Redes e ConexÃµes</h3>
               </div>
 
               <div>
@@ -241,9 +296,9 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">Nº Estimado de Membros</label>
+                <label className="text-[10px] font-black uppercase opacity-40 ml-2 block mb-2 tracking-widest">NÂº Estimado de Membros</label>
                 <select className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none shadow-inner font-bold" value={formData.churchMembersCount} onChange={e => setFormData({...formData, churchMembersCount: e.target.value})}>
-                  <option value="Até 50">Até 50</option>
+                  <option value="AtÃ© 50">AtÃ© 50</option>
                   <option value="50 a 200">50 a 200</option>
                   <option value="200 a 500">200 a 500</option>
                   <option value="500 a 1000">500 a 1000</option>

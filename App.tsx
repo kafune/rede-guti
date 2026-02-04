@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Church, Municipality, Region, Supporter, SupportStatus, User, UserRole } from './types';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { Church, Municipality, Region, Supporter, SupportStatus, SupporterType, User, UserRole } from './types';
 import {
   ApiIndication,
   createChurch,
@@ -17,11 +17,54 @@ import Dashboard from './components/Dashboard';
 import SupporterForm from './components/SupporterForm';
 import SupporterList from './components/SupporterList';
 import SupporterDetail from './components/SupporterDetail';
+import PastorForm from './components/PastorForm';
 import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
 import MapView from './components/MapView';
 import PublicSignup from './components/PublicSignup';
 import PublicThanks from './components/PublicThanks';
+
+const LOCAL_PASTORS_KEY = 'guti_local_pastors';
+
+const loadLocalPastors = (): Supporter[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_PASTORS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as Supporter[])
+      .filter(Boolean)
+      .map((item) => ({
+        ...item,
+        type: item.type ?? SupporterType.PASTOR,
+        status: item.status ?? SupportStatus.ACTIVE,
+        createdAt: item.createdAt ?? new Date().toISOString()
+      }));
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalPastors = (pastors: Supporter[]) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(LOCAL_PASTORS_KEY, JSON.stringify(pastors));
+};
+
+const createLocalId = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `pastor-${crypto.randomUUID()}`;
+  }
+  return `pastor-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const mergeSupporters = (localPastors: Supporter[], apiSupporters: Supporter[]) => {
+  return [...localPastors, ...apiSupporters].sort((a, b) => {
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    return timeB - timeA;
+  });
+};
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -29,13 +72,14 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : null;
   });
   
-  const [supporters, setSupporters] = useState<Supporter[]>([]);
+  const [apiSupporters, setApiSupporters] = useState<Supporter[]>([]);
+  const [localPastors, setLocalPastors] = useState<Supporter[]>(() => loadLocalPastors());
   const [churches, setChurches] = useState<Church[]>([]);
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [view, setView] = useState<'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'form' | 'pastor-form' | 'list' | 'detail' | 'admin' | 'map'>('dashboard');
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -44,6 +88,11 @@ const App: React.FC = () => {
   const [isPublicThanks, setIsPublicThanks] = useState(() => window.location.hash.startsWith('#/obrigado'));
   const refreshInFlight = useRef(false);
   const POLL_INTERVAL_MS = 15000;
+
+  const allSupporters = useMemo(
+    () => mergeSupporters(localPastors, apiSupporters),
+    [localPastors, apiSupporters]
+  );
 
   
 
@@ -56,6 +105,10 @@ const App: React.FC = () => {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  useEffect(() => {
+    saveLocalPastors(localPastors);
+  }, [localPastors]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -79,7 +132,8 @@ const App: React.FC = () => {
       createdBy: indication.createdBy?.id ?? indication.createdById ?? 'system',
       status: SupportStatus.ACTIVE,
       notes: indication.municipality?.name ?? '',
-      indicatedBy: indication.indicatedBy
+      indicatedBy: indication.indicatedBy,
+      type: SupporterType.SUPPORTER
     };
   };
 
@@ -102,7 +156,7 @@ const App: React.FC = () => {
       try {
         const { indications, churchesData, municipalitiesData } = await fetchAllData();
         if (cancelled) return;
-        setSupporters(indications.map(mapIndicationToSupporter));
+        setApiSupporters(indications.map(mapIndicationToSupporter));
         setChurches(churchesData);
         setMunicipalities(municipalitiesData);
       } catch (error) {
@@ -137,7 +191,7 @@ const App: React.FC = () => {
       try {
         const { indications, churchesData, municipalitiesData } = await fetchAllData();
         if (cancelled) return;
-        setSupporters(indications.map(mapIndicationToSupporter));
+        setApiSupporters(indications.map(mapIndicationToSupporter));
         setChurches(churchesData);
         setMunicipalities(municipalitiesData);
       } catch (error) {
@@ -192,7 +246,7 @@ const App: React.FC = () => {
     if (!currentUser) return false;
 
     const normalizedPhone = normalizePhone(data.whatsapp);
-    const existing = supporters.find(s => s.whatsapp === normalizedPhone);
+    const existing = allSupporters.find(s => s.whatsapp === normalizedPhone);
     if (existing) {
       if (confirm('WhatsApp já cadastrado. Visualizar?')) {
         setSelectedSupporter(existing);
@@ -216,7 +270,7 @@ const App: React.FC = () => {
       });
 
       const newSupporter = mapIndicationToSupporter(indication);
-      setSupporters((prev) => [newSupporter, ...prev]);
+      setApiSupporters((prev) => [newSupporter, ...prev]);
       return true;
     } catch (error) {
       if (isUnauthorized(error)) {
@@ -228,10 +282,70 @@ const App: React.FC = () => {
     }
   };
 
+  const addPastor = (data: Partial<Supporter>) => {
+    if (!currentUser) return false;
+
+    const normalizedPhone = data.whatsapp ? normalizePhone(data.whatsapp) : '';
+    if (!normalizedPhone) {
+      alert('WhatsApp invÃ¡lido.');
+      return false;
+    }
+
+    const existing = allSupporters.find(s => s.whatsapp === normalizedPhone);
+    if (existing) {
+      if (confirm('WhatsApp jÃ¡ cadastrado. Visualizar?')) {
+        setSelectedSupporter(existing);
+        setView('detail');
+      }
+      return false;
+    }
+
+    const referrer = data.referredBy ? allSupporters.find(s => s.id === data.referredBy) : undefined;
+    const createdAt = new Date().toISOString();
+    const municipalityNote = data.notes ?? (data as { municipality?: string }).municipality ?? '';
+    const newPastor: Supporter = {
+      id: createLocalId(),
+      name: (data.name ?? '').trim(),
+      whatsapp: normalizedPhone,
+      church: (data.church ?? '').trim(),
+      region: (data.region ?? 'Interior (outros)') as Region,
+      createdAt,
+      createdBy: currentUser.id,
+      status: SupportStatus.ACTIVE,
+      notes: municipalityNote,
+      photo: data.photo,
+      type: SupporterType.PASTOR,
+      birthDate: data.birthDate,
+      cpf: data.cpf,
+      churchDenomination: data.churchDenomination,
+      isMainBranch: data.isMainBranch,
+      ministryRole: data.ministryRole,
+      churchAddress: data.churchAddress,
+      churchCNPJ: data.churchCNPJ,
+      churchSocialMedia: data.churchSocialMedia,
+      churchMembersCount: data.churchMembersCount,
+      hasSocialProjects: data.hasSocialProjects,
+      socialProjectsDescription: data.socialProjectsDescription,
+      referredBy: data.referredBy,
+      indicatedBy: referrer?.name || 'Cadastro Pastor'
+    };
+
+    setLocalPastors((prev) => [newPastor, ...prev]);
+    setSelectedSupporter(newPastor);
+    setView('detail');
+    return true;
+  };
+
   const deleteSupporter = async (id: string) => {
+    if (id.startsWith('pastor-')) {
+      setLocalPastors((prev) => prev.filter(s => s.id !== id));
+      setView('list');
+      setSelectedSupporter(null);
+      return;
+    }
     try {
       await deleteIndication(id);
-      setSupporters((prev) => prev.filter(s => s.id !== id));
+      setApiSupporters((prev) => prev.filter(s => s.id !== id));
       setView('list');
       setSelectedSupporter(null);
     } catch (error) {
@@ -301,24 +415,33 @@ const App: React.FC = () => {
         )}
         {view === 'dashboard' && (
           <Dashboard 
-            supporters={supporters} 
+            supporters={allSupporters} 
             currentUser={currentUser}
             onViewList={() => setView('list')} 
             onViewSupporter={(s) => { setSelectedSupporter(s); setView('detail'); }}
+            onAddLeader={() => setView('form')}
+            onAddPastor={() => setView('pastor-form')}
           />
         )}
         {view === 'form' && (
           <SupporterForm 
-            supporters={supporters}
+            supporters={allSupporters}
             churches={churches}
             municipalities={municipalities}
             onSave={addSupporter} 
             onCancel={() => setView('dashboard')}
           />
         )}
+        {view === 'pastor-form' && (
+          <PastorForm 
+            supporters={allSupporters}
+            onSave={addPastor}
+            onCancel={() => setView('dashboard')}
+          />
+        )}
         {view === 'list' && (
           <SupporterList 
-            supporters={supporters} 
+            supporters={allSupporters} 
             user={currentUser}
             municipalities={municipalities}
             onSelect={(s) => { setSelectedSupporter(s); setView('detail'); }} 
@@ -326,7 +449,7 @@ const App: React.FC = () => {
         )}
         {view === 'map' && (
           <MapView
-            supporters={supporters}
+            supporters={allSupporters}
             onSelectSupporter={(s) => {
               setSelectedSupporter(s);
               setView('detail');
@@ -336,15 +459,17 @@ const App: React.FC = () => {
         {view === 'detail' && selectedSupporter && (
           <SupporterDetail 
             supporter={selectedSupporter} 
+            allSupporters={allSupporters}
             user={currentUser}
+            onUpdate={(updated) => setSelectedSupporter(updated)}
             onDelete={deleteSupporter}
             onBack={() => setView('list')}
           />
         )}
         {view === 'admin' && currentUser.role === UserRole.ADMIN && (
           <AdminPanel 
-            supporters={supporters}
-            onImport={(data) => setSupporters([...data, ...supporters])}
+            supporters={allSupporters}
+            onImport={(data) => setApiSupporters((prev) => [...data, ...prev])}
             currentUser={currentUser}
           />
         )}
@@ -379,7 +504,15 @@ const App: React.FC = () => {
       <nav className="hidden md:flex fixed top-0 left-0 bottom-0 w-24 bg-white dark:bg-gray-900 border-r dark:border-gray-800 z-50 flex-col items-center pt-28 gap-8">
         <button onClick={() => setView('dashboard')} className={`p-4 rounded-2xl transition-all ${view === 'dashboard' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'}`} title="Dashboard"><i className="fa-solid fa-chart-line text-xl"></i></button>
         <button onClick={() => setView('list')} className={`p-4 rounded-2xl transition-all ${view === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'}`} title="Apoiadores"><i className="fa-solid fa-users text-xl"></i></button>
-        <button onClick={() => setView('form')} className={`p-4 rounded-2xl transition-all ${view === 'form' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'}`} title="Novo Cadastro"><i className="fa-solid fa-plus text-xl"></i></button>
+        <button
+          onClick={() => setView('form')}
+          className={`p-4 rounded-2xl transition-all ${
+            view === 'form' || view === 'pastor-form' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
+          }`}
+          title="Novo Cadastro"
+        >
+          <i className="fa-solid fa-plus text-xl"></i>
+        </button>
         <button onClick={() => setView('map')} className={`p-4 rounded-2xl transition-all ${view === 'map' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'}`} title="Mapa"><i className="fa-solid fa-map-location-dot text-xl"></i></button>
         <button onClick={() => setView('admin')} className={`p-4 rounded-2xl transition-all ${view === 'admin' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'}`} title="Admin"><i className="fa-solid fa-shield-halved text-xl"></i></button>
       </nav>

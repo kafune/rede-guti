@@ -1,5 +1,4 @@
-
-export enum UserRole {
+﻿export enum UserRole {
   ADMIN = 'ADMIN',
   OPERATOR = 'OPERATOR',
   VIEWER = 'VIEWER'
@@ -7,19 +6,24 @@ export enum UserRole {
 
 export enum SupportStatus {
   ACTIVE = 'Ativo',
-  VALIDATING = 'Em validação',
+  VALIDATING = 'Em validaÃ§Ã£o',
   INACTIVE = 'Inativo'
+}
+
+export enum SupporterType {
+  SUPPORTER = 'SUPPORTER',
+  PASTOR = 'PASTOR'
 }
 
 export type Region = 
   | 'Capital'
   | 'RMSP'
   | 'Campinas/RMC'
-  | 'Vale do Paraíba'
+  | 'Vale do ParaÃ­ba'
   | 'Sorocaba'
-  | 'Ribeirão Preto'
-  | 'São José do Rio Preto'
-  | 'Bauru/Marília'
+  | 'RibeirÃ£o Preto'
+  | 'SÃ£o JosÃ© do Rio Preto'
+  | 'Bauru/MarÃ­lia'
   | 'Presidente Prudente'
   | 'Baixada Santista'
   | 'Litoral Norte'
@@ -66,6 +70,18 @@ export interface Supporter {
   status: SupportStatus;
   notes?: string;
   photo?: string; // Campo para a foto em Base64
+  type?: SupporterType;
+  birthDate?: string;
+  cpf?: string;
+  churchDenomination?: string;
+  isMainBranch?: boolean;
+  ministryRole?: string;
+  churchAddress?: string;
+  churchCNPJ?: string;
+  churchSocialMedia?: string;
+  churchMembersCount?: string;
+  hasSocialProjects?: boolean;
+  socialProjectsDescription?: string;
 }
 
 export interface DashboardStats {

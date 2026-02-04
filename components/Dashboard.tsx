@@ -7,9 +7,11 @@ interface Props {
   currentUser: User;
   onViewList: () => void;
   onViewSupporter: (s: Supporter) => void;
+  onAddLeader: () => void;
+  onAddPastor: () => void;
 }
 
-const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onViewSupporter }) => {
+const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onViewSupporter, onAddLeader, onAddPastor }) => {
   const [copyLabel, setCopyLabel] = useState('Copiar link');
   const baseUrl = `${window.location.origin}${window.location.pathname}#/cadastro`;
   const indicatorName = currentUser?.name?.trim();
@@ -71,8 +73,26 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
     <div className="space-y-6 animate-fade-up">
       {/* Resumo da Rede */}
       <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-[2rem] text-white shadow-xl shadow-blue-500/20 animate-soft-pop transition-all duration-500 ease-out">
-        <p className="text-xs font-black uppercase tracking-widest opacity-60 mb-1">Total da Rede SP</p>
-        <h2 className="text-5xl font-black mb-4">{stats.total} <span className="text-lg opacity-40 font-normal">apoiadores</span></h2>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest opacity-60 mb-1">Total da Rede SP</p>
+            <h2 className="text-5xl font-black mb-4">{stats.total} <span className="text-lg opacity-40 font-normal">apoiadores</span></h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={onAddPastor}
+              className="px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 text-[10px] font-black uppercase tracking-widest transition-all duration-300 ease-out"
+            >
+              + Pastor Ministerial
+            </button>
+            <button
+              onClick={onAddLeader}
+              className="px-4 py-2 rounded-full bg-white text-blue-700 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-900/20 transition-all duration-300 ease-out hover:-translate-y-0.5"
+            >
+              + Lider
+            </button>
+          </div>
+        </div>
         <div className="flex gap-4">
           <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 transition-all duration-500 ease-out">
             <p className="text-[10px] font-bold opacity-60">Municípios Ativos</p>

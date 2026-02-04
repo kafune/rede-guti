@@ -60,7 +60,7 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
   useEffect(() => {
     const handle = window.setTimeout(() => {
       setDebouncedMunicipality(formData.municipality);
-    }, 300);
+    }, 150);
     return () => window.clearTimeout(handle);
   }, [formData.municipality]);
 
@@ -70,8 +70,8 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
     const list = query
       ? municipalities.filter((name) => name.toLowerCase().includes(query))
       : municipalities;
-    return list.slice(0, 12);
-  }, [municipalities, formData.municipality]);
+    return list;
+  }, [municipalities, debouncedMunicipality]);
 
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -327,3 +327,5 @@ const PastorForm: React.FC<Props> = ({ supporters, onSave, onCancel }) => {
 };
 
 export default PastorForm;
+
+

@@ -37,9 +37,9 @@ const loadLocalPastors = (): Supporter[] => {
       .filter(Boolean)
       .map((item) => ({
         ...item,
-        type: item.type ? SupporterType.PASTOR,
-        status: item.status ? SupportStatus.ACTIVE,
-        createdAt: item.createdAt ? new Date().toISOString()
+        type: item.type ?? SupporterType.PASTOR,
+        status: item.status ?? SupportStatus.ACTIVE,
+        createdAt: item.createdAt ?? new Date().toISOString()
       }));
   } catch {
     return [];

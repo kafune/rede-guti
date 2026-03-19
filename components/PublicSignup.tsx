@@ -9,6 +9,14 @@ const getIndicatorFromHash = () => {
   return params.get('indicador') || params.get('indicado') || params.get('ref') || '';
 };
 
+const getIndicatorIdFromHash = () => {
+  const hash = window.location.hash || '';
+  const queryIndex = hash.indexOf('?');
+  if (queryIndex === -1) return '';
+  const params = new URLSearchParams(hash.slice(queryIndex + 1));
+  return params.get('indicadorId') || params.get('indicatorId') || params.get('refId') || '';
+};
+
 const getGroupLinkFromHash = () => {
   const hash = window.location.hash || '';
   const queryIndex = hash.indexOf('?');
@@ -66,6 +74,7 @@ const PublicSignup: React.FC = () => {
   }, []);
 
   const refIndicator = useMemo(() => getIndicatorFromHash(), []);
+  const refIndicatorId = useMemo(() => getIndicatorIdFromHash(), []);
   const refGroupLink = useMemo(() => getGroupLinkFromHash(), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,7 +90,8 @@ const PublicSignup: React.FC = () => {
         email: email.trim() || undefined,
         churchName: churchName.trim(),
         municipalityName: municipalityName.trim(),
-        indicatedBy: refIndicator.trim()
+        indicatedBy: refIndicator.trim(),
+        indicatedByUserId: refIndicatorId.trim() || undefined
       };
 
       await createPublicIndication(payload);
@@ -200,10 +210,10 @@ const PublicSignup: React.FC = () => {
               <input
                 type="text"
                 readOnly
-                value={refIndicator || 'Link sem indicador'}
+                value={refIndicator || (refIndicatorId ? 'Indicador identificado' : 'Link sem indicador')}
                 className="w-full bg-gray-100 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 text-sm font-semibold opacity-80"
               />
-              {!refIndicator && (
+              {!refIndicator && !refIndicatorId && (
                 <p className="text-[10px] mt-2 text-yellow-700 font-bold">
                   Este link nao contem o nome do indicador. Solicite um novo link.
                 </p>
@@ -223,7 +233,7 @@ const PublicSignup: React.FC = () => {
 
             <button
               type="submit"
-              disabled={submitting || !refIndicator}
+              disabled={submitting || (!refIndicator && !refIndicatorId)}
               className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-500/40 active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50"
             >
               {submitting ? 'Enviando...' : 'Enviar cadastro'}

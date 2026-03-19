@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate --config prisma.config.ts",
     "prisma:migrate": "prisma migrate dev --config prisma.config.ts",
     "prisma:deploy": "prisma migrate deploy --config prisma.config.ts",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "create:coordinator": "tsx scripts/create-coordinator.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",

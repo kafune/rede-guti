@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { Municipality, Supporter, User, UserRole } from '../types';
+import { Municipality, Supporter, User } from '../types';
+import { canViewAllSupporters } from '../roleUtils';
 
 interface Props {
   supporters: Supporter[];
@@ -14,15 +15,18 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
   const [municipalityFilter, setMunicipalityFilter] = useState('');
 
   const municipalityNames = useMemo(() => {
-    return Array.from(new Set(municipalities.map(m => m.name)))
+    return Array.from<string>(new Set(municipalities.map((municipality) => municipality.name)))
       .sort((a, b) => a.localeCompare(b));
   }, [municipalities]);
   
   const filtered = useMemo(() => {
     let result = supporters;
     
-    if (user.role === UserRole.OPERATOR) {
-      result = result.filter(s => s.createdBy === user.id);
+    if (!canViewAllSupporters(user.role)) {
+      result = result.filter(
+        (supporter) =>
+          supporter.createdBy === user.id || supporter.indicatedByUserId === user.id
+      );
     }
 
     if (search) {

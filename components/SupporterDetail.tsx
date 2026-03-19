@@ -1,6 +1,7 @@
 ﻿
 import React, { useState, useMemo } from 'react';
-import { Supporter, User, UserRole, SupporterType } from '../types';
+import { Supporter, User } from '../types';
+import { canDeleteSupporters } from '../roleUtils';
 
 interface Props {
   supporter: Supporter;
@@ -25,10 +26,12 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
   );
 
   const canDelete = useMemo(() => {
-    return user.role === UserRole.ADMIN || (user.role === UserRole.OPERATOR && supporter.createdBy === user.id);
+    return canDeleteSupporters(user.role);
   }, [user, supporter]);
 
-  const isPastor = supporter.type === SupporterType.PASTOR;
+  const hierarchyTrail = useMemo(() => {
+    return supporter.hierarchyPath?.map((item) => item.name).join(' > ') ?? '';
+  }, [supporter.hierarchyPath]);
 
   return (
     <div className="max-w-xl mx-auto space-y-6 pb-24">
@@ -36,12 +39,12 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
         <button onClick={onBack} className="p-2 active:scale-90 transition-transform bg-white dark:bg-gray-800 rounded-xl shadow-sm">
           <i className="fa-solid fa-arrow-left text-xl"></i>
         </button>
-        <h2 className="text-2xl font-black flex-1">Dados Ministerial</h2>
+        <h2 className="text-2xl font-black flex-1">Detalhes do Cadastro</h2>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-2xl overflow-hidden border dark:border-gray-700">
         {/* Header Profile */}
-        <div className={`${isPastor ? 'bg-gradient-to-br from-indigo-700 to-indigo-900' : 'bg-gradient-to-br from-blue-600 to-blue-800'} p-10 text-center text-white relative`}>
+        <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-10 text-center text-white relative">
           <div className="w-28 h-28 bg-white/20 rounded-[2rem] flex items-center justify-center mx-auto mb-5 border-2 border-white/30 overflow-hidden shadow-2xl backdrop-blur-sm">
             {supporter.photo ? (
               <img src={supporter.photo} alt={supporter.name} className="w-full h-full object-cover" />
@@ -61,11 +64,6 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
               }`}>
                 {supporter.status}
               </span>
-              {isPastor && (
-                <span className="bg-white text-indigo-700 text-[8px] px-2.5 py-1 rounded-lg font-black uppercase shadow-lg">
-                  PASTOR â˜…
-                </span>
-              )}
           </div>
         </div>
 
@@ -74,7 +72,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
           
           {/* Card: Igreja Mapeada */}
           <div className="space-y-4">
-             <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-[0.2em] mb-4">Mapeamento da Igreja</h4>
+             <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-[0.2em] mb-4">Dados da Igreja</h4>
              <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
                   <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Denominação</p>
@@ -96,7 +94,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
 
              {supporter.churchAddress && (
                <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
-                  <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Endereço Ministerial</p>
+                  <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Endereco da Igreja</p>
                   <div className="flex items-start gap-2">
                     <i className="fa-solid fa-location-dot text-indigo-600 mt-1"></i>
                     <p className="font-bold text-xs leading-relaxed">{supporter.churchAddress}</p>
@@ -106,7 +104,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
           </div>
 
           {/* Social Impact */}
-          {isPastor && supporter.hasSocialProjects && (
+          {supporter.hasSocialProjects && supporter.socialProjectsDescription && (
              <div className="bg-green-50 dark:bg-green-900/10 p-6 rounded-3xl border border-green-100 dark:border-green-800/30">
                 <div className="flex items-center gap-2 mb-3">
                    <i className="fa-solid fa-hand-holding-heart text-green-600"></i>
@@ -152,9 +150,16 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs font-bold text-gray-400 italic">
-                    {supporter.indicatedBy || 'Liderança Direta (Rede Guti)'}
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-gray-400 italic">
+                      {supporter.indicatedBy || supporter.indicatedByUser?.name || 'Lideranca Direta (Rede Guti)'}
+                    </p>
+                    {hierarchyTrail && (
+                      <p className="text-[10px] font-black uppercase tracking-wide text-blue-600 break-words">
+                        Rede: {hierarchyTrail}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -198,7 +203,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
               <div className="fixed inset-0 z-[100] flex items-end p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
                 <div className="w-full bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom-10">
                   <h5 className="text-xl font-black text-center mb-2">Excluir Registro?</h5>
-                  <p className="text-sm text-center opacity-50 mb-8 font-medium">Esta ação não pode ser desfeita. O pastor e suas referências serão afetados.</p>
+                  <p className="text-sm text-center opacity-50 mb-8 font-medium">Esta acao nao pode ser desfeita. O cadastro e suas referencias serao afetados.</p>
                   <div className="flex gap-3">
                     <button onClick={() => setIsConfirmingDelete(false)} className="flex-1 py-4 bg-gray-100 dark:bg-gray-700 rounded-2xl font-black text-sm">CANCELAR</button>
                     <button onClick={() => onDelete(supporter.id)} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-sm">SIM, EXCLUIR</button>

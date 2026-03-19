@@ -10,27 +10,34 @@ datasource db {
 
 
 enum Role {
-  ADMIN
-  VIEWER
+  COORDENADOR
+  LIDER_REGIONAL
+  LIDER_LOCAL
 }
 
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  name         String?      @map("name")
-  devzappLink  String?      @map("devzapp_link")
-  passwordHash String       @map("password_hash")
-  role         Role         @default(VIEWER)
-  createdAt    DateTime     @default(now()) @map("created_at")
-  indications  Indication[] @relation("CreatedBy")
+  id                 String       @id @default(cuid())
+  email              String       @unique
+  name               String?      @map("name")
+  devzappLink        String?      @map("devzapp_link")
+  passwordHash       String       @map("password_hash")
+  role               Role         @default(LIDER_LOCAL)
+  indicatedByUserId  String?      @map("indicated_by_user_id")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  indicatedByUser    User?        @relation("UserIndications", fields: [indicatedByUserId], references: [id], onDelete: SetNull)
+  indicatedUsers     User[]       @relation("UserIndications")
+  createdIndications Indication[] @relation("CreatedBy")
+  indicatedSupporters Indication[] @relation("IndicatedByUser")
 
+  @@index([role])
+  @@index([indicatedByUserId])
   @@map("users")
 }
 
 model Church {
-  id        String       @id @default(cuid())
-  name      String       @unique
-  createdAt DateTime     @default(now()) @map("created_at")
+  id          String       @id @default(cuid())
+  name        String       @unique
+  createdAt   DateTime     @default(now()) @map("created_at")
   indications Indication[]
 
   @@map("churches")
@@ -48,22 +55,26 @@ model Municipality {
 }
 
 model Indication {
-  id             String       @id @default(cuid())
-  name           String
-  phone          String?
-  email          String?
-  indicatedBy    String       @map("indicated_by")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  createdById    String       @map("created_by_id")
-  churchId       String       @map("church_id")
-  municipalityId String       @map("municipality_id")
+  id                String       @id @default(cuid())
+  name              String
+  phone             String?
+  email             String?
+  indicatedBy       String?      @map("indicated_by")
+  indicatedByUserId String?      @map("indicated_by_user_id")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  createdById       String       @map("created_by_id")
+  churchId          String       @map("church_id")
+  municipalityId    String       @map("municipality_id")
 
-  createdBy    User         @relation("CreatedBy", fields: [createdById], references: [id])
-  church       Church       @relation(fields: [churchId], references: [id])
-  municipality Municipality @relation(fields: [municipalityId], references: [id])
+  createdBy       User         @relation("CreatedBy", fields: [createdById], references: [id])
+  indicatedByUser User?        @relation("IndicatedByUser", fields: [indicatedByUserId], references: [id], onDelete: SetNull)
+  church          Church       @relation(fields: [churchId], references: [id])
+  municipality    Municipality @relation(fields: [municipalityId], references: [id])
 
   @@index([createdAt])
+  @@index([createdById])
   @@index([churchId])
   @@index([municipalityId])
+  @@index([indicatedByUserId])
   @@map("indications")
 }

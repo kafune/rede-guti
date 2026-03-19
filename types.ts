@@ -1,28 +1,61 @@
-﻿export enum UserRole {
-  ADMIN = 'ADMIN',
-  OPERATOR = 'OPERATOR',
-  VIEWER = 'VIEWER'
+export enum UserRole {
+  COORDENADOR = 'COORDENADOR',
+  LIDER_REGIONAL = 'LIDER_REGIONAL',
+  LIDER_LOCAL = 'LIDER_LOCAL'
+}
+
+export type HierarchyRole = UserRole | 'APOIADOR';
+export const SUPPORTER_REGISTRATION_TARGET = 'APOIADOR';
+export type RegistrationTarget =
+  | UserRole.LIDER_REGIONAL
+  | UserRole.LIDER_LOCAL
+  | typeof SUPPORTER_REGISTRATION_TARGET;
+
+export interface RegistrationUserPayload {
+  target: UserRole.LIDER_REGIONAL | UserRole.LIDER_LOCAL;
+  name: string;
+  email: string;
+  password: string;
+  devzappLink?: string;
+}
+
+export interface RegistrationSupporterPayload {
+  target: typeof SUPPORTER_REGISTRATION_TARGET;
+  name: string;
+  whatsapp: string;
+  churchName: string;
+  municipalityName: string;
+}
+
+export type RegistrationPayload = RegistrationUserPayload | RegistrationSupporterPayload;
+
+export interface HierarchyPathItem {
+  id: string;
+  name: string;
+  role: HierarchyRole;
+}
+
+export interface UserSummary {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
 }
 
 export enum SupportStatus {
   ACTIVE = 'Ativo',
-  VALIDATING = 'Em validação',
+  VALIDATING = 'Em validacao',
   INACTIVE = 'Inativo'
 }
 
-export enum SupporterType {
-  SUPPORTER = 'SUPPORTER',
-  PASTOR = 'PASTOR'
-}
-
-export type Region = 
+export type Region =
   | 'Capital'
   | 'RMSP'
   | 'Campinas/RMC'
   | 'Vale do Paraíba'
   | 'Sorocaba'
   | 'Ribeirão Preto'
-  | 'São Jos? do Rio Preto'
+  | 'São José do Rio Preto'
   | 'Bauru/Marília'
   | 'Presidente Prudente'
   | 'Baixada Santista'
@@ -35,6 +68,10 @@ export interface User {
   name: string;
   devzappLink?: string | null;
   role: UserRole;
+  indicatedByUserId?: string | null;
+  indicatedByUser?: UserSummary | null;
+  hierarchyPath?: HierarchyPathItem[];
+  allowedUserRolesToCreate?: UserRole[];
 }
 
 export interface AdminUser {
@@ -44,6 +81,11 @@ export interface AdminUser {
   devzappLink?: string | null;
   role: UserRole;
   createdAt: string;
+  indicatedByUserId?: string | null;
+  indicatedByUser?: UserSummary | null;
+  hierarchyPath?: HierarchyPathItem[];
+  directIndicatedUsersCount?: number;
+  directSupportersCount?: number;
 }
 
 export interface Church {
@@ -65,12 +107,15 @@ export interface Supporter {
   region: Region;
   createdAt: string;
   createdBy: string;
-  referredBy?: string; 
-  indicatedBy?: string;
+  createdByName?: string;
+  referredBy?: string;
+  indicatedBy?: string | null;
+  indicatedByUserId?: string | null;
+  indicatedByUser?: UserSummary | null;
+  hierarchyPath?: HierarchyPathItem[];
   status: SupportStatus;
   notes?: string;
-  photo?: string; // Campo para a foto em Base64
-  type?: SupporterType;
+  photo?: string;
   birthDate?: string;
   cpf?: string;
   churchDenomination?: string;

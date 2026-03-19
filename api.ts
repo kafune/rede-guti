@@ -1,4 +1,4 @@
-import { AdminUser, Church, Municipality, UserRole } from './types';
+import { AdminUser, Church, HierarchyPathItem, Municipality, UserRole, UserSummary } from './types';
 
 const getApiBase = () => {
   const envValue = String((import.meta as any).env?.VITE_API_URL ?? '').trim();
@@ -9,7 +9,11 @@ const getApiBase = () => {
     return sameHost;
   }
 
-  if ((envValue.includes('localhost') || envValue.includes('127.0.0.1')) && hostname && !['localhost', '127.0.0.1'].includes(hostname)) {
+  if (
+    (envValue.includes('localhost') || envValue.includes('127.0.0.1')) &&
+    hostname &&
+    !['localhost', '127.0.0.1'].includes(hostname)
+  ) {
     return sameHost;
   }
 
@@ -21,6 +25,7 @@ const REQUEST_TIMEOUT_MS = 12000;
 
 class ApiError extends Error {
   status: number;
+
   constructor(message: string, status: number) {
     super(message);
     this.status = status;
@@ -65,7 +70,7 @@ const request = async <T>(path: string, options: RequestInit = {}) => {
       if ((!payload?.error || payload?.error === 'Bad Request') && payload?.message) {
         message = payload.message;
       }
-    } catch (err) {
+    } catch {
       // ignore parse errors
     }
     throw new ApiError(message, response.status);
@@ -83,12 +88,15 @@ export type ApiIndication = {
   name: string;
   phone?: string | null;
   email?: string | null;
-  indicatedBy: string;
+  indicatedBy?: string | null;
+  indicatedByUserId?: string | null;
+  indicatedByUser?: UserSummary | null;
+  hierarchyPath?: HierarchyPathItem[];
   createdAt: string;
   createdById?: string;
+  createdBy?: UserSummary | null;
   church: Church;
   municipality: Municipality;
-  createdBy?: { id: string; email: string; role: string };
 };
 
 export const fetchIndications = async () => {
@@ -100,7 +108,6 @@ export const createIndication = async (payload: {
   name: string;
   phone?: string;
   email?: string;
-  indicatedBy: string;
   churchId: string;
   municipalityId: string;
 }) => {
@@ -153,6 +160,7 @@ export const createPublicIndication = async (payload: {
   churchName: string;
   municipalityName: string;
   indicatedBy?: string;
+  indicatedByUserId?: string;
 }) => {
   const data = await request<{ indication: ApiIndication }>('/public/indications', {
     method: 'POST',

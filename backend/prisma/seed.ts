@@ -10,25 +10,37 @@ const getRequiredEnv = (key: string) => {
   return value;
 };
 
-async function upsertUser(email: string, password: string, role: Role) {
+async function upsertUser(email: string, password: string, role: Role, indicatedByUserId?: string) {
   const passwordHash = await bcrypt.hash(password, 10);
-  await prisma.user.upsert({
+  return prisma.user.upsert({
     where: { email },
-    update: { passwordHash, role },
-    create: { email, passwordHash, role }
+    update: { passwordHash, role, indicatedByUserId },
+    create: { email, passwordHash, role, indicatedByUserId }
   });
 }
 
 async function main() {
-  const adminEmail = getRequiredEnv('ADMIN_EMAIL');
-  const adminPassword = getRequiredEnv('ADMIN_PASSWORD');
-  const viewerEmail = process.env.VIEWER_EMAIL;
-  const viewerPassword = process.env.VIEWER_PASSWORD;
+  const coordinatorEmail = (process.env.COORD_EMAIL ?? process.env.ADMIN_EMAIL)?.toLowerCase();
+  const coordinatorPassword = process.env.COORD_PASSWORD ?? process.env.ADMIN_PASSWORD;
+  const regionalEmail = process.env.LR_EMAIL?.toLowerCase();
+  const regionalPassword = process.env.LR_PASSWORD;
+  const localEmail = process.env.LL_EMAIL?.toLowerCase();
+  const localPassword = process.env.LL_PASSWORD;
 
-  await upsertUser(adminEmail.toLowerCase(), adminPassword, Role.ADMIN);
+  if (!coordinatorEmail || !coordinatorPassword) {
+    throw new Error('Missing coordinator credentials. Set COORD_EMAIL/COORD_PASSWORD or ADMIN_EMAIL/ADMIN_PASSWORD.');
+  }
 
-  if (viewerEmail && viewerPassword) {
-    await upsertUser(viewerEmail.toLowerCase(), viewerPassword, Role.VIEWER);
+  const coordinator = await upsertUser(coordinatorEmail, coordinatorPassword, Role.COORDENADOR);
+
+  let regionalId = coordinator.id;
+  if (regionalEmail && regionalPassword) {
+    const regional = await upsertUser(regionalEmail, regionalPassword, Role.LIDER_REGIONAL, coordinator.id);
+    regionalId = regional.id;
+  }
+
+  if (localEmail && localPassword) {
+    await upsertUser(localEmail, localPassword, Role.LIDER_LOCAL, regionalId);
   }
 }
 

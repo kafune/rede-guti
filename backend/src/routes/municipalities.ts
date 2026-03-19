@@ -1,4 +1,4 @@
-﻿import { FastifyInstance } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 
@@ -13,7 +13,7 @@ export async function municipalityRoutes(app: FastifyInstance) {
     return { municipalities };
   });
 
-  app.post('/municipalities', { preHandler: app.requireAdmin }, async (request, reply) => {
+  app.post('/municipalities', { preHandler: app.authenticate }, async (request, reply) => {
     const body = municipalitySchema.safeParse(request.body);
     if (!body.success) {
       return reply.code(400).send({ error: 'Invalid payload' });

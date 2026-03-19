@@ -33,6 +33,16 @@ The API will start at `http://localhost:4000`.
 2. Run:
    `docker compose up -d`
 
+### Database helpers
+
+From the project root, you can use Bun scripts for the Postgres container:
+
+- `bun run db:shell` opens `psql` inside the `db` container.
+- `bun run db:status` shows container status, readiness, and current tables.
+- `bun run db:dump` creates a SQL backup in `./backups`.
+- `bun run db:restore -- ./backups/file.sql` restores a SQL backup into the container database.
+- `bun run db:logs` tails database logs.
+
 ### Core endpoints
 
 - `POST /auth/login`

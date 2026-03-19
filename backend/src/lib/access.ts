@@ -1,4 +1,4 @@
-import { Prisma, Role } from '@prisma/client';
+import type { Prisma, Role } from '@prisma/client';
 
 export type AuthenticatedUser = {
   sub: string;

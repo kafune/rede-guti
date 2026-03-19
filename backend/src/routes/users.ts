@@ -1,4 +1,5 @@
-import { Role } from '@prisma/client';
+import prismaClient from '@prisma/client';
+import type { Role as RoleType } from '@prisma/client';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
@@ -11,6 +12,8 @@ import {
   visibleUsersWhere
 } from '../lib/access.js';
 import { buildUserHierarchyPath, serializeUserSummary, userHierarchySelect } from '../lib/hierarchy.js';
+
+const { Role } = prismaClient;
 
 const createSchema = z.object({
   email: z.string().email(),
@@ -60,14 +63,14 @@ const serializeUserRecord = (user: {
   email: string;
   name: string | null;
   devzappLink: string | null;
-  role: Role;
+  role: RoleType;
   createdAt: Date;
   indicatedByUserId: string | null;
   indicatedByUser?: {
     id: string;
     email: string;
     name: string | null;
-    role: Role;
+  role: RoleType;
     indicatedByUser?: any;
   } | null;
   _count: {
@@ -197,7 +200,7 @@ export async function userRoutes(app: FastifyInstance) {
     const updateData: {
       email?: string;
       name?: string;
-      role?: Role;
+    role?: RoleType;
       passwordHash?: string;
       devzappLink?: string | null;
     } = {};

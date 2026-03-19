@@ -1,8 +1,10 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
-import { Role } from '@prisma/client';
+import prismaClient from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../src/db.ts';
+
+const { Role } = prismaClient;
 
 const helpText = `
 Uso:

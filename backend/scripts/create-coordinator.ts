@@ -8,28 +8,25 @@ const { Role } = prismaClient;
 
 const helpText = `
 Uso:
-  bun run create:coordinator -- --email coord@exemplo.com --password "Senha123!" [--name "Nome"] [--devzapp "https://..."]
+  bun run create:coordinator -- --email coord@exemplo.com --password "Senha123!" [--name "Nome"]
 
 Tambem aceita fallback via ambiente:
   COORD_EMAIL
   COORD_PASSWORD
   COORD_NAME
-  COORD_DEVZAPP_LINK
 `.trim();
 
 type ParsedArgs = {
   email?: string;
   password?: string;
   name?: string;
-  devzappLink?: string;
   help?: boolean;
 };
 
 const inputSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
-  name: z.string().min(2).optional(),
-  devzappLink: z.string().min(3).optional()
+  name: z.string().min(2).optional()
 });
 
 const parseArgs = (argv: string[]): ParsedArgs => {
@@ -63,10 +60,6 @@ const parseArgs = (argv: string[]): ParsedArgs => {
       case 'name':
         parsed.name = nextValue;
         break;
-      case 'devzapp':
-      case 'devzappLink':
-        parsed.devzappLink = nextValue;
-        break;
       default:
         throw new Error(`Argumento nao suportado: --${key}`);
     }
@@ -88,15 +81,13 @@ async function main() {
   const rawInput = {
     email: args.email ?? process.env.COORD_EMAIL,
     password: args.password ?? process.env.COORD_PASSWORD,
-    name: args.name ?? process.env.COORD_NAME,
-    devzappLink: args.devzappLink ?? process.env.COORD_DEVZAPP_LINK
+    name: args.name ?? process.env.COORD_NAME
   };
 
   const parsed = inputSchema.safeParse({
     email: rawInput.email?.trim().toLowerCase(),
     password: rawInput.password,
-    name: rawInput.name?.trim() || undefined,
-    devzappLink: rawInput.devzappLink?.trim() || undefined
+    name: rawInput.name?.trim() || undefined
   });
 
   if (!parsed.success) {
@@ -106,7 +97,7 @@ async function main() {
     return;
   }
 
-  const { email, password, name, devzappLink } = parsed.data;
+  const { email, password, name } = parsed.data;
   const passwordHash = await bcrypt.hash(password, 10);
 
   const existing = await prisma.user.findUnique({
@@ -126,15 +117,13 @@ async function main() {
         role: Role.COORDENADOR,
         passwordHash,
         name: name ?? existing.name,
-        devzappLink: devzappLink ?? undefined,
         indicatedByUserId: null
       },
       select: {
         id: true,
         email: true,
         role: true,
-        name: true,
-        devzappLink: true
+        name: true
       }
     });
 
@@ -149,15 +138,13 @@ async function main() {
       passwordHash,
       role: Role.COORDENADOR,
       name,
-      devzappLink,
       indicatedByUserId: null
     },
     select: {
       id: true,
       email: true,
       role: true,
-      name: true,
-      devzappLink: true
+      name: true
     }
   });
 

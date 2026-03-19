@@ -14,7 +14,6 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
   const baseUrl = `${window.location.origin}${window.location.pathname}#/cadastro`;
   const indicatorName = currentUser?.name?.trim();
   const indicatorId = currentUser?.id;
-  const devzappLink = currentUser?.devzappLink?.trim();
   const networkLabel =
     currentUser.role === 'COORDENADOR'
       ? 'Total da Rede SP'
@@ -22,7 +21,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
         ? 'Total da Sua Rede Regional'
         : 'Total da Sua Base Local';
   const shareUrl = indicatorName
-    ? `${baseUrl}?indicador=${encodeURIComponent(indicatorName)}${indicatorId ? `&indicadorId=${encodeURIComponent(indicatorId)}` : ''}${devzappLink ? `&devzapp=${encodeURIComponent(devzappLink)}` : ''}`
+    ? `${baseUrl}?indicador=${encodeURIComponent(indicatorName)}${indicatorId ? `&indicadorId=${encodeURIComponent(indicatorId)}` : ''}`
     : baseUrl;
 
   const handleCopy = async () => {

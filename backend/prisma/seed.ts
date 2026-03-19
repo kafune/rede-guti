@@ -1,4 +1,5 @@
 import prismaClient from '@prisma/client';
+import type { Role as RoleType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/db.ts';
 
@@ -12,7 +13,7 @@ const getRequiredEnv = (key: string) => {
   return value;
 };
 
-async function upsertUser(email: string, password: string, role: Role, indicatedByUserId?: string) {
+async function upsertUser(email: string, password: string, role: RoleType, indicatedByUserId?: string) {
   const passwordHash = await bcrypt.hash(password, 10);
   return prisma.user.upsert({
     where: { email },

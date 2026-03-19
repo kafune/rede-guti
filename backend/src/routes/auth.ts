@@ -14,7 +14,6 @@ const authUserSelect = {
   id: true,
   email: true,
   name: true,
-  devzappLink: true,
   role: true,
   indicatedByUserId: true,
   indicatedByUser: {
@@ -26,7 +25,6 @@ const serializeAuthUser = (user: {
   id: string;
   email: string;
   name: string | null;
-  devzappLink: string | null;
   role: 'COORDENADOR' | 'LIDER_REGIONAL' | 'LIDER_LOCAL';
   indicatedByUserId: string | null;
   indicatedByUser?: {
@@ -40,7 +38,6 @@ const serializeAuthUser = (user: {
   id: user.id,
   email: user.email,
   name: user.name,
-  devzappLink: user.devzappLink,
   role: user.role,
   indicatedByUserId: user.indicatedByUserId,
   indicatedByUser: serializeUserSummary(user.indicatedByUser),

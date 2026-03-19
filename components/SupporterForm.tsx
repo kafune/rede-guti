@@ -48,8 +48,7 @@ const SupporterForm: React.FC<Props> = ({
   const [userForm, setUserForm] = useState({
     name: '',
     email: '',
-    password: '',
-    devzappLink: ''
+    password: ''
   });
   const [supporterForm, setSupporterForm] = useState({
     name: '',
@@ -70,8 +69,7 @@ const SupporterForm: React.FC<Props> = ({
     setUserForm({
       name: '',
       email: '',
-      password: '',
-      devzappLink: ''
+      password: ''
     });
   };
 
@@ -100,8 +98,7 @@ const SupporterForm: React.FC<Props> = ({
         target,
         name: userForm.name.trim(),
         email: userForm.email.trim(),
-        password: userForm.password,
-        devzappLink: userForm.devzappLink.trim() || undefined
+        password: userForm.password
       };
     } else {
       if (
@@ -257,23 +254,6 @@ const SupporterForm: React.FC<Props> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-2">
-                  Link DevZapp
-                </label>
-                <input
-                  type="text"
-                  placeholder="Opcional"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={userForm.devzappLink}
-                  onChange={(event) =>
-                    setUserForm((previous) => ({
-                      ...previous,
-                      devzappLink: event.target.value
-                    }))
-                  }
-                />
-              </div>
             </>
           ) : (
             <>

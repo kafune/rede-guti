@@ -34,6 +34,15 @@ model User {
   @@map("users")
 }
 
+model AppConfig {
+  id                String   @id @default("default")
+  whatsappGroupLink String?  @map("whatsapp_group_link")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("app_config")
+}
+
 model Church {
   id          String       @id @default(cuid())
   name        String       @unique

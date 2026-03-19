@@ -17,14 +17,6 @@ const getIndicatorIdFromHash = () => {
   return params.get('indicadorId') || params.get('indicatorId') || params.get('refId') || '';
 };
 
-const getGroupLinkFromHash = () => {
-  const hash = window.location.hash || '';
-  const queryIndex = hash.indexOf('?');
-  if (queryIndex === -1) return '';
-  const params = new URLSearchParams(hash.slice(queryIndex + 1));
-  return params.get('devzapp') || params.get('grupo') || '';
-};
-
 const normalizePhone = (value: string) => {
   const digits = value.replace(/\D/g, '');
   if (!digits) return '';
@@ -36,6 +28,7 @@ const PublicSignup: React.FC = () => {
   const [optionsError, setOptionsError] = useState<string | null>(null);
   const [churches, setChurches] = useState<string[]>([]);
   const [municipalities, setMunicipalities] = useState<string[]>([]);
+  const [whatsappGroupLink, setWhatsappGroupLink] = useState('');
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -57,6 +50,7 @@ const PublicSignup: React.FC = () => {
         if (cancelled) return;
         setChurches(data.churches || []);
         setMunicipalities(data.municipalities || []);
+        setWhatsappGroupLink(data.whatsappGroupLink?.trim() || '');
       } catch (error) {
         if (!cancelled) {
           setOptionsError(getApiErrorMessage(error, 'Erro ao carregar dados.'));
@@ -75,7 +69,6 @@ const PublicSignup: React.FC = () => {
 
   const refIndicator = useMemo(() => getIndicatorFromHash(), []);
   const refIndicatorId = useMemo(() => getIndicatorIdFromHash(), []);
-  const refGroupLink = useMemo(() => getGroupLinkFromHash(), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +80,7 @@ const PublicSignup: React.FC = () => {
       const payload = {
         name: name.trim(),
         phone: normalizePhone(phone),
-        email: email.trim() || undefined,
+        email: email.trim(),
         churchName: churchName.trim(),
         municipalityName: municipalityName.trim(),
         indicatedBy: refIndicator.trim(),
@@ -96,8 +89,8 @@ const PublicSignup: React.FC = () => {
 
       await createPublicIndication(payload);
       sessionStorage.setItem('guti_public_name', payload.name);
-      if (refGroupLink.trim()) {
-        sessionStorage.setItem('guti_public_group_link', refGroupLink.trim());
+      if (whatsappGroupLink.trim()) {
+        sessionStorage.setItem('guti_public_group_link', whatsappGroupLink.trim());
       } else {
         sessionStorage.removeItem('guti_public_group_link');
       }
@@ -157,13 +150,14 @@ const PublicSignup: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-1">E-mail (opcional)</label>
+                <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-1">E-mail</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   placeholder="nome@exemplo.com"
+                  required
                 />
               </div>
             </div>

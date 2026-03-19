@@ -16,7 +16,6 @@ export interface RegistrationUserPayload {
   name: string;
   email: string;
   password: string;
-  devzappLink?: string;
 }
 
 export interface RegistrationSupporterPayload {
@@ -66,7 +65,6 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  devzappLink?: string | null;
   role: UserRole;
   indicatedByUserId?: string | null;
   indicatedByUser?: UserSummary | null;
@@ -78,7 +76,6 @@ export interface AdminUser {
   id: string;
   email: string;
   name?: string | null;
-  devzappLink?: string | null;
   role: UserRole;
   createdAt: string;
   indicatedByUserId?: string | null;
@@ -86,6 +83,11 @@ export interface AdminUser {
   hierarchyPath?: HierarchyPathItem[];
   directIndicatedUsersCount?: number;
   directSupportersCount?: number;
+}
+
+export interface AppSettings {
+  whatsappGroupLink?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface Church {

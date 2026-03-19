@@ -268,8 +268,7 @@ const App: React.FC = () => {
         name: payload.name.trim(),
         email: payload.email.trim(),
         password: payload.password,
-        role: payload.target,
-        devzappLink: payload.devzappLink?.trim() || undefined
+        role: payload.target
       });
       return true;
     } catch (error) {

@@ -13,7 +13,7 @@ const createPublicSchema = z
   .object({
     name: z.string().min(2),
     phone: z.string().min(6),
-    email: z.string().email().optional(),
+    email: z.string().email(),
     churchName: z.string().min(2),
     municipalityName: z.string().min(2),
     indicatedBy: z.string().min(2).optional(),
@@ -88,18 +88,25 @@ const serializeIndicationRecord = (indication: {
 
 export async function publicRoutes(app: FastifyInstance) {
   app.get('/public/options', async () => {
-    const churches = await prisma.church.findMany({
-      select: { name: true },
-      orderBy: { name: 'asc' }
-    });
-    const municipalities = await prisma.municipality.findMany({
-      select: { name: true },
-      orderBy: { name: 'asc' }
-    });
+    const [churches, municipalities, settings] = await Promise.all([
+      prisma.church.findMany({
+        select: { name: true },
+        orderBy: { name: 'asc' }
+      }),
+      prisma.municipality.findMany({
+        select: { name: true },
+        orderBy: { name: 'asc' }
+      }),
+      prisma.appConfig.findUnique({
+        where: { id: 'default' },
+        select: { whatsappGroupLink: true }
+      })
+    ]);
 
     return {
       churches: churches.map((c) => c.name),
-      municipalities: municipalities.map((m) => m.name)
+      municipalities: municipalities.map((m) => m.name),
+      whatsappGroupLink: settings?.whatsappGroupLink ?? null
     };
   });
 
@@ -112,7 +119,7 @@ export async function publicRoutes(app: FastifyInstance) {
     const data = body.data;
     const name = normalizeText(data.name);
     const phone = normalizeText(data.phone);
-    const email = data.email ? data.email.toLowerCase().trim() : undefined;
+    const email = data.email.toLowerCase().trim();
     const churchName = normalizeText(data.churchName);
     const municipalityName = normalizeText(data.municipalityName);
     const indicatedBy = data.indicatedBy ? normalizeText(data.indicatedBy) : undefined;

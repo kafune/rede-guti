@@ -1,6 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AdminUser, Church, Municipality, RegistrationPayload, Supporter, User, UserRole } from '../types';
-import { deleteUser, fetchUsers, getApiErrorMessage, updateUser } from '../api';
+import {
+  AdminUser,
+  AppSettings,
+  Church,
+  Municipality,
+  RegistrationPayload,
+  Supporter,
+  User,
+  UserRole
+} from '../types';
+import { deleteUser, fetchSettings, fetchUsers, getApiErrorMessage, updateSettings, updateUser } from '../api';
 import { canManageUsers, getDefaultCreatableUserRole, getRoleLabel } from '../roleUtils';
 import SupporterForm from './SupporterForm';
 
@@ -57,12 +66,17 @@ const AdminPanel: React.FC<Props> = ({
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSuccess, setSettingsSuccess] = useState('');
+  const [whatsappGroupLinkInput, setWhatsappGroupLinkInput] = useState('');
   const [editUser, setEditUser] = useState({
     name: '',
     email: '',
     password: '',
-    role: getDefaultCreatableUserRole(currentUser.role),
-    devzappLink: ''
+    role: getDefaultCreatableUserRole(currentUser.role)
   });
 
   const exportCSV = () => {
@@ -107,8 +121,23 @@ const AdminPanel: React.FC<Props> = ({
     }
   };
 
+  const loadSettings = async () => {
+    setSettingsLoading(true);
+    setSettingsError(null);
+    try {
+      const data = await fetchSettings();
+      setSettings(data);
+      setWhatsappGroupLinkInput(data.whatsappGroupLink?.trim() || '');
+    } catch (error) {
+      setSettingsError(getApiErrorMessage(error, 'Erro ao carregar configuracao do grupo.'));
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
   useEffect(() => {
     void loadUsers();
+    void loadSettings();
   }, []);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,8 +185,7 @@ const AdminPanel: React.FC<Props> = ({
       name: user.name ?? '',
       email: user.email,
       password: '',
-      role: user.role,
-      devzappLink: user.devzappLink ?? ''
+      role: user.role
     });
   };
 
@@ -167,8 +195,7 @@ const AdminPanel: React.FC<Props> = ({
       name: '',
       email: '',
       password: '',
-      role: getDefaultCreatableUserRole(currentUser.role),
-      devzappLink: ''
+      role: getDefaultCreatableUserRole(currentUser.role)
     });
   };
 
@@ -180,12 +207,10 @@ const AdminPanel: React.FC<Props> = ({
       name?: string;
       password?: string;
       role?: UserRole;
-      devzappLink?: string | null;
     } = {};
 
     const trimmedEmail = editUser.email.trim().toLowerCase();
     const trimmedName = editUser.name.trim();
-    const trimmedDevzappLink = editUser.devzappLink.trim();
 
     if (trimmedEmail && trimmedEmail !== user.email.toLowerCase()) {
       payload.email = trimmedEmail;
@@ -201,10 +226,6 @@ const AdminPanel: React.FC<Props> = ({
 
     if (editUser.role && editUser.role !== user.role) {
       payload.role = editUser.role;
-    }
-
-    if (trimmedDevzappLink !== (user.devzappLink ?? '')) {
-      payload.devzappLink = trimmedDevzappLink ? trimmedDevzappLink : null;
     }
 
     if (!Object.keys(payload).length) {
@@ -241,6 +262,26 @@ const AdminPanel: React.FC<Props> = ({
     }
   };
 
+  const handleSaveSettings = async () => {
+    if (!allowUserEditing) return;
+
+    setSettingsSaving(true);
+    setSettingsError(null);
+    setSettingsSuccess('');
+    try {
+      const updated = await updateSettings({
+        whatsappGroupLink: whatsappGroupLinkInput.trim() || null
+      });
+      setSettings(updated);
+      setWhatsappGroupLinkInput(updated.whatsappGroupLink?.trim() || '');
+      setSettingsSuccess('Link do grupo atualizado com sucesso.');
+    } catch (error) {
+      setSettingsError(getApiErrorMessage(error, 'Erro ao salvar link do grupo.'));
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   const networkUsers = useMemo<NetworkUserNode[]>(() => {
     const baseUsers = [...users];
     if (!baseUsers.some((user) => user.id === currentUser.id)) {
@@ -249,7 +290,6 @@ const AdminPanel: React.FC<Props> = ({
         email: currentUser.email,
         name: currentUser.name,
         role: currentUser.role,
-        devzappLink: currentUser.devzappLink ?? null,
         createdAt: '',
         indicatedByUserId: currentUser.indicatedByUserId ?? null,
         indicatedByUser: currentUser.indicatedByUser ?? null,
@@ -401,6 +441,86 @@ const AdminPanel: React.FC<Props> = ({
       </div>
 
       <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center text-green-600 text-xl shrink-0">
+            <i className="fa-brands fa-whatsapp"></i>
+          </div>
+          <div className="flex-1 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold mb-1">Grupo oficial de WhatsApp</h3>
+              <p className="text-sm opacity-60">
+                Link unico usado no cadastro publico e na tela de boas-vindas.
+              </p>
+            </div>
+
+            {settingsLoading ? (
+              <div className="text-sm text-blue-600 font-semibold bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
+                Carregando configuracao...
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <input
+                  type="url"
+                  value={whatsappGroupLinkInput}
+                  onChange={(event) => setWhatsappGroupLinkInput(event.target.value)}
+                  placeholder="https://chat.whatsapp.com/..."
+                  disabled={!allowUserEditing}
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-green-500 outline-none transition-all disabled:opacity-70"
+                />
+
+                <div className="flex flex-wrap items-center gap-3">
+                  {allowUserEditing ? (
+                    <button
+                      onClick={handleSaveSettings}
+                      disabled={settingsSaving}
+                      className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50"
+                    >
+                      {settingsSaving ? 'Salvando...' : 'Salvar link'}
+                    </button>
+                  ) : (
+                    settings?.whatsappGroupLink && (
+                      <a
+                        href={settings.whatsappGroupLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-bold transition-all duration-300 ease-out hover:-translate-y-0.5"
+                      >
+                        Abrir link
+                      </a>
+                    )
+                  )}
+
+                  {settings?.updatedAt && (
+                    <span className="text-xs opacity-50 font-semibold">
+                      Atualizado em {new Date(settings.updatedAt).toLocaleString('pt-BR')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {settingsError && (
+              <div className="text-sm text-red-600 font-semibold bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+                {settingsError}
+              </div>
+            )}
+
+            {settingsSuccess && (
+              <div className="text-sm text-green-700 font-semibold bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
+                {settingsSuccess}
+              </div>
+            )}
+
+            {!allowUserEditing && (
+              <div className="text-sm font-semibold text-gray-500">
+                Apenas coordenadores podem alterar este link.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
             <h3 className="text-lg font-bold mb-1">Cadastros da rede</h3>
@@ -460,7 +580,7 @@ const AdminPanel: React.FC<Props> = ({
               >
                 <div className="flex-1 space-y-2">
                   {isEditing ? (
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                       <input
                         type="text"
                         value={editUser.name}
@@ -471,15 +591,6 @@ const AdminPanel: React.FC<Props> = ({
                         type="email"
                         value={editUser.email}
                         onChange={(event) => setEditUser((prev) => ({ ...prev, email: event.target.value }))}
-                        className="md:col-span-2 w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      />
-                      <input
-                        type="text"
-                        value={editUser.devzappLink}
-                        onChange={(event) =>
-                          setEditUser((prev) => ({ ...prev, devzappLink: event.target.value }))
-                        }
-                        placeholder="DevZapp (opcional)"
                         className="md:col-span-2 w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       />
                       <select
@@ -518,7 +629,6 @@ const AdminPanel: React.FC<Props> = ({
                       </div>
                       <div className="text-xs opacity-60 space-y-1">
                         <div>{user.email}</div>
-                        {user.devzappLink && <div>DevZapp: {user.devzappLink}</div>}
                         {user.indicatedByUser && <div>Indicado por: {user.indicatedByUser.name}</div>}
                         {hierarchyLabel && <div>Rede: {hierarchyLabel}</div>}
                         <div>

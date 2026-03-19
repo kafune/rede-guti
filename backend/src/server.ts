@@ -11,6 +11,7 @@ import { indicationRoutes } from './routes/indications.js';
 import { userRoutes } from './routes/users.js';
 import { healthRoutes } from './routes/health.js';
 import { publicRoutes } from './routes/public.js';
+import { settingsRoutes } from './routes/settings.js';
 
 const app = Fastify({
   logger: true
@@ -29,6 +30,7 @@ await app.register(churchRoutes);
 await app.register(municipalityRoutes);
 await app.register(indicationRoutes);
 await app.register(publicRoutes);
+await app.register(settingsRoutes);
 
 const start = async () => {
   try {

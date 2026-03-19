@@ -19,8 +19,7 @@ const createSchema = z.object({
   email: z.string().email(),
   name: z.string().min(2),
   password: z.string().min(6),
-  role: z.nativeEnum(Role),
-  devzappLink: z.string().min(3).optional()
+  role: z.nativeEnum(Role)
 });
 
 const updateSchema = z
@@ -28,8 +27,7 @@ const updateSchema = z
     email: z.string().email().optional(),
     name: z.string().min(2).optional(),
     password: z.string().min(6).optional(),
-    role: z.nativeEnum(Role).optional(),
-    devzappLink: z.string().min(3).nullable().optional()
+    role: z.nativeEnum(Role).optional()
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Invalid payload'
@@ -43,7 +41,6 @@ const userListSelect = {
   id: true,
   email: true,
   name: true,
-  devzappLink: true,
   role: true,
   createdAt: true,
   indicatedByUserId: true,
@@ -62,7 +59,6 @@ const serializeUserRecord = (user: {
   id: string;
   email: string;
   name: string | null;
-  devzappLink: string | null;
   role: RoleType;
   createdAt: Date;
   indicatedByUserId: string | null;
@@ -70,7 +66,7 @@ const serializeUserRecord = (user: {
     id: string;
     email: string;
     name: string | null;
-  role: RoleType;
+    role: RoleType;
     indicatedByUser?: any;
   } | null;
   _count: {
@@ -81,7 +77,6 @@ const serializeUserRecord = (user: {
   id: user.id,
   email: user.email,
   name: user.name,
-  devzappLink: user.devzappLink,
   role: user.role,
   createdAt: user.createdAt,
   indicatedByUserId: user.indicatedByUserId,
@@ -128,7 +123,6 @@ export async function userRoutes(app: FastifyInstance) {
         data: {
           email: body.data.email.toLowerCase(),
           name: body.data.name.trim(),
-          devzappLink: body.data.devzappLink?.trim() || undefined,
           passwordHash,
           role: body.data.role,
           indicatedByUserId: request.user.sub
@@ -200,9 +194,8 @@ export async function userRoutes(app: FastifyInstance) {
     const updateData: {
       email?: string;
       name?: string;
-    role?: RoleType;
+      role?: RoleType;
       passwordHash?: string;
-      devzappLink?: string | null;
     } = {};
 
     if (body.data.email) {
@@ -219,10 +212,6 @@ export async function userRoutes(app: FastifyInstance) {
 
     if (body.data.password) {
       updateData.passwordHash = await bcrypt.hash(body.data.password, 10);
-    }
-
-    if (body.data.devzappLink !== undefined) {
-      updateData.devzappLink = body.data.devzappLink ? body.data.devzappLink.trim() : null;
     }
 
     try {

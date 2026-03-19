@@ -55,7 +55,6 @@ const Login: React.FC<Props> = ({ onLogin }) => {
         id: data.user.id,
         email: data.user.email,
         name: resolvedName,
-        devzappLink: data.user.devzappLink ?? null,
         role: data.user.role
       });
     } catch (err) {

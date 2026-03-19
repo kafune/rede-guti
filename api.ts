@@ -1,4 +1,12 @@
-import { AdminUser, Church, HierarchyPathItem, Municipality, UserRole, UserSummary } from './types';
+import {
+  AdminUser,
+  AppSettings,
+  Church,
+  HierarchyPathItem,
+  Municipality,
+  UserRole,
+  UserSummary
+} from './types';
 
 const getApiBase = () => {
   const envValue = String((import.meta as any).env?.VITE_API_URL ?? '').trim();
@@ -149,14 +157,18 @@ export const createMunicipality = async (name: string, stateCode = 'SP') => {
 };
 
 export const fetchPublicOptions = async () => {
-  const data = await request<{ churches: string[]; municipalities: string[] }>('/public/options');
+  const data = await request<{
+    churches: string[];
+    municipalities: string[];
+    whatsappGroupLink?: string | null;
+  }>('/public/options');
   return data;
 };
 
 export const createPublicIndication = async (payload: {
   name: string;
   phone: string;
-  email?: string;
+  email: string;
   churchName: string;
   municipalityName: string;
   indicatedBy?: string;
@@ -179,7 +191,6 @@ export const createUser = async (payload: {
   name: string;
   password: string;
   role: UserRole;
-  devzappLink?: string;
 }) => {
   const data = await request<{ user: AdminUser }>('/users', {
     method: 'POST',
@@ -190,7 +201,7 @@ export const createUser = async (payload: {
 
 export const updateUser = async (
   id: string,
-  payload: { email?: string; name?: string; password?: string; role?: UserRole; devzappLink?: string | null }
+  payload: { email?: string; name?: string; password?: string; role?: UserRole }
 ) => {
   const data = await request<{ user: AdminUser }>(`/users/${id}`, {
     method: 'PATCH',
@@ -201,6 +212,19 @@ export const updateUser = async (
 
 export const deleteUser = async (id: string) => {
   await request<void>(`/users/${id}`, { method: 'DELETE' });
+};
+
+export const fetchSettings = async () => {
+  const data = await request<{ settings: AppSettings }>('/settings');
+  return data.settings;
+};
+
+export const updateSettings = async (payload: { whatsappGroupLink: string | null }) => {
+  const data = await request<{ settings: AppSettings }>('/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+  return data.settings;
 };
 
 export const isUnauthorized = (error: unknown) => {

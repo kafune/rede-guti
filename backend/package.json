@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "postinstall": "bun run prisma:generate",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
@@ -11,6 +12,7 @@
     "prisma:migrate": "prisma migrate dev --config prisma.config.ts",
     "prisma:deploy": "prisma migrate deploy --config prisma.config.ts",
     "seed": "tsx prisma/seed.ts",
+    "precreate:coordinator": "bun run prisma:generate",
     "create:coordinator": "tsx scripts/create-coordinator.ts"
   },
   "dependencies": {

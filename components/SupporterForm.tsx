@@ -174,7 +174,7 @@ const SupporterForm: React.FC<Props> = ({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border dark:border-gray-700 space-y-5 transition-all duration-500 ease-out">
+        <div className="theme-panel bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border dark:border-gray-700 space-y-5 transition-all duration-500 ease-out">
           <div>
             <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-2">
               Perfil a cadastrar

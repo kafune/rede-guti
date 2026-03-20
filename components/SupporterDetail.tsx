@@ -36,7 +36,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
   return (
     <div className="max-w-xl mx-auto space-y-6 pb-24">
       <div className="flex items-center gap-4">
-        <button onClick={onBack} className="p-2 active:scale-90 transition-transform bg-white dark:bg-gray-800 rounded-xl shadow-sm">
+        <button onClick={onBack} className="theme-panel p-2 active:scale-90 transition-transform bg-white dark:bg-gray-800 rounded-xl shadow-sm">
           <i className="fa-solid fa-arrow-left text-xl"></i>
         </button>
         <h2 className="text-2xl font-black flex-1">Detalhes do Cadastro</h2>
@@ -185,7 +185,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
           <div className="space-y-3 pt-6 border-t dark:border-gray-700">
             <button 
               onClick={() => window.open(`https://wa.me/${supporter.whatsapp}`, '_blank')}
-              className="w-full py-5 bg-green-500 text-white rounded-[1.75rem] font-black flex items-center justify-center gap-3 shadow-xl shadow-green-500/30 active:scale-95 transition-all"
+              className="theme-accent-button w-full py-5 rounded-[1.75rem] font-black flex items-center justify-center gap-3 active:scale-95 transition-all"
             >
               <i className="fa-brands fa-whatsapp text-2xl"></i> FALAR NO WHATSAPP
             </button>

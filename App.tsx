@@ -320,12 +320,12 @@ const App: React.FC = () => {
         isMapView ? 'pb-0' : 'pb-24 md:pb-0'
       }`}
     >
-      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b dark:border-gray-800 px-6 h-20 flex items-center justify-between">
+      <header className="fixed top-0 left-0 md:left-24 right-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b dark:border-gray-800 px-6 h-20 flex items-center justify-between">
         <div
           className="flex items-center gap-3 cursor-pointer"
           onClick={() => setView('dashboard')}
         >
-          <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/20">
+          <div className="theme-brand-mark w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-xl">
             G
           </div>
           <div>
@@ -447,7 +447,7 @@ const App: React.FC = () => {
         <div className="relative -top-10">
           <button
             onClick={() => setView('form')}
-            className="w-16 h-16 bg-blue-600 text-white rounded-[1.75rem] shadow-2xl shadow-blue-500/50 flex items-center justify-center text-3xl transition-transform active:scale-90"
+            className="theme-brand-mark w-16 h-16 rounded-[1.75rem] flex items-center justify-center text-3xl transition-transform active:scale-90"
           >
             <i className="fa-solid fa-plus"></i>
           </button>

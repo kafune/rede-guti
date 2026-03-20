@@ -152,7 +152,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
         } transition-all duration-700 ease-out`}
       >
         <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-950 p-6 rounded-[2rem] border dark:border-gray-800 shadow-sm relative overflow-hidden flex flex-col min-h-0 transition-all duration-700 ease-out">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.18),_transparent_60%)]" />
+          <div className="theme-map-glow absolute inset-0" />
           <div className="relative flex-1 min-h-0 flex flex-col transition-all duration-700 ease-out">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -173,8 +173,8 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
               >
                 <defs>
                   <linearGradient id="sp-fill" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#93C5FD" stopOpacity="0.2" />
-                    <stop offset="100%" stopColor="#2563EB" stopOpacity="0.08" />
+                    <stop offset="0%" stopColor="#7A9FD4" stopOpacity="0.26" />
+                    <stop offset="100%" stopColor="#0D1F4E" stopOpacity="0.1" />
                   </linearGradient>
                   <filter id="marker-glow" x="-50%" y="-50%" width="200%" height="200%">
                     <feGaussianBlur stdDeviation="6" result="blur" />
@@ -191,8 +191,8 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
                 <path
                   d={mapPath}
                   fill="url(#sp-fill)"
-                  stroke="#3B82F6"
-                  strokeOpacity="0.4"
+                  stroke="#0D1F4E"
+                  strokeOpacity="0.34"
                   strokeWidth="1.8"
                   vectorEffect="non-scaling-stroke"
                   className="transition-all duration-700 ease-out"
@@ -222,7 +222,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
                           cx={marker.x}
                           cy={marker.y}
                           r={size}
-                          fill={isActive ? '#1D4ED8' : '#60A5FA'}
+                          fill={isActive ? '#C9A84C' : '#7A9FD4'}
                           opacity={isActive ? 0.95 : 0.6}
                           filter="url(#marker-glow)"
                           style={{ transition: 'r 320ms ease, opacity 320ms ease, fill 320ms ease' }}
@@ -231,7 +231,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
                           cx={marker.x}
                           cy={marker.y}
                           r={Math.max(3, size * 0.45)}
-                          fill="#EFF6FF"
+                          fill="#F0F4FF"
                           opacity={0.9}
                           style={{ transition: 'r 320ms ease, opacity 320ms ease' }}
                         />

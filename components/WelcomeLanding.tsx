@@ -20,7 +20,7 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
         </div>
 
         <div className="relative z-10 max-w-lg mx-auto">
-          <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center text-white text-2xl font-black mx-auto mb-6 backdrop-blur-md border border-white/20 shadow-xl">G</div>
+          <div className="theme-brand-mark w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-black mx-auto mb-6">G</div>
           <h1 className="text-3xl font-black mb-2 tracking-tight">Bem-vindo à Família Guti 2026!</h1>
           <p className="text-blue-100 font-medium opacity-80">
             Olá, <span className="text-white font-bold">{name.split(' ')[0]}</span>! Seu cadastro foi realizado com sucesso.
@@ -62,7 +62,7 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
               href={resolvedGroupLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="group block w-full py-5 bg-green-500 hover:bg-green-600 text-white rounded-[2rem] font-black text-lg shadow-xl shadow-green-500/30 transition-all active:scale-95 relative overflow-hidden"
+              className="theme-accent-button group block w-full py-5 rounded-[2rem] font-black text-lg transition-all active:scale-95 relative overflow-hidden"
             >
               <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="flex items-center justify-center gap-3">

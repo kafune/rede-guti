@@ -427,22 +427,22 @@ const AdminPanel: React.FC<Props> = ({
           </div>
         )}
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out hover:-translate-y-0.5">
+        <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out hover:-translate-y-0.5">
           <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center text-purple-600 mb-4 text-xl">
             <i className="fa-solid fa-file-import"></i>
           </div>
           <h3 className="text-lg font-bold mb-2">Importar Dados</h3>
           <p className="text-sm opacity-60 mb-6">Suba uma lista de contatos em massa via arquivo CSV.</p>
-          <label className="block w-full py-3 bg-purple-600 text-white rounded-xl font-bold shadow-lg shadow-purple-500/20 active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 text-center cursor-pointer">
+          <label className="theme-accent-button block w-full py-3 rounded-xl font-bold active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 text-center cursor-pointer">
             Selecionar CSV
             <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
           </label>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
+      <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
         <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center text-green-600 text-xl shrink-0">
+          <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center text-purple-600 text-xl shrink-0">
             <i className="fa-brands fa-whatsapp"></i>
           </div>
           <div className="flex-1 space-y-4">
@@ -465,7 +465,7 @@ const AdminPanel: React.FC<Props> = ({
                   onChange={(event) => setWhatsappGroupLinkInput(event.target.value)}
                   placeholder="https://chat.whatsapp.com/..."
                   disabled={!allowUserEditing}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-green-500 outline-none transition-all disabled:opacity-70"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-70"
                 />
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -473,7 +473,7 @@ const AdminPanel: React.FC<Props> = ({
                     <button
                       onClick={handleSaveSettings}
                       disabled={settingsSaving}
-                      className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50"
+                      className="theme-accent-button px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50"
                     >
                       {settingsSaving ? 'Salvando...' : 'Salvar link'}
                     </button>
@@ -483,7 +483,7 @@ const AdminPanel: React.FC<Props> = ({
                         href={settings.whatsappGroupLink}
                         target="_blank"
                         rel="noreferrer"
-                        className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-bold transition-all duration-300 ease-out hover:-translate-y-0.5"
+                        className="theme-accent-button px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300 ease-out hover:-translate-y-0.5"
                       >
                         Abrir link
                       </a>
@@ -520,7 +520,7 @@ const AdminPanel: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
+      <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
             <h3 className="text-lg font-bold mb-1">Cadastros da rede</h3>
@@ -687,7 +687,7 @@ const AdminPanel: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
+      <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
         <div className="mb-6">
           <h3 className="text-lg font-bold mb-1">Visualizacao multinivel</h3>
           <p className="text-sm opacity-60">Cada no mostra quem indicou quem na hierarquia atual da rede.</p>

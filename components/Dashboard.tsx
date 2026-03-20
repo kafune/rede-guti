@@ -95,7 +95,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
+      <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-[2rem] border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
         <h3 className="text-lg font-black mb-2 flex items-center gap-2">
           <i className="fa-solid fa-link text-blue-500"></i>
           Link de Cadastro
@@ -110,7 +110,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
           />
           <button
             onClick={handleCopy}
-            className="px-5 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5"
+            className="theme-accent-button px-5 py-3 rounded-2xl font-bold active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5"
           >
             {copyLabel}
           </button>
@@ -118,7 +118,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
             href={shareUrl}
             target="_blank"
             rel="noreferrer"
-            className="px-5 py-3 bg-gray-100 dark:bg-gray-900 rounded-2xl font-bold text-sm text-center transition-all duration-300 ease-out hover:-translate-y-0.5"
+            className="theme-outline-button px-5 py-3 rounded-2xl font-bold text-sm text-center transition-all duration-300 ease-out hover:-translate-y-0.5"
           >
             Abrir
           </a>

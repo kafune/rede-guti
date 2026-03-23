@@ -50,9 +50,6 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
           <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight">
             Assista à mensagem e siga para o próximo passo
           </h2>
-          <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">
-            O vídeo já está disponível nesta página com a versão atualizada.
-          </p>
         </div>
 
         {resolvedGroupLink ? (

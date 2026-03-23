@@ -28,3 +28,12 @@ backend/.env
 
 # Claude Code
 .claude/
+
+# Bun
+bun.lock
+bun.lockb
+backend/bun.lock
+backend/bun.lockb
+
+# Local media
+video_guti.mp4

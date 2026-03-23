@@ -8,6 +8,7 @@ interface Props {
 
 const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
   const resolvedGroupLink = groupLink?.trim();
+  const videoSrc = '/video-atualizado.mp4';
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 flex flex-col">
@@ -31,21 +32,15 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
       {/* Video Section */}
       <div className="px-6 -mt-16 relative z-20 max-w-lg mx-auto w-full">
         <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-2xl overflow-hidden p-3 border dark:border-gray-700">
-          <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 rounded-[2rem] overflow-hidden relative flex items-center justify-center p-8 text-center">
-            <div className="space-y-3">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/80 text-2xl text-gray-700 shadow-sm dark:bg-white/10 dark:text-white">
-                <i className="fa-solid fa-triangle-exclamation"></i>
-              </div>
-              <div className="space-y-1">
-                <p className="text-lg font-black text-gray-900 dark:text-white">
-                  Vídeo temporariamente indisponível
-                </p>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                  Tivemos problemas com o vídeo e estamos corrigindo isso.
-                </p>
-              </div>
-            </div>
-          </div>
+          <video
+            className="aspect-video w-full rounded-[2rem] bg-black object-cover"
+            controls
+            playsInline
+            preload="metadata"
+          >
+            <source src={videoSrc} type="video/mp4" />
+            Seu navegador não suporta reprodução de vídeo.
+          </video>
         </div>
       </div>
 
@@ -53,10 +48,10 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
       <div className="flex-1 px-8 py-12 max-w-lg mx-auto w-full space-y-8 text-center">
         <div className="space-y-4">
           <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight">
-            Estamos ajustando esse conteúdo para você
+            Assista à mensagem e siga para o próximo passo
           </h2>
           <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">
-            Tivemos um problema com o vídeo exibido aqui. Em breve vamos publicar a versão correta.
+            O vídeo já está disponível nesta página com a versão atualizada.
           </p>
         </div>
 

@@ -38,8 +38,12 @@ fi
 echo "==> Build do frontend"
 echo "VITE_API_URL=/api" > .env.local
 
-if command -v bun >/dev/null 2>&1 && [ -f bun.lock ]; then
-  bun install
+if command -v bun >/dev/null 2>&1; then
+  if [ -f bun.lock ] || [ -f bun.lockb ]; then
+    bun install --frozen-lockfile
+  else
+    bun install
+  fi
   bun run build
 else
   npm install --no-package-lock

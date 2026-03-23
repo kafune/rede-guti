@@ -34,7 +34,9 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
         <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-2xl overflow-hidden p-3 border dark:border-gray-700">
           <video
             className="aspect-video w-full rounded-[2rem] bg-black object-cover"
+            autoPlay
             controls
+            muted
             playsInline
             preload="metadata"
           >

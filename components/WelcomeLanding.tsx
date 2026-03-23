@@ -8,7 +8,7 @@ interface Props {
 
 const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
   const resolvedGroupLink = groupLink?.trim();
-  const videoSrc = '/video-atualizado.mp4';
+  const videoSrc = '/lv_0_20260322235857.mp4';
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 flex flex-col">

@@ -31,16 +31,20 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
       {/* Video Section */}
       <div className="px-6 -mt-16 relative z-20 max-w-lg mx-auto w-full">
         <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-2xl overflow-hidden p-3 border dark:border-gray-700">
-          <div className="aspect-video bg-gray-900 rounded-[2rem] overflow-hidden relative group">
-            {/* Placeholder para o vídeo real do Guti */}
-            <iframe
-              className="w-full h-full"
-              src="https://www.youtube.com/embed/dQw4w9WgXcQ" // Substituir pelo ID real do vídeo do Guti
-              title="Apresentação Guti 2026"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            ></iframe>
+          <div className="aspect-video bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 rounded-[2rem] overflow-hidden relative flex items-center justify-center p-8 text-center">
+            <div className="space-y-3">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/80 text-2xl text-gray-700 shadow-sm dark:bg-white/10 dark:text-white">
+                <i className="fa-solid fa-triangle-exclamation"></i>
+              </div>
+              <div className="space-y-1">
+                <p className="text-lg font-black text-gray-900 dark:text-white">
+                  Vídeo temporariamente indisponível
+                </p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                  Tivemos problemas com o vídeo e estamos corrigindo isso.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -49,10 +53,10 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
       <div className="flex-1 px-8 py-12 max-w-lg mx-auto w-full space-y-8 text-center">
         <div className="space-y-4">
           <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight">
-            Assista ao recado que o Guti preparou para você
+            Estamos ajustando esse conteúdo para você
           </h2>
           <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">
-            Estamos construindo a maior rede de conexões evangélicas de São Paulo. Sua presença é fundamental para o sucesso deste projeto!
+            Tivemos um problema com o vídeo exibido aqui. Em breve vamos publicar a versão correta.
           </p>
         </div>
 

@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import WelcomeLanding from './WelcomeLanding';
 
 const PublicThanks: React.FC = () => {
-  const storedName = sessionStorage.getItem('guti_public_name')?.trim() ?? '';
-  const displayName = storedName || 'Apoiador';
-  const groupLink = sessionStorage.getItem('guti_public_group_link')?.trim() ?? '';
+  const [displayName] = useState(() => {
+    const storedName = sessionStorage.getItem('guti_public_name')?.trim() ?? '';
+    return storedName || 'Apoiador';
+  });
+  const [groupLink] = useState(() => sessionStorage.getItem('guti_public_group_link')?.trim() ?? '');
 
   useEffect(() => {
     sessionStorage.removeItem('guti_public_name');

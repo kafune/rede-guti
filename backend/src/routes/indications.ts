@@ -1,10 +1,12 @@
-import type { Prisma, Role as RoleType } from '@prisma/client';
+import type { IndicationStatus as IndicationStatusType, Prisma, Role as RoleType } from '@prisma/client';
+import prismaClient from '@prisma/client';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import {
   canCreateSupporters,
   canDeleteSupporters,
+  canUpdateSupporterStatus,
   canViewSupporterIdentities,
   visibleIndicationsWhere
 } from '../lib/access.js';
@@ -16,6 +18,8 @@ import {
   userSummarySelect
 } from '../lib/hierarchy.js';
 import { validateAndNormalizeBrazilWhatsapp } from '../lib/public-registration.js';
+
+const { IndicationStatus } = prismaClient;
 
 const createSchema = z.object({
   name: z.string().min(2),
@@ -35,6 +39,14 @@ const querySchema = z.object({
   dateTo: z.string().optional()
 });
 
+const paramsSchema = z.object({
+  id: z.string().min(1)
+});
+
+const updateStatusSchema = z.object({
+  status: z.nativeEnum(IndicationStatus)
+});
+
 const parseDate = (value?: string) => {
   if (!value) return undefined;
   const date = new Date(value);
@@ -46,6 +58,7 @@ const indicationQuerySelect = {
   name: true,
   phone: true,
   email: true,
+  status: true,
   indicatedBy: true,
   indicatedByUserId: true,
   createdAt: true,
@@ -65,6 +78,7 @@ const serializeIndicationRecord = (indication: {
   name: string;
   phone: string | null;
   email: string | null;
+  status: IndicationStatusType;
   indicatedBy: string | null;
   indicatedByUserId: string | null;
   createdAt: Date;
@@ -93,6 +107,7 @@ const serializeIndicationRecord = (indication: {
     identityHidden: redactSupporterIdentity,
     phone: redactSupporterIdentity ? null : indication.phone,
     email: redactSupporterIdentity ? null : indication.email,
+    status: indication.status,
     indicatedBy:
       indication.indicatedBy ??
       (indication.indicatedByUser ? getUserDisplayName(indication.indicatedByUser) : null),
@@ -235,12 +250,49 @@ export async function indicationRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
 
-    const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+    const params = paramsSchema.safeParse(request.params);
     if (!params.success) {
       return reply.code(400).send({ error: 'Invalid id' });
     }
 
     await prisma.indication.delete({ where: { id: params.data.id } });
     return reply.code(204).send();
+  });
+
+  app.patch('/indications/:id/status', { preHandler: app.authenticate }, async (request, reply) => {
+    if (!canUpdateSupporterStatus(request.user.role)) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+
+    const params = paramsSchema.safeParse(request.params);
+    if (!params.success) {
+      return reply.code(400).send({ error: 'Invalid id' });
+    }
+
+    const body = updateStatusSchema.safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: 'Invalid payload' });
+    }
+
+    const existing = await prisma.indication.findUnique({
+      where: { id: params.data.id },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      return reply.code(404).send({ error: 'Indication not found' });
+    }
+
+    const indication = await prisma.indication.update({
+      where: { id: params.data.id },
+      data: { status: body.data.status },
+      select: indicationQuerySelect
+    });
+
+    return {
+      indication: serializeIndicationRecord(indication, {
+        redactSupporterIdentity: !canViewSupporterIdentities(request.user.role)
+      })
+    };
   });
 }

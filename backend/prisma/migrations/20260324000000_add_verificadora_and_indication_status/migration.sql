@@ -1,0 +1,6 @@
+ALTER TYPE "Role" ADD VALUE 'VERIFICADORA';
+
+CREATE TYPE "IndicationStatus" AS ENUM ('ATIVO', 'INATIVO');
+
+ALTER TABLE "indications"
+ADD COLUMN "status" "IndicationStatus" NOT NULL DEFAULT 'ATIVO';

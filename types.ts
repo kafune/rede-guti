@@ -1,14 +1,18 @@
 export enum UserRole {
   COORDENADOR = 'COORDENADOR',
-  LIDER_REGIONAL = 'LIDER_REGIONAL'
+  LIDER_REGIONAL = 'LIDER_REGIONAL',
+  VERIFICADORA = 'VERIFICADORA'
 }
 
 export type HierarchyRole = UserRole | 'APOIADOR';
 export const SUPPORTER_REGISTRATION_TARGET = 'APOIADOR';
-export type RegistrationTarget = UserRole.LIDER_REGIONAL | typeof SUPPORTER_REGISTRATION_TARGET;
+export type RegistrationTarget =
+  | UserRole.LIDER_REGIONAL
+  | UserRole.VERIFICADORA
+  | typeof SUPPORTER_REGISTRATION_TARGET;
 
 export interface RegistrationUserPayload {
-  target: UserRole.LIDER_REGIONAL;
+  target: UserRole.LIDER_REGIONAL | UserRole.VERIFICADORA;
   name: string;
   email: string;
   password: string;

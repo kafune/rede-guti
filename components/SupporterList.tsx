@@ -52,7 +52,7 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
       <div className="flex items-center justify-between animate-soft-pop">
         <h2 className="text-2xl font-bold">Lideranças SP</h2>
         <span className="text-[10px] bg-blue-600 text-white px-3 py-1 rounded-full font-black uppercase tracking-wider">
-          {filtered.length} Ativos
+          {filtered.length} Registros
         </span>
       </div>
 
@@ -120,7 +120,11 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
                     {s.notes || s.region}
                   </span>
                   <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter ${
-                    s.status === 'Ativo' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-yellow-50 text-yellow-700'
+                    s.status === 'Ativo'
+                      ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                      : s.status === 'Inativo'
+                        ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                        : 'bg-yellow-50 text-yellow-700'
                   }`}>
                     {s.status}
                   </span>

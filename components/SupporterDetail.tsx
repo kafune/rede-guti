@@ -1,19 +1,30 @@
 ﻿
 import React, { useState, useMemo } from 'react';
-import { Supporter, User } from '../types';
-import { canDeleteSupporters } from '../roleUtils';
+import { SupportStatus, Supporter, User } from '../types';
+import { canDeleteSupporters, canUpdateSupporterStatus } from '../roleUtils';
 
 interface Props {
   supporter: Supporter;
   allSupporters: Supporter[];
   user: User;
-  onUpdate: (s: Supporter) => void;
+  onStatusChange: (
+    supporterId: string,
+    status: SupportStatus.ACTIVE | SupportStatus.INACTIVE
+  ) => Promise<void>;
   onDelete: (id: string) => void;
   onBack: () => void;
 }
 
-const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDelete, onBack }) => {
+const SupporterDetail: React.FC<Props> = ({
+  supporter,
+  allSupporters,
+  user,
+  onStatusChange,
+  onDelete,
+  onBack
+}) => {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const referrer = useMemo(() => 
     allSupporters.find(s => s.id === supporter.referredBy), 
@@ -27,11 +38,37 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
 
   const canDelete = useMemo(() => {
     return canDeleteSupporters(user.role);
-  }, [user, supporter]);
+  }, [user.role]);
+
+  const canManageStatus = useMemo(() => {
+    return canUpdateSupporterStatus(user.role);
+  }, [user.role]);
 
   const hierarchyTrail = useMemo(() => {
     return supporter.hierarchyPath?.map((item) => item.name).join(' > ') ?? '';
   }, [supporter.hierarchyPath]);
+
+  const statusBadgeClass =
+    supporter.status === SupportStatus.ACTIVE
+      ? 'bg-green-400 text-green-950'
+      : supporter.status === SupportStatus.INACTIVE
+        ? 'bg-slate-300 text-slate-900'
+        : 'bg-yellow-400 text-yellow-950';
+
+  const handleStatusChange = async (nextStatus: SupportStatus.ACTIVE | SupportStatus.INACTIVE) => {
+    if (supporter.status === nextStatus) {
+      return;
+    }
+
+    setIsUpdatingStatus(true);
+    try {
+      await onStatusChange(supporter.id, nextStatus);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Erro ao atualizar status.');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
 
   return (
     <div className="max-w-xl mx-auto space-y-6 pb-24">
@@ -59,9 +96,7 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
           </div>
           
           <div className="absolute top-6 right-6 flex flex-col items-end gap-2">
-             <span className={`text-[9px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest shadow-lg ${
-                supporter.status === 'Ativo' ? 'bg-green-400 text-green-950' : 'bg-yellow-400 text-yellow-950'
-              }`}>
+             <span className={`text-[9px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest shadow-lg ${statusBadgeClass}`}>
                 {supporter.status}
               </span>
           </div>
@@ -69,6 +104,50 @@ const SupporterDetail: React.FC<Props> = ({ supporter, allSupporters, user, onDe
 
         {/* Content Tabs-like sections */}
         <div className="p-8 space-y-8">
+          <div className="rounded-3xl border dark:border-gray-700 bg-slate-50 dark:bg-slate-900/40 p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Status do Apoiador
+                </h4>
+                <p className="text-sm font-semibold opacity-70 mt-2">
+                  {canManageStatus
+                    ? 'Verificadora e coordenadores podem alternar este cadastro a qualquer momento.'
+                    : 'Somente Verificadora e coordenadores podem alterar este status.'}
+                </p>
+              </div>
+              {isUpdatingStatus && (
+                <span className="text-xs font-bold text-blue-600">Salvando...</span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={!canManageStatus || isUpdatingStatus}
+                onClick={() => handleStatusChange(SupportStatus.ACTIVE)}
+                className={`rounded-2xl px-4 py-4 text-sm font-black transition-all ${
+                  supporter.status === SupportStatus.ACTIVE
+                    ? 'bg-green-600 text-white shadow-lg shadow-green-500/20'
+                    : 'bg-white dark:bg-gray-900 border dark:border-gray-700'
+                } disabled:opacity-60`}
+              >
+                Ativo
+              </button>
+              <button
+                type="button"
+                disabled={!canManageStatus || isUpdatingStatus}
+                onClick={() => handleStatusChange(SupportStatus.INACTIVE)}
+                className={`rounded-2xl px-4 py-4 text-sm font-black transition-all ${
+                  supporter.status === SupportStatus.INACTIVE
+                    ? 'bg-slate-700 text-white shadow-lg shadow-slate-500/20'
+                    : 'bg-white dark:bg-gray-900 border dark:border-gray-700'
+                } disabled:opacity-60`}
+              >
+                Inativo
+              </button>
+            </div>
+          </div>
           
           {/* Card: Igreja Mapeada */}
           <div className="space-y-4">

@@ -6,6 +6,7 @@ import {
   Church,
   Municipality,
   RegistrationPayload,
+  SupportStatus,
   Supporter,
   User,
   UserRole
@@ -48,6 +49,8 @@ const getRoleBadgeClass = (role: UserRole) => {
       return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
     case UserRole.LIDER_REGIONAL:
       return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+    case UserRole.VERIFICADORA:
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
     default:
       return 'bg-gray-100 text-gray-700 dark:bg-gray-900/40 dark:text-gray-300';
   }
@@ -91,7 +94,8 @@ const AdminPanel: React.FC<Props> = ({
       Cidade: supporter.notes || supporter.region,
       Numero: supporter.whatsapp,
       Email: supporter.email || '',
-      Igreja: supporter.church
+      Igreja: supporter.church,
+      Status: supporter.status
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
@@ -100,7 +104,8 @@ const AdminPanel: React.FC<Props> = ({
       { wch: 20 },
       { wch: 18 },
       { wch: 30 },
-      { wch: 28 }
+      { wch: 28 },
+      { wch: 14 }
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -344,7 +349,10 @@ const AdminPanel: React.FC<Props> = ({
       (user) => user.id !== currentUser.id
     ).length;
     const activeMunicipalities = new Set(
-      supporters.map((supporter) => (supporter.notes || '').trim()).filter(Boolean)
+      supporters
+        .filter((supporter) => supporter.status === SupportStatus.ACTIVE)
+        .map((supporter) => (supporter.notes || '').trim())
+        .filter(Boolean)
     ).size;
 
     return {
@@ -598,7 +606,7 @@ const AdminPanel: React.FC<Props> = ({
             const editableRoles =
               user.role === UserRole.COORDENADOR
                 ? [UserRole.COORDENADOR]
-                : [UserRole.LIDER_REGIONAL];
+                : [UserRole.LIDER_REGIONAL, UserRole.VERIFICADORA];
             const hierarchyLabel = user.hierarchyPath?.map((item) => item.name).join(' > ') ?? '';
 
             return (

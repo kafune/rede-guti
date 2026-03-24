@@ -1,4 +1,4 @@
-import type { Role as RoleType } from '@prisma/client';
+import type { IndicationStatus as IndicationStatusType, Role as RoleType } from '@prisma/client';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
@@ -35,6 +35,7 @@ const indicationQuerySelect = {
   name: true,
   phone: true,
   email: true,
+  status: true,
   indicatedBy: true,
   indicatedByUserId: true,
   createdAt: true,
@@ -54,6 +55,7 @@ const serializeIndicationRecord = (indication: {
   name: string;
   phone: string | null;
   email: string | null;
+  status: IndicationStatusType;
   indicatedBy: string | null;
   indicatedByUserId: string | null;
   createdAt: Date;
@@ -78,6 +80,7 @@ const serializeIndicationRecord = (indication: {
   name: indication.name,
   phone: indication.phone,
   email: indication.email,
+  status: indication.status,
   indicatedBy:
     indication.indicatedBy ??
     (indication.indicatedByUser ? getUserDisplayName(indication.indicatedByUser) : null),

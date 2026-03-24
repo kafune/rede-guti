@@ -4,6 +4,7 @@ import {
   Church,
   HierarchyPathItem,
   Municipality,
+  SupportStatus,
   UserRole,
   UserSummary
 } from './types';
@@ -97,6 +98,7 @@ export type ApiIndication = {
   identityHidden?: boolean;
   phone?: string | null;
   email?: string | null;
+  status: 'ATIVO' | 'INATIVO';
   indicatedBy?: string | null;
   indicatedByUserId?: string | null;
   indicatedByUser?: UserSummary | null;
@@ -123,6 +125,21 @@ export const createIndication = async (payload: {
   const data = await request<{ indication: ApiIndication }>('/indications', {
     method: 'POST',
     body: JSON.stringify(payload)
+  });
+  return data.indication;
+};
+
+const toApiIndicationStatus = (status: SupportStatus.ACTIVE | SupportStatus.INACTIVE) => {
+  return status === SupportStatus.INACTIVE ? 'INATIVO' : 'ATIVO';
+};
+
+export const updateIndicationStatus = async (
+  id: string,
+  status: SupportStatus.ACTIVE | SupportStatus.INACTIVE
+) => {
+  const data = await request<{ indication: ApiIndication }>(`/indications/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: toApiIndicationStatus(status) })
   });
   return data.indication;
 };

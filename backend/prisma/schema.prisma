@@ -12,6 +12,12 @@ datasource db {
 enum Role {
   COORDENADOR
   LIDER_REGIONAL
+  VERIFICADORA
+}
+
+enum IndicationStatus {
+  ATIVO
+  INATIVO
 }
 
 model User {
@@ -67,6 +73,7 @@ model Indication {
   name              String
   phone             String?
   email             String?
+  status            IndicationStatus @default(ATIVO)
   indicatedBy       String?      @map("indicated_by")
   indicatedByUserId String?      @map("indicated_by_user_id")
   createdAt         DateTime     @default(now()) @map("created_at")

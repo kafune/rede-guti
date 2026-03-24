@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Supporter, User, UserRole } from '../types';
+import { SupportStatus, Supporter, User, UserRole } from '../types';
+import { canCreateRegistrations } from '../roleUtils';
 
 interface Props {
   supporters: Supporter[];
@@ -14,10 +15,14 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
   const indicatorName = currentUser?.name?.trim();
   const indicatorId = currentUser?.id;
   const isRegionalViewer = currentUser.role === UserRole.LIDER_REGIONAL;
+  const isVerifier = currentUser.role === UserRole.VERIFICADORA;
+  const canShareRegistrationLink = canCreateRegistrations(currentUser.role);
   const networkLabel =
     currentUser.role === UserRole.COORDENADOR
       ? 'Total da Rede SP'
-      : 'Total da Sua Rede Regional';
+      : isVerifier
+        ? 'Base completa de apoiadores'
+        : 'Total da Sua Rede Regional';
   const shareUrl = indicatorName
     ? `${baseUrl}?indicador=${encodeURIComponent(indicatorName)}${
         indicatorId ? `&indicadorId=${encodeURIComponent(indicatorId)}` : ''
@@ -73,13 +78,19 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
       return Date.now() - createdAt.getTime() <= 7 * 24 * 60 * 60 * 1000;
     }).length;
 
+    const activeCities = new Set(
+      supporters
+        .filter((supporter) => supporter.status === SupportStatus.ACTIVE)
+        .map((supporter) => supporter.notes || 'Nao informado')
+    ).size;
+
     return {
       topInfluencers,
       topCities,
       total: supporters.length,
       indicatedCount,
       last7Days,
-      activeCities: topCities.length
+      activeCities
     };
   }, [supporters]);
 
@@ -137,42 +148,44 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
         </div>
       )}
 
-      <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-[2rem] border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
-        <h3 className="text-lg font-black mb-2 flex items-center gap-2">
-          <i className="fa-solid fa-link text-blue-500"></i>
-          Link de Cadastro
-        </h3>
-        <p className="text-sm opacity-60 mb-4">
-          Envie este link para que novos apoiadores se cadastrem sozinhos.
-        </p>
-        <div className="flex flex-col md:flex-row gap-3">
-          <input
-            type="text"
-            readOnly
-            value={shareUrl}
-            className="flex-1 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 text-xs font-semibold truncate"
-          />
-          <button
-            onClick={handleCopy}
-            className="theme-accent-button px-5 py-3 rounded-2xl font-bold active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5"
-          >
-            {copyLabel}
-          </button>
-          <a
-            href={shareUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="theme-outline-button px-5 py-3 rounded-2xl font-bold text-sm text-center transition-all duration-300 ease-out hover:-translate-y-0.5"
-          >
-            Abrir
-          </a>
-        </div>
-        {indicatorName && (
-          <p className="text-[10px] uppercase tracking-widest opacity-40 font-black mt-3">
-            Indicacao vinculada a {indicatorName}
+      {canShareRegistrationLink && (
+        <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-[2rem] border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
+          <h3 className="text-lg font-black mb-2 flex items-center gap-2">
+            <i className="fa-solid fa-link text-blue-500"></i>
+            Link de Cadastro
+          </h3>
+          <p className="text-sm opacity-60 mb-4">
+            Envie este link para que novos apoiadores se cadastrem sozinhos.
           </p>
-        )}
-      </div>
+          <div className="flex flex-col md:flex-row gap-3">
+            <input
+              type="text"
+              readOnly
+              value={shareUrl}
+              className="flex-1 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 text-xs font-semibold truncate"
+            />
+            <button
+              onClick={handleCopy}
+              className="theme-accent-button px-5 py-3 rounded-2xl font-bold active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5"
+            >
+              {copyLabel}
+            </button>
+            <a
+              href={shareUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="theme-outline-button px-5 py-3 rounded-2xl font-bold text-sm text-center transition-all duration-300 ease-out hover:-translate-y-0.5"
+            >
+              Abrir
+            </a>
+          </div>
+          {indicatorName && (
+            <p className="text-[10px] uppercase tracking-widest opacity-40 font-black mt-3">
+              Indicacao vinculada a {indicatorName}
+            </p>
+          )}
+        </div>
+      )}
 
       {isRegionalViewer && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
@@ -180,6 +193,15 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
           <p className="text-sm opacity-60">
             Seu perfil exibe apenas totais agregados dos apoiadores vinculados ao seu
             link de indicacao.
+          </p>
+        </div>
+      )}
+
+      {isVerifier && (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
+          <h3 className="text-lg font-black mb-2">Perfil de verificacao</h3>
+          <p className="text-sm opacity-60">
+            Este perfil visualiza todos os apoiadores e pode somente alternar o status entre ativo e inativo.
           </p>
         </div>
       )}
@@ -246,7 +268,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
       {!isRegionalViewer && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-black">Ultimos Ativos</h3>
+            <h3 className="text-lg font-black">Ultimos cadastros</h3>
             <button
               onClick={onViewList}
               className="text-[10px] font-black uppercase text-blue-600"

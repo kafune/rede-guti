@@ -16,7 +16,10 @@ export const normalizeRole = (
     case 'LIDER_REGIONAL':
     case 'OPERATOR':
       return 'LIDER_REGIONAL';
+    case 'VERIFICADORA':
+      return 'VERIFICADORA';
     case 'VIEWER':
+      return 'VERIFICADORA';
     case 'LIDER_LOCAL':
       return 'LIDER_REGIONAL';
     default:
@@ -25,8 +28,9 @@ export const normalizeRole = (
 };
 
 export const creatableUserRolesByActor: Record<Role, Role[]> = {
-  COORDENADOR: ['LIDER_REGIONAL'],
-  LIDER_REGIONAL: []
+  COORDENADOR: ['LIDER_REGIONAL', 'VERIFICADORA'],
+  LIDER_REGIONAL: [],
+  VERIFICADORA: []
 };
 
 export const canManageUsers = (role: Role | string) => normalizeRole(role) === 'COORDENADOR';
@@ -44,7 +48,12 @@ export const canCreateSupporters = (role: Role | string) => {
 export const canDeleteSupporters = (role: Role | string) => normalizeRole(role) === 'COORDENADOR';
 
 export const canViewSupporterIdentities = (role: Role | string) =>
-  normalizeRole(role) === 'COORDENADOR';
+  normalizeRole(role) === 'COORDENADOR' || normalizeRole(role) === 'VERIFICADORA';
+
+export const canUpdateSupporterStatus = (role: Role | string) => {
+  const normalizedRole = normalizeRole(role);
+  return normalizedRole === 'COORDENADOR' || normalizedRole === 'VERIFICADORA';
+};
 
 export const canCreateUserRole = (actorRole: Role | string, targetRole: Role) => {
   const normalizedActorRole = normalizeRole(actorRole);
@@ -74,7 +83,7 @@ export const visibleUsersWhere = (actor: AuthenticatedUser): Prisma.UserWhereInp
 export const visibleIndicationsWhere = (actor: AuthenticatedUser): Prisma.IndicationWhereInput => {
   const actorRole = normalizeRole(actor.role);
 
-  if (actorRole === 'COORDENADOR') {
+  if (actorRole === 'COORDENADOR' || actorRole === 'VERIFICADORA') {
     return {};
   }
 
@@ -107,6 +116,10 @@ export const roleAllowsIndicator = (
 
   if (!normalizedIndicatorRole) {
     return normalizedRole === 'COORDENADOR';
+  }
+
+  if (normalizedRole === 'VERIFICADORA') {
+    return normalizedIndicatorRole === 'COORDENADOR';
   }
 
   if (normalizedRole === 'LIDER_REGIONAL') {

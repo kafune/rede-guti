@@ -20,7 +20,8 @@ import {
   fetchIndications,
   fetchMunicipalities,
   getApiErrorMessage,
-  isUnauthorized
+  isUnauthorized,
+  updateIndicationStatus
 } from './api';
 import Dashboard from './components/Dashboard';
 import SupporterForm from './components/SupporterForm';
@@ -31,7 +32,12 @@ import Login from './components/Login';
 import MapView from './components/MapView';
 import PublicSignup from './components/PublicSignup';
 import PublicThanks from './components/PublicThanks';
-import { canAccessManagementPanel, canViewSupporterIdentity, normalizeUserRole } from './roleUtils';
+import {
+  canAccessManagementPanel,
+  canCreateRegistrations,
+  canViewSupporterIdentity,
+  normalizeUserRole
+} from './roleUtils';
 
 const loadStoredUser = (): User | null => {
   const saved = localStorage.getItem('guti_user');
@@ -107,6 +113,10 @@ const App: React.FC = () => {
     return digits.startsWith('55') ? digits : `55${digits}`;
   };
 
+  const mapApiStatusToSupportStatus = (status?: ApiIndication['status']) => {
+    return status === 'INATIVO' ? SupportStatus.INACTIVE : SupportStatus.ACTIVE;
+  };
+
   const mapIndicationToSupporter = (indication: ApiIndication): Supporter => {
     return {
       id: indication.id,
@@ -119,7 +129,7 @@ const App: React.FC = () => {
       createdAt: indication.createdAt,
       createdBy: indication.createdBy?.id ?? indication.createdById ?? 'system',
       createdByName: indication.createdBy?.name ?? indication.createdBy?.email ?? undefined,
-      status: SupportStatus.ACTIVE,
+      status: mapApiStatusToSupportStatus(indication.status),
       notes: indication.municipality?.name ?? '',
       indicatedBy: indication.indicatedBy ?? undefined,
       indicatedByUserId: indication.indicatedByUserId ?? undefined,
@@ -177,6 +187,16 @@ const App: React.FC = () => {
 
     if (view === 'list' || view === 'detail' || view === 'map') {
       setSelectedSupporter(null);
+      setView('dashboard');
+    }
+  }, [currentUser, view]);
+
+  useEffect(() => {
+    if (!currentUser || canCreateRegistrations(currentUser.role)) {
+      return;
+    }
+
+    if (view === 'form') {
       setView('dashboard');
     }
   }, [currentUser, view]);
@@ -316,6 +336,30 @@ const App: React.FC = () => {
     }
   };
 
+  const updateSupporter = (updated: Supporter) => {
+    setApiSupporters((prev) =>
+      prev.map((supporter) => (supporter.id === updated.id ? updated : supporter))
+    );
+    setSelectedSupporter((prev) => (prev?.id === updated.id ? updated : prev));
+  };
+
+  const changeSupporterStatus = async (
+    supporterId: string,
+    status: SupportStatus.ACTIVE | SupportStatus.INACTIVE
+  ) => {
+    try {
+      const updated = mapIndicationToSupporter(await updateIndicationStatus(supporterId, status));
+      updateSupporter(updated);
+    } catch (error) {
+      if (isUnauthorized(error)) {
+        handleLogout();
+        return;
+      }
+
+      throw new Error(getApiErrorMessage(error, 'Erro ao atualizar status do apoiador.'));
+    }
+  };
+
   if (isPublicThanks) {
     return <PublicThanks />;
   }
@@ -330,6 +374,7 @@ const App: React.FC = () => {
 
   const canOpenManagementPanel = canAccessManagementPanel(currentUser.role);
   const canAccessSupporterDirectory = canViewSupporterIdentity(currentUser.role);
+  const canCreateNewEntries = canCreateRegistrations(currentUser.role);
   const isMapView = view === 'map';
   const mainWidthClass = isMapView ? 'max-w-none w-full px-2 sm:px-4 lg:px-8' : 'max-w-4xl';
 
@@ -393,7 +438,7 @@ const App: React.FC = () => {
           />
         )}
 
-        {view === 'form' && (
+        {view === 'form' && canCreateNewEntries && (
           <SupporterForm
             currentUser={currentUser}
             churches={churches}
@@ -430,7 +475,7 @@ const App: React.FC = () => {
             supporter={selectedSupporter}
             allSupporters={allSupporters}
             user={currentUser}
-            onUpdate={(updated) => setSelectedSupporter(updated)}
+            onStatusChange={changeSupporterStatus}
             onDelete={deleteSupporter}
             onBack={() => setView('list')}
           />
@@ -465,14 +510,16 @@ const App: React.FC = () => {
             <span className="text-[9px] font-black uppercase">Apoiadores</span>
           </button>
         )}
-        <div className="relative -top-10">
-          <button
-            onClick={() => setView('form')}
-            className="theme-brand-mark w-16 h-16 rounded-[1.75rem] flex items-center justify-center text-3xl transition-transform active:scale-90"
-          >
-            <i className="fa-solid fa-plus"></i>
-          </button>
-        </div>
+        {canCreateNewEntries && (
+          <div className="relative -top-10">
+            <button
+              onClick={() => setView('form')}
+              className="theme-brand-mark w-16 h-16 rounded-[1.75rem] flex items-center justify-center text-3xl transition-transform active:scale-90"
+            >
+              <i className="fa-solid fa-plus"></i>
+            </button>
+          </div>
+        )}
         {canAccessSupporterDirectory && (
           <button
             onClick={() => setView('map')}
@@ -514,15 +561,17 @@ const App: React.FC = () => {
             <i className="fa-solid fa-users text-xl"></i>
           </button>
         )}
-        <button
-          onClick={() => setView('form')}
-          className={`p-4 rounded-2xl transition-all ${
-            view === 'form' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-          }`}
-          title="Novo Cadastro"
-        >
-          <i className="fa-solid fa-plus text-xl"></i>
-        </button>
+        {canCreateNewEntries && (
+          <button
+            onClick={() => setView('form')}
+            className={`p-4 rounded-2xl transition-all ${
+              view === 'form' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
+            }`}
+            title="Novo Cadastro"
+          >
+            <i className="fa-solid fa-plus text-xl"></i>
+          </button>
+        )}
         {canAccessSupporterDirectory && (
           <button
             onClick={() => setView('map')}

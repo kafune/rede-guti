@@ -112,6 +112,7 @@ const App: React.FC = () => {
       id: indication.id,
       name: indication.name,
       identityHidden: indication.identityHidden,
+      email: indication.email ?? null,
       whatsapp: indication.phone ? normalizePhone(indication.phone) : '',
       church: indication.church?.name ?? '',
       region: 'Interior (outros)' as Region,

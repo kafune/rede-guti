@@ -101,6 +101,7 @@ export interface Supporter {
   id: string;
   name: string;
   identityHidden?: boolean;
+  email?: string | null;
   whatsapp: string;
   church: string;
   region: Region;

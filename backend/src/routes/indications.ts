@@ -10,6 +10,7 @@ import {
   userHierarchySelect,
   userSummarySelect
 } from '../lib/hierarchy.js';
+import { validateAndNormalizeBrazilWhatsapp } from '../lib/public-registration.js';
 
 const createSchema = z.object({
   name: z.string().min(2),
@@ -187,10 +188,16 @@ export async function indicationRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
 
+    const phoneInput = body.data.phone?.trim();
+    const normalizedPhone = phoneInput ? validateAndNormalizeBrazilWhatsapp(phoneInput) : undefined;
+    if (normalizedPhone && 'error' in normalizedPhone) {
+      return reply.code(400).send({ error: normalizedPhone.error });
+    }
+
     const indication = await prisma.indication.create({
       data: {
         name: body.data.name.trim(),
-        phone: body.data.phone?.trim(),
+        phone: normalizedPhone?.normalized,
         email: body.data.email?.toLowerCase().trim(),
         indicatedBy: getUserDisplayName(actor),
         indicatedByUserId: actor.id,

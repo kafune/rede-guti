@@ -8,22 +8,26 @@ import {
   userHierarchySelect,
   userSummarySelect
 } from '../lib/hierarchy.js';
+import {
+  getPublicMunicipalityOptions,
+  normalizeMunicipalityName,
+  normalizeText,
+  validateAndNormalizeBrazilWhatsapp
+} from '../lib/public-registration.js';
 
 const createPublicSchema = z
   .object({
-    name: z.string().min(2),
-    phone: z.string().min(6),
-    email: z.string().email(),
-    churchName: z.string().min(2),
-    municipalityName: z.string().min(2),
-    indicatedBy: z.string().min(2).optional(),
-    indicatedByUserId: z.string().min(1).optional()
+    name: z.string().trim().min(2, 'Informe seu nome completo.'),
+    phone: z.string().trim().min(1, 'Informe seu WhatsApp.'),
+    email: z.string().trim().email('Informe um e-mail valido.'),
+    churchName: z.string().trim().min(2, 'Informe sua igreja.'),
+    municipalityName: z.string().trim().min(2, 'Informe seu municipio.'),
+    indicatedBy: z.string().trim().min(2).optional(),
+    indicatedByUserId: z.string().trim().min(1).optional()
   })
   .refine((data) => Boolean(data.indicatedBy?.trim() || data.indicatedByUserId?.trim()), {
-    message: 'Indicator is required'
+    message: 'Indicador obrigatorio.'
   });
-
-const normalizeText = (value: string) => value.trim();
 
 const indicationQuerySelect = {
   id: true,
@@ -88,12 +92,8 @@ const serializeIndicationRecord = (indication: {
 
 export async function publicRoutes(app: FastifyInstance) {
   app.get('/public/options', async () => {
-    const [churches, municipalities, settings] = await Promise.all([
+    const [churches, settings] = await Promise.all([
       prisma.church.findMany({
-        select: { name: true },
-        orderBy: { name: 'asc' }
-      }),
-      prisma.municipality.findMany({
         select: { name: true },
         orderBy: { name: 'asc' }
       }),
@@ -105,7 +105,7 @@ export async function publicRoutes(app: FastifyInstance) {
 
     return {
       churches: churches.map((c) => c.name),
-      municipalities: municipalities.map((m) => m.name),
+      municipalities: getPublicMunicipalityOptions(),
       whatsappGroupLink: settings?.whatsappGroupLink ?? null
     };
   });
@@ -113,15 +113,23 @@ export async function publicRoutes(app: FastifyInstance) {
   app.post('/public/indications', async (request, reply) => {
     const body = createPublicSchema.safeParse(request.body);
     if (!body.success) {
-      return reply.code(400).send({ error: 'Invalid payload' });
+      return reply.code(400).send({ error: body.error.issues[0]?.message ?? 'Dados invalidos.' });
     }
 
     const data = body.data;
     const name = normalizeText(data.name);
-    const phone = normalizeText(data.phone);
+    const phoneResult = validateAndNormalizeBrazilWhatsapp(data.phone);
+    if ('error' in phoneResult) {
+      return reply.code(400).send({ error: phoneResult.error });
+    }
+
     const email = data.email.toLowerCase().trim();
     const churchName = normalizeText(data.churchName);
-    const municipalityName = normalizeText(data.municipalityName);
+    const municipalityName = normalizeMunicipalityName(data.municipalityName);
+    if (!municipalityName) {
+      return reply.code(400).send({ error: 'Selecione um municipio valido da lista.' });
+    }
+
     const indicatedBy = data.indicatedBy ? normalizeText(data.indicatedBy) : undefined;
     const indicatedByUserId = data.indicatedByUserId?.trim();
 
@@ -163,7 +171,10 @@ export async function publicRoutes(app: FastifyInstance) {
     }
 
     let municipality = await prisma.municipality.findFirst({
-      where: { name: { equals: municipalityName, mode: 'insensitive' }, stateCode: 'SP' }
+      where: {
+        name: { equals: municipalityName, mode: 'insensitive' },
+        stateCode: 'SP'
+      }
     });
     if (!municipality) {
       municipality = await prisma.municipality.create({
@@ -174,7 +185,7 @@ export async function publicRoutes(app: FastifyInstance) {
     const indication = await prisma.indication.create({
       data: {
         name,
-        phone,
+        phone: phoneResult.normalized,
         email,
         indicatedBy: getUserDisplayName(indicator),
         indicatedByUserId: indicator.id,

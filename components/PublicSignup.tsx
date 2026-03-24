@@ -17,10 +17,62 @@ const getIndicatorIdFromHash = () => {
   return params.get('indicadorId') || params.get('indicatorId') || params.get('refId') || '';
 };
 
-const normalizePhone = (value: string) => {
-  const digits = value.replace(/\D/g, '');
-  if (!digits) return '';
-  return digits.startsWith('55') ? digits : `55${digits}`;
+const collapseWhitespace = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+const stripDiacritics = (value: string) =>
+  value.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
+const normalizeLookupKey = (value: string) => {
+  const sanitized = stripDiacritics(collapseWhitespace(value))
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, ' ')
+    .trim();
+
+  return sanitized.replace(/\bsp\b$/u, '').trim();
+};
+
+const buildCanonicalLookup = (values: string[]) =>
+  new Map(values.map((value) => [normalizeLookupKey(value), collapseWhitespace(value)]));
+
+const findCanonicalMunicipalityName = (value: string, lookup: Map<string, string>) => {
+  const lookupKey = normalizeLookupKey(value);
+  if (!lookupKey) return null;
+  return lookup.get(lookupKey) ?? null;
+};
+
+const validateWhatsapp = (value: string) => {
+  const digitsOnly = value.replace(/\D/g, '');
+  if (!digitsOnly) {
+    return { error: 'Informe um WhatsApp com DDD.' } as const;
+  }
+
+  const nationalDigits =
+    digitsOnly.startsWith('55') && digitsOnly.length > 11 ? digitsOnly.slice(2) : digitsOnly;
+
+  if (nationalDigits.length !== 11) {
+    return { error: 'Informe um WhatsApp valido com DDD.' } as const;
+  }
+
+  const areaCode = nationalDigits.slice(0, 2);
+  const subscriberNumber = nationalDigits.slice(2);
+
+  if (!/^[1-9]{2}$/.test(areaCode) || subscriberNumber[0] !== '9') {
+    return { error: 'Informe um WhatsApp valido com DDD.' } as const;
+  }
+
+  return { normalized: `55${nationalDigits}` } as const;
+};
+
+const formatWhatsappForDisplay = (value: string) => {
+  const digitsOnly = value.replace(/\D/g, '');
+  const nationalDigits =
+    digitsOnly.startsWith('55') && digitsOnly.length > 11 ? digitsOnly.slice(2) : digitsOnly;
+
+  if (nationalDigits.length !== 11) {
+    return value;
+  }
+
+  return `(${nationalDigits.slice(0, 2)}) ${nationalDigits.slice(2, 7)}-${nationalDigits.slice(7)}`;
 };
 
 const PublicSignup: React.FC = () => {
@@ -35,6 +87,8 @@ const PublicSignup: React.FC = () => {
   const [email, setEmail] = useState('');
   const [churchName, setChurchName] = useState('');
   const [municipalityName, setMunicipalityName] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [municipalityError, setMunicipalityError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -69,20 +123,73 @@ const PublicSignup: React.FC = () => {
 
   const refIndicator = useMemo(() => getIndicatorFromHash(), []);
   const refIndicatorId = useMemo(() => getIndicatorIdFromHash(), []);
+  const municipalityLookup = useMemo(() => buildCanonicalLookup(municipalities), [municipalities]);
+
+  const normalizeMunicipalityInput = () => {
+    const normalizedMunicipality = findCanonicalMunicipalityName(
+      municipalityName,
+      municipalityLookup
+    );
+
+    if (!municipalityName.trim()) {
+      setMunicipalityError(null);
+      return null;
+    }
+
+    if (!normalizedMunicipality) {
+      setMunicipalityError('Selecione um municipio valido da lista oficial.');
+      return null;
+    }
+
+    setMunicipalityName(normalizedMunicipality);
+    setMunicipalityError(null);
+    return normalizedMunicipality;
+  };
+
+  const normalizePhoneInput = () => {
+    const validation = validateWhatsapp(phone);
+
+    if (!phone.trim()) {
+      setPhoneError(null);
+      return null;
+    }
+
+    if ('error' in validation) {
+      setPhoneError(validation.error);
+      return null;
+    }
+
+    setPhoneError(null);
+    setPhone(formatWhatsappForDisplay(validation.normalized));
+    return validation.normalized;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
     setSubmitError(null);
     setSuccessMessage('');
+
+    if (optionsLoading) {
+      setSubmitError('Aguarde o carregamento da lista oficial de municipios.');
+      return;
+    }
+
+    const normalizedPhone = normalizePhoneInput();
+    const normalizedMunicipality = normalizeMunicipalityInput();
+
+    if (!normalizedPhone || !normalizedMunicipality) {
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
       const payload = {
         name: name.trim(),
-        phone: normalizePhone(phone),
+        phone: normalizedPhone,
         email: email.trim(),
         churchName: churchName.trim(),
-        municipalityName: municipalityName.trim(),
+        municipalityName: normalizedMunicipality,
         indicatedBy: refIndicator.trim(),
         indicatedByUserId: refIndicatorId.trim() || undefined
       };
@@ -100,6 +207,8 @@ const PublicSignup: React.FC = () => {
       setEmail('');
       setChurchName('');
       setMunicipalityName('');
+      setPhoneError(null);
+      setMunicipalityError(null);
       window.location.hash = '#/obrigado';
     } catch (error) {
       setSubmitError(getApiErrorMessage(error, 'Nao foi possivel enviar o cadastro.'));
@@ -143,11 +252,18 @@ const PublicSignup: React.FC = () => {
                 <input
                   type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  inputMode="numeric"
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    if (phoneError) setPhoneError(null);
+                    if (submitError) setSubmitError(null);
+                  }}
+                  onBlur={normalizePhoneInput}
                   className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   placeholder="(11) 9 9999-9999"
                   required
                 />
+                {phoneError && <p className="mt-2 text-[11px] font-semibold text-red-600">{phoneError}</p>}
               </div>
               <div>
                 <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-1">E-mail</label>
@@ -169,11 +285,24 @@ const PublicSignup: React.FC = () => {
                   type="text"
                   list="public-municipalities"
                   value={municipalityName}
-                  onChange={(e) => setMunicipalityName(e.target.value)}
+                  onChange={(e) => {
+                    setMunicipalityName(e.target.value);
+                    if (municipalityError) setMunicipalityError(null);
+                    if (submitError) setSubmitError(null);
+                  }}
+                  onBlur={normalizeMunicipalityInput}
                   className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  placeholder="Digite sua cidade"
+                  placeholder="Comece a digitar e selecione"
                   required
                 />
+                {optionsLoading && (
+                  <p className="mt-2 text-[11px] font-semibold text-blue-600">
+                    Carregando lista oficial de municipios...
+                  </p>
+                )}
+                {municipalityError && (
+                  <p className="mt-2 text-[11px] font-semibold text-red-600">{municipalityError}</p>
+                )}
                 <datalist id="public-municipalities">
                   {municipalities.map((item) => (
                     <option key={item} value={item} />
@@ -227,7 +356,7 @@ const PublicSignup: React.FC = () => {
 
             <button
               type="submit"
-              disabled={submitting || (!refIndicator && !refIndicatorId)}
+              disabled={submitting || optionsLoading || (!refIndicator && !refIndicatorId)}
               className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-500/40 active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50"
             >
               {submitting ? 'Enviando...' : 'Enviar cadastro'}

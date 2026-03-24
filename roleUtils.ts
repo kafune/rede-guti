@@ -6,8 +6,6 @@ export const getRoleLabel = (role: UserRole) => {
       return 'Coordenador';
     case UserRole.LIDER_REGIONAL:
       return 'Lider Regional';
-    case UserRole.LIDER_LOCAL:
-      return 'Lider Local';
     default:
       return role;
   }
@@ -18,22 +16,20 @@ export const getCreatableUserRoles = (role: UserRole) => {
 };
 
 export const getDefaultCreatableUserRole = (role: UserRole) => {
-  return getCreatableUserRoles(role)[0] ?? UserRole.LIDER_LOCAL;
+  return getCreatableUserRoles(role)[0] ?? UserRole.LIDER_REGIONAL;
 };
 
 export const isUserRoleRegistrationTarget = (
   target: RegistrationTarget
-): target is UserRole.LIDER_REGIONAL | UserRole.LIDER_LOCAL => {
-  return target === UserRole.LIDER_REGIONAL || target === UserRole.LIDER_LOCAL;
+): target is UserRole.LIDER_REGIONAL => {
+  return target === UserRole.LIDER_REGIONAL;
 };
 
 export const getCreatableRegistrationTargets = (role: UserRole): RegistrationTarget[] => {
   switch (role) {
     case UserRole.COORDENADOR:
-      return [UserRole.LIDER_REGIONAL, UserRole.LIDER_LOCAL, SUPPORTER_REGISTRATION_TARGET];
+      return [UserRole.LIDER_REGIONAL, SUPPORTER_REGISTRATION_TARGET];
     case UserRole.LIDER_REGIONAL:
-      return [UserRole.LIDER_LOCAL, SUPPORTER_REGISTRATION_TARGET];
-    case UserRole.LIDER_LOCAL:
       return [SUPPORTER_REGISTRATION_TARGET];
     default:
       return [];
@@ -57,8 +53,9 @@ export const canAccessManagementPanel = (role: UserRole) =>
 
 export const canManageUsers = (role: UserRole) => role === UserRole.COORDENADOR;
 
-export const canViewAllSupporters = (role: UserRole) =>
-  role === UserRole.COORDENADOR || role === UserRole.LIDER_REGIONAL;
+export const canViewAllSupporters = (role: UserRole) => role === UserRole.COORDENADOR;
+
+export const canViewSupporterIdentity = (role: UserRole) => role === UserRole.COORDENADOR;
 
 export const canDeleteSupporters = (role: UserRole) => role === UserRole.COORDENADOR;
 
@@ -70,9 +67,9 @@ export const normalizeUserRole = (value: string | undefined | null): UserRole | 
     case UserRole.LIDER_REGIONAL:
     case 'OPERATOR':
       return UserRole.LIDER_REGIONAL;
-    case UserRole.LIDER_LOCAL:
     case 'VIEWER':
-      return UserRole.LIDER_LOCAL;
+    case 'LIDER_LOCAL':
+      return UserRole.LIDER_REGIONAL;
     default:
       return null;
   }

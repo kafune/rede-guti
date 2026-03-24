@@ -94,12 +94,13 @@ const request = async <T>(path: string, options: RequestInit = {}) => {
 export type ApiIndication = {
   id: string;
   name: string;
+  identityHidden?: boolean;
   phone?: string | null;
   email?: string | null;
   indicatedBy?: string | null;
   indicatedByUserId?: string | null;
   indicatedByUser?: UserSummary | null;
-  hierarchyPath?: HierarchyPathItem[];
+  hierarchyPath?: HierarchyPathItem[] | null;
   createdAt: string;
   createdById?: string;
   createdBy?: UserSummary | null;

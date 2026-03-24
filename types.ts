@@ -1,18 +1,14 @@
 export enum UserRole {
   COORDENADOR = 'COORDENADOR',
-  LIDER_REGIONAL = 'LIDER_REGIONAL',
-  LIDER_LOCAL = 'LIDER_LOCAL'
+  LIDER_REGIONAL = 'LIDER_REGIONAL'
 }
 
 export type HierarchyRole = UserRole | 'APOIADOR';
 export const SUPPORTER_REGISTRATION_TARGET = 'APOIADOR';
-export type RegistrationTarget =
-  | UserRole.LIDER_REGIONAL
-  | UserRole.LIDER_LOCAL
-  | typeof SUPPORTER_REGISTRATION_TARGET;
+export type RegistrationTarget = UserRole.LIDER_REGIONAL | typeof SUPPORTER_REGISTRATION_TARGET;
 
 export interface RegistrationUserPayload {
-  target: UserRole.LIDER_REGIONAL | UserRole.LIDER_LOCAL;
+  target: UserRole.LIDER_REGIONAL;
   name: string;
   email: string;
   password: string;
@@ -104,6 +100,7 @@ export interface Municipality {
 export interface Supporter {
   id: string;
   name: string;
+  identityHidden?: boolean;
   whatsapp: string;
   church: string;
   region: Region;
@@ -114,7 +111,7 @@ export interface Supporter {
   indicatedBy?: string | null;
   indicatedByUserId?: string | null;
   indicatedByUser?: UserSummary | null;
-  hierarchyPath?: HierarchyPathItem[];
+  hierarchyPath?: HierarchyPathItem[] | null;
   status: SupportStatus;
   notes?: string;
   photo?: string;

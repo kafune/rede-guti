@@ -1,3 +1,4 @@
+import type { Role as RoleType } from '@prisma/client';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
@@ -63,13 +64,13 @@ const serializeIndicationRecord = (indication: {
     id: string;
     email: string;
     name: string | null;
-    role: 'COORDENADOR' | 'LIDER_REGIONAL' | 'LIDER_LOCAL';
+    role: RoleType;
   };
   indicatedByUser?: {
     id: string;
     email: string;
     name: string | null;
-    role: 'COORDENADOR' | 'LIDER_REGIONAL' | 'LIDER_LOCAL';
+    role: RoleType;
     indicatedByUser?: any;
   } | null;
 }) => ({

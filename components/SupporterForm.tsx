@@ -179,7 +179,7 @@ const SupporterForm: React.FC<Props> = ({
             <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-2">
               Perfil a cadastrar
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {allowedTargets.map((allowedTarget) => {
                 const isActive = target === allowedTarget;
                 return (

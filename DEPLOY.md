@@ -20,7 +20,7 @@
   cp backend/.env.example backend/.env
   nano backend/.env
   ```
-  - Set `DATABASE_URL=postgres://postgres:postgres@db:5432/rede_evangelica?schema=public`, `JWT_SECRET`, `ADMIN_*`, `VIEWER_*`.
+  - Set `DATABASE_URL=postgres://postgres:postgres@db:5432/rede_evangelica?schema=public`, `JWT_SECRET`, `COORD_*` e `LR_*`.
 
 - **Backend Docker setup**
   - `backend/tsconfig.json` defines `rootDir: src`.
@@ -38,8 +38,8 @@
 
 - **Database migrate + seed**
   ```bash
-  docker-compose exec api npm run prisma:deploy
-  docker-compose exec api npm run seed
+  docker-compose exec api bun run prisma:deploy
+  docker-compose exec api bun run seed
   ```
   - Scripts rely on `prisma.config.ts` and need `tsx` in the runtime image.
   - Confirm `DATABASE_URL` inside container: `docker-compose exec api sh -c 'echo $DATABASE_URL'`.
@@ -47,8 +47,8 @@
 - **Frontend build**
   ```bash
   echo "VITE_API_URL=/api" > .env.local
-  npm install
-  npm run build
+  bun install
+  bun run build
   sudo mkdir -p /var/www/rede/dist
   sudo rsync -av --delete dist/ /var/www/rede/dist/
   ```

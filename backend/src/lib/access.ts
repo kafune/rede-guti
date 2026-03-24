@@ -16,18 +16,17 @@ export const normalizeRole = (
     case 'LIDER_REGIONAL':
     case 'OPERATOR':
       return 'LIDER_REGIONAL';
-    case 'LIDER_LOCAL':
     case 'VIEWER':
-      return 'LIDER_LOCAL';
+    case 'LIDER_LOCAL':
+      return 'LIDER_REGIONAL';
     default:
       return null;
   }
 };
 
 export const creatableUserRolesByActor: Record<Role, Role[]> = {
-  COORDENADOR: ['LIDER_REGIONAL', 'LIDER_LOCAL'],
-  LIDER_REGIONAL: ['LIDER_LOCAL'],
-  LIDER_LOCAL: []
+  COORDENADOR: ['LIDER_REGIONAL'],
+  LIDER_REGIONAL: []
 };
 
 export const canManageUsers = (role: Role | string) => normalizeRole(role) === 'COORDENADOR';
@@ -39,14 +38,13 @@ export const canListUsers = (role: Role | string) => {
 
 export const canCreateSupporters = (role: Role | string) => {
   const normalizedRole = normalizeRole(role);
-  return (
-    normalizedRole === 'COORDENADOR' ||
-    normalizedRole === 'LIDER_REGIONAL' ||
-    normalizedRole === 'LIDER_LOCAL'
-  );
+  return normalizedRole === 'COORDENADOR' || normalizedRole === 'LIDER_REGIONAL';
 };
 
 export const canDeleteSupporters = (role: Role | string) => normalizeRole(role) === 'COORDENADOR';
+
+export const canViewSupporterIdentities = (role: Role | string) =>
+  normalizeRole(role) === 'COORDENADOR';
 
 export const canCreateUserRole = (actorRole: Role | string, targetRole: Role) => {
   const normalizedActorRole = normalizeRole(actorRole);
@@ -66,7 +64,7 @@ export const visibleUsersWhere = (actor: AuthenticatedUser): Prisma.UserWhereInp
 
   if (actorRole === 'LIDER_REGIONAL') {
     return {
-      OR: [{ id: actor.sub }, { role: 'LIDER_LOCAL', indicatedByUserId: actor.sub }]
+      OR: [{ id: actor.sub }, { indicatedByUserId: actor.sub }]
     };
   }
 
@@ -85,8 +83,8 @@ export const visibleIndicationsWhere = (actor: AuthenticatedUser): Prisma.Indica
       OR: [
         { createdById: actor.sub },
         { indicatedByUserId: actor.sub },
-        { createdBy: { role: 'LIDER_LOCAL', indicatedByUserId: actor.sub } },
-        { indicatedByUser: { role: 'LIDER_LOCAL', indicatedByUserId: actor.sub } }
+        { createdBy: { indicatedByUserId: actor.sub } },
+        { indicatedByUser: { indicatedByUserId: actor.sub } }
       ]
     };
   }
@@ -112,10 +110,6 @@ export const roleAllowsIndicator = (
   }
 
   if (normalizedRole === 'LIDER_REGIONAL') {
-    return normalizedIndicatorRole === 'COORDENADOR';
-  }
-
-  if (normalizedRole === 'LIDER_LOCAL') {
     return normalizedIndicatorRole === 'COORDENADOR' || normalizedIndicatorRole === 'LIDER_REGIONAL';
   }
 

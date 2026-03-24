@@ -27,8 +27,6 @@ async function main() {
   const coordinatorPassword = process.env.COORD_PASSWORD ?? process.env.ADMIN_PASSWORD;
   const regionalEmail = process.env.LR_EMAIL?.toLowerCase();
   const regionalPassword = process.env.LR_PASSWORD;
-  const localEmail = process.env.LL_EMAIL?.toLowerCase();
-  const localPassword = process.env.LL_PASSWORD;
 
   if (!coordinatorEmail || !coordinatorPassword) {
     throw new Error('Missing coordinator credentials. Set COORD_EMAIL/COORD_PASSWORD or ADMIN_EMAIL/ADMIN_PASSWORD.');
@@ -36,14 +34,8 @@ async function main() {
 
   const coordinator = await upsertUser(coordinatorEmail, coordinatorPassword, Role.COORDENADOR);
 
-  let regionalId = coordinator.id;
   if (regionalEmail && regionalPassword) {
-    const regional = await upsertUser(regionalEmail, regionalPassword, Role.LIDER_REGIONAL, coordinator.id);
-    regionalId = regional.id;
-  }
-
-  if (localEmail && localPassword) {
-    await upsertUser(localEmail, localPassword, Role.LIDER_LOCAL, regionalId);
+    await upsertUser(regionalEmail, regionalPassword, Role.LIDER_REGIONAL, coordinator.id);
   }
 }
 

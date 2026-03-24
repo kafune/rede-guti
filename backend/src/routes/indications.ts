@@ -1,8 +1,13 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, Role as RoleType } from '@prisma/client';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-import { canCreateSupporters, canDeleteSupporters, visibleIndicationsWhere } from '../lib/access.js';
+import {
+  canCreateSupporters,
+  canDeleteSupporters,
+  canViewSupporterIdentities,
+  visibleIndicationsWhere
+} from '../lib/access.js';
 import {
   buildSupporterHierarchyPath,
   getUserDisplayName,
@@ -70,32 +75,37 @@ const serializeIndicationRecord = (indication: {
     id: string;
     email: string;
     name: string | null;
-    role: 'COORDENADOR' | 'LIDER_REGIONAL' | 'LIDER_LOCAL';
+    role: RoleType;
   };
   indicatedByUser?: {
     id: string;
     email: string;
     name: string | null;
-    role: 'COORDENADOR' | 'LIDER_REGIONAL' | 'LIDER_LOCAL';
+    role: RoleType;
     indicatedByUser?: any;
   } | null;
-}) => ({
-  id: indication.id,
-  name: indication.name,
-  phone: indication.phone,
-  email: indication.email,
-  indicatedBy:
-    indication.indicatedBy ??
-    (indication.indicatedByUser ? getUserDisplayName(indication.indicatedByUser) : null),
-  indicatedByUserId: indication.indicatedByUserId,
-  createdAt: indication.createdAt,
-  createdById: indication.createdById,
-  createdBy: serializeUserSummary(indication.createdBy),
-  indicatedByUser: serializeUserSummary(indication.indicatedByUser),
-  church: indication.church,
-  municipality: indication.municipality,
-  hierarchyPath: buildSupporterHierarchyPath(indication)
-});
+}, options?: { redactSupporterIdentity?: boolean }) => {
+  const redactSupporterIdentity = options?.redactSupporterIdentity ?? false;
+
+  return {
+    id: indication.id,
+    name: redactSupporterIdentity ? 'Apoiador oculto' : indication.name,
+    identityHidden: redactSupporterIdentity,
+    phone: redactSupporterIdentity ? null : indication.phone,
+    email: redactSupporterIdentity ? null : indication.email,
+    indicatedBy:
+      indication.indicatedBy ??
+      (indication.indicatedByUser ? getUserDisplayName(indication.indicatedByUser) : null),
+    indicatedByUserId: indication.indicatedByUserId,
+    createdAt: indication.createdAt,
+    createdById: indication.createdById,
+    createdBy: serializeUserSummary(indication.createdBy),
+    indicatedByUser: serializeUserSummary(indication.indicatedByUser),
+    church: indication.church,
+    municipality: indication.municipality,
+    hierarchyPath: redactSupporterIdentity ? null : buildSupporterHierarchyPath(indication)
+  };
+};
 
 export async function indicationRoutes(app: FastifyInstance) {
   app.get('/indications', { preHandler: app.authenticate }, async (request, reply) => {
@@ -162,7 +172,12 @@ export async function indicationRoutes(app: FastifyInstance) {
       orderBy: { createdAt: 'desc' }
     });
 
-    return { indications: indications.map(serializeIndicationRecord) };
+    const redactSupporterIdentity = !canViewSupporterIdentities(request.user.role);
+    return {
+      indications: indications.map((indication) =>
+        serializeIndicationRecord(indication, { redactSupporterIdentity })
+      )
+    };
   });
 
   app.post('/indications', { preHandler: app.authenticate }, async (request, reply) => {
@@ -208,7 +223,11 @@ export async function indicationRoutes(app: FastifyInstance) {
       select: indicationQuerySelect
     });
 
-    return reply.code(201).send({ indication: serializeIndicationRecord(indication) });
+    return reply.code(201).send({
+      indication: serializeIndicationRecord(indication, {
+        redactSupporterIdentity: !canViewSupporterIdentities(request.user.role)
+      })
+    });
   });
 
   app.delete('/indications/:id', { preHandler: app.authenticate }, async (request, reply) => {

@@ -1,0 +1,21 @@
+BEGIN;
+
+CREATE TYPE "Role_new" AS ENUM ('COORDENADOR', 'LIDER_REGIONAL');
+
+ALTER TABLE "users" ALTER COLUMN "role" DROP DEFAULT;
+
+ALTER TABLE "users"
+ALTER COLUMN "role" TYPE "Role_new"
+USING (
+  CASE
+    WHEN "role"::text = 'LIDER_LOCAL' THEN 'LIDER_REGIONAL'
+    ELSE "role"::text
+  END
+)::"Role_new";
+
+DROP TYPE "Role";
+ALTER TYPE "Role_new" RENAME TO "Role";
+
+ALTER TABLE "users" ALTER COLUMN "role" SET DEFAULT 'LIDER_REGIONAL';
+
+COMMIT;

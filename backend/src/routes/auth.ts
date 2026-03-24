@@ -1,3 +1,4 @@
+import type { Role as RoleType } from '@prisma/client';
 import { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
@@ -25,13 +26,13 @@ const serializeAuthUser = (user: {
   id: string;
   email: string;
   name: string | null;
-  role: 'COORDENADOR' | 'LIDER_REGIONAL' | 'LIDER_LOCAL';
+  role: RoleType;
   indicatedByUserId: string | null;
   indicatedByUser?: {
     id: string;
     email: string;
     name: string | null;
-    role: 'COORDENADOR' | 'LIDER_REGIONAL' | 'LIDER_LOCAL';
+    role: RoleType;
     indicatedByUser?: any;
   } | null;
 }) => ({

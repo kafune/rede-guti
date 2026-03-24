@@ -12,7 +12,6 @@ datasource db {
 enum Role {
   COORDENADOR
   LIDER_REGIONAL
-  LIDER_LOCAL
 }
 
 model User {
@@ -21,7 +20,7 @@ model User {
   name               String?      @map("name")
   devzappLink        String?      @map("devzapp_link")
   passwordHash       String       @map("password_hash")
-  role               Role         @default(LIDER_LOCAL)
+  role               Role         @default(LIDER_REGIONAL)
   indicatedByUserId  String?      @map("indicated_by_user_id")
   createdAt          DateTime     @default(now()) @map("created_at")
   indicatedByUser    User?        @relation("UserIndications", fields: [indicatedByUserId], references: [id], onDelete: SetNull)

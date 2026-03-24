@@ -31,7 +31,7 @@ import Login from './components/Login';
 import MapView from './components/MapView';
 import PublicSignup from './components/PublicSignup';
 import PublicThanks from './components/PublicThanks';
-import { canAccessManagementPanel, normalizeUserRole } from './roleUtils';
+import { canAccessManagementPanel, canViewSupporterIdentity, normalizeUserRole } from './roleUtils';
 
 const loadStoredUser = (): User | null => {
   const saved = localStorage.getItem('guti_user');
@@ -111,6 +111,7 @@ const App: React.FC = () => {
     return {
       id: indication.id,
       name: indication.name,
+      identityHidden: indication.identityHidden,
       whatsapp: indication.phone ? normalizePhone(indication.phone) : '',
       church: indication.church?.name ?? '',
       region: 'Interior (outros)' as Region,
@@ -167,6 +168,17 @@ const App: React.FC = () => {
       cancelled = true;
     };
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser || canViewSupporterIdentity(currentUser.role)) {
+      return;
+    }
+
+    if (view === 'list' || view === 'detail' || view === 'map') {
+      setSelectedSupporter(null);
+      setView('dashboard');
+    }
+  }, [currentUser, view]);
 
   useEffect(() => {
     if (!currentUser || view !== 'map') return;
@@ -229,6 +241,11 @@ const App: React.FC = () => {
       const normalizedPhone = normalizePhone(payload.whatsapp);
       const existing = allSupporters.find((supporter) => supporter.whatsapp === normalizedPhone);
       if (existing) {
+        if (!canViewSupporterIdentity(currentUser.role)) {
+          alert('Este WhatsApp ja foi cadastrado na sua rede.');
+          return false;
+        }
+
         if (confirm('WhatsApp ja cadastrado. Visualizar?')) {
           setSelectedSupporter(existing);
           setView('detail');
@@ -311,6 +328,7 @@ const App: React.FC = () => {
   }
 
   const canOpenManagementPanel = canAccessManagementPanel(currentUser.role);
+  const canAccessSupporterDirectory = canViewSupporterIdentity(currentUser.role);
   const isMapView = view === 'map';
   const mainWidthClass = isMapView ? 'max-w-none w-full px-2 sm:px-4 lg:px-8' : 'max-w-4xl';
 
@@ -384,7 +402,7 @@ const App: React.FC = () => {
           />
         )}
 
-        {view === 'list' && (
+        {view === 'list' && canAccessSupporterDirectory && (
           <SupporterList
             supporters={allSupporters}
             user={currentUser}
@@ -396,7 +414,7 @@ const App: React.FC = () => {
           />
         )}
 
-        {view === 'map' && (
+        {view === 'map' && canAccessSupporterDirectory && (
           <MapView
             supporters={allSupporters}
             onSelectSupporter={(supporter) => {
@@ -406,7 +424,7 @@ const App: React.FC = () => {
           />
         )}
 
-        {view === 'detail' && selectedSupporter && (
+        {view === 'detail' && canAccessSupporterDirectory && selectedSupporter && (
           <SupporterDetail
             supporter={selectedSupporter}
             allSupporters={allSupporters}
@@ -437,13 +455,15 @@ const App: React.FC = () => {
           <i className="fa-solid fa-chart-line text-xl mb-1"></i>
           <span className="text-[9px] font-black uppercase">Dashboard</span>
         </button>
-        <button
-          onClick={() => setView('list')}
-          className={`flex flex-col items-center ${view === 'list' ? 'text-blue-600' : 'opacity-30'}`}
-        >
-          <i className="fa-solid fa-users text-xl mb-1"></i>
-          <span className="text-[9px] font-black uppercase">Apoiadores</span>
-        </button>
+        {canAccessSupporterDirectory && (
+          <button
+            onClick={() => setView('list')}
+            className={`flex flex-col items-center ${view === 'list' ? 'text-blue-600' : 'opacity-30'}`}
+          >
+            <i className="fa-solid fa-users text-xl mb-1"></i>
+            <span className="text-[9px] font-black uppercase">Apoiadores</span>
+          </button>
+        )}
         <div className="relative -top-10">
           <button
             onClick={() => setView('form')}
@@ -452,13 +472,15 @@ const App: React.FC = () => {
             <i className="fa-solid fa-plus"></i>
           </button>
         </div>
-        <button
-          onClick={() => setView('map')}
-          className={`flex flex-col items-center ${view === 'map' ? 'text-blue-600' : 'opacity-30'}`}
-        >
-          <i className="fa-solid fa-map-location-dot text-xl mb-1"></i>
-          <span className="text-[9px] font-black uppercase">Mapa</span>
-        </button>
+        {canAccessSupporterDirectory && (
+          <button
+            onClick={() => setView('map')}
+            className={`flex flex-col items-center ${view === 'map' ? 'text-blue-600' : 'opacity-30'}`}
+          >
+            <i className="fa-solid fa-map-location-dot text-xl mb-1"></i>
+            <span className="text-[9px] font-black uppercase">Mapa</span>
+          </button>
+        )}
         {canOpenManagementPanel && (
           <button
             onClick={() => setView('admin')}
@@ -480,15 +502,17 @@ const App: React.FC = () => {
         >
           <i className="fa-solid fa-chart-line text-xl"></i>
         </button>
-        <button
-          onClick={() => setView('list')}
-          className={`p-4 rounded-2xl transition-all ${
-            view === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-          }`}
-          title="Apoiadores"
-        >
-          <i className="fa-solid fa-users text-xl"></i>
-        </button>
+        {canAccessSupporterDirectory && (
+          <button
+            onClick={() => setView('list')}
+            className={`p-4 rounded-2xl transition-all ${
+              view === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
+            }`}
+            title="Apoiadores"
+          >
+            <i className="fa-solid fa-users text-xl"></i>
+          </button>
+        )}
         <button
           onClick={() => setView('form')}
           className={`p-4 rounded-2xl transition-all ${
@@ -498,15 +522,17 @@ const App: React.FC = () => {
         >
           <i className="fa-solid fa-plus text-xl"></i>
         </button>
-        <button
-          onClick={() => setView('map')}
-          className={`p-4 rounded-2xl transition-all ${
-            view === 'map' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-          }`}
-          title="Mapa"
-        >
-          <i className="fa-solid fa-map-location-dot text-xl"></i>
-        </button>
+        {canAccessSupporterDirectory && (
+          <button
+            onClick={() => setView('map')}
+            className={`p-4 rounded-2xl transition-all ${
+              view === 'map' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
+            }`}
+            title="Mapa"
+          >
+            <i className="fa-solid fa-map-location-dot text-xl"></i>
+          </button>
+        )}
         {canOpenManagementPanel && (
           <button
             onClick={() => setView('admin')}

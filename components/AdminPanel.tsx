@@ -10,7 +10,12 @@ import {
   UserRole
 } from '../types';
 import { deleteUser, fetchSettings, fetchUsers, getApiErrorMessage, updateSettings, updateUser } from '../api';
-import { canManageUsers, getDefaultCreatableUserRole, getRoleLabel } from '../roleUtils';
+import {
+  canManageUsers,
+  canViewSupporterIdentity,
+  getDefaultCreatableUserRole,
+  getRoleLabel
+} from '../roleUtils';
 import SupporterForm from './SupporterForm';
 
 interface Props {
@@ -42,8 +47,6 @@ const getRoleBadgeClass = (role: UserRole) => {
       return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
     case UserRole.LIDER_REGIONAL:
       return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
-    case UserRole.LIDER_LOCAL:
-      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
     default:
       return 'bg-gray-100 text-gray-700 dark:bg-gray-900/40 dark:text-gray-300';
   }
@@ -59,6 +62,7 @@ const AdminPanel: React.FC<Props> = ({
 }) => {
   const allowUserEditing = canManageUsers(currentUser.role);
   const canExportData = currentUser.role === UserRole.COORDENADOR;
+  const canViewSupporterDetails = canViewSupporterIdentity(currentUser.role);
 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -337,6 +341,23 @@ const AdminPanel: React.FC<Props> = ({
     return [currentUser.id];
   }, [currentUser.id, currentUser.role, networkUsers, userMap]);
 
+  const regionalSummary = useMemo(() => {
+    const directSupporters = supportersByParent.get(currentUser.id)?.length ?? 0;
+    const directLeaders = (usersByParent.get(currentUser.id) ?? []).filter(
+      (user) => user.id !== currentUser.id
+    ).length;
+    const activeMunicipalities = new Set(
+      supporters.map((supporter) => (supporter.notes || '').trim()).filter(Boolean)
+    ).size;
+
+    return {
+      totalSupporters: supporters.length,
+      directSupporters,
+      directLeaders,
+      activeMunicipalities
+    };
+  }, [currentUser.id, supporters, supportersByParent, usersByParent]);
+
   const renderNetworkNode = (userId: string, depth = 0): React.ReactNode => {
     const user = userMap.get(userId);
     if (!user) return null;
@@ -545,7 +566,7 @@ const AdminPanel: React.FC<Props> = ({
 
         {!allowUserEditing && (
           <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
-            Lider Regional pode cadastrar e visualizar sua propria arvore, mas apenas Coordenador edita ou exclui acessos.
+            Lider Regional pode cadastrar apoiadores e acompanhar apenas os totais numericos da propria rede. Apenas Coordenador edita ou exclui acessos.
           </div>
         )}
 
@@ -570,7 +591,7 @@ const AdminPanel: React.FC<Props> = ({
             const editableRoles =
               user.role === UserRole.COORDENADOR
                 ? [UserRole.COORDENADOR]
-                : [UserRole.LIDER_REGIONAL, UserRole.LIDER_LOCAL];
+                : [UserRole.LIDER_REGIONAL];
             const hierarchyLabel = user.hierarchyPath?.map((item) => item.name).join(' > ') ?? '';
 
             return (
@@ -690,9 +711,34 @@ const AdminPanel: React.FC<Props> = ({
       <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
         <div className="mb-6">
           <h3 className="text-lg font-bold mb-1">Visualizacao multinivel</h3>
-          <p className="text-sm opacity-60">Cada no mostra quem indicou quem na hierarquia atual da rede.</p>
+          <p className="text-sm opacity-60">
+            {canViewSupporterDetails
+              ? 'Cada no mostra quem indicou quem na hierarquia atual da rede.'
+              : 'Para LR, esta area exibe apenas contagens agregadas da rede vinculada ao seu link.'}
+          </p>
         </div>
-        <div className="space-y-4">{rootNetworkIds.map((rootId) => renderNetworkNode(rootId))}</div>
+        {canViewSupporterDetails ? (
+          <div className="space-y-4">{rootNetworkIds.map((rootId) => renderNetworkNode(rootId))}</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="rounded-2xl border dark:border-gray-700 p-5 bg-blue-50/70 dark:bg-blue-900/10">
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-2">Total da rede</p>
+              <p className="text-3xl font-black text-blue-700 dark:text-blue-300">{regionalSummary.totalSupporters}</p>
+            </div>
+            <div className="rounded-2xl border dark:border-gray-700 p-5 bg-white dark:bg-gray-900/40">
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-2">Indicacoes diretas</p>
+              <p className="text-3xl font-black">{regionalSummary.directSupporters}</p>
+            </div>
+            <div className="rounded-2xl border dark:border-gray-700 p-5 bg-white dark:bg-gray-900/40">
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-2">Liderancas vinculadas</p>
+              <p className="text-3xl font-black">{regionalSummary.directLeaders}</p>
+            </div>
+            <div className="rounded-2xl border dark:border-gray-700 p-5 bg-white dark:bg-gray-900/40">
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-2">Municipios ativos</p>
+              <p className="text-3xl font-black">{regionalSummary.activeMunicipalities}</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

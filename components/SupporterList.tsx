@@ -13,27 +13,37 @@ interface Props {
 const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSelect }) => {
   const [search, setSearch] = useState('');
   const [municipalityFilter, setMunicipalityFilter] = useState('');
+  const [leaderFilter, setLeaderFilter] = useState('');
 
   const municipalityNames = useMemo(() => {
     return Array.from<string>(new Set(municipalities.map((municipality) => municipality.name)))
       .sort((a, b) => a.localeCompare(b));
   }, [municipalities]);
-  
-  const filtered = useMemo(() => {
-    let result = supporters;
-    
+
+  const visibleSupporters = useMemo(() => {
     if (!canViewAllSupporters(user.role)) {
-      result = result.filter(
-        (supporter) =>
-          supporter.createdBy === user.id || supporter.indicatedByUserId === user.id
+      return supporters.filter(
+        (s) => s.createdBy === user.id || s.indicatedByUserId === user.id
       );
     }
+    return supporters;
+  }, [supporters, user]);
+
+  const leaderNames = useMemo(() => {
+    const names = visibleSupporters
+      .map((s) => s.createdByName)
+      .filter((n): n is string => Boolean(n));
+    return Array.from<string>(new Set(names)).sort((a, b) => a.localeCompare(b));
+  }, [visibleSupporters]);
+
+  const filtered = useMemo(() => {
+    let result = visibleSupporters;
 
     if (search) {
       const q = search.toLowerCase();
-      result = result.filter(s => 
-        s.name.toLowerCase().includes(q) || 
-        s.church.toLowerCase().includes(q) || 
+      result = result.filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.church.toLowerCase().includes(q) ||
         s.whatsapp.includes(q) ||
         (s.indicatedBy || '').toLowerCase().includes(q)
       );
@@ -44,13 +54,17 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
       result = result.filter(s => (s.notes || '').toLowerCase() === target);
     }
 
+    if (leaderFilter) {
+      result = result.filter(s => s.createdByName === leaderFilter);
+    }
+
     return result;
-  }, [supporters, search, municipalityFilter, user]);
+  }, [visibleSupporters, search, municipalityFilter, leaderFilter]);
 
   return (
     <div className="space-y-4 animate-fade-up">
       <div className="flex items-center justify-between animate-soft-pop">
-        <h2 className="text-2xl font-bold">Lideranças SP</h2>
+        <h2 className="text-2xl font-bold">Apoiadores</h2>
         <span className="text-[10px] bg-blue-600 text-white px-3 py-1 rounded-full font-black uppercase tracking-wider">
           {filtered.length} Registros
         </span>
@@ -69,23 +83,23 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
         </div>
         
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          <button 
+          <button
             onClick={() => setMunicipalityFilter('')}
             className={`whitespace-nowrap px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ease-out hover:-translate-y-0.5 ${
-              municipalityFilter === '' 
-                ? 'bg-blue-600 text-white' 
+              municipalityFilter === ''
+                ? 'bg-blue-600 text-white'
                 : 'bg-white dark:bg-gray-800 opacity-60'
             }`}
           >
             Todos
           </button>
           {municipalityNames.map(name => (
-            <button 
+            <button
               key={name}
               onClick={() => setMunicipalityFilter(name)}
               className={`whitespace-nowrap px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ease-out hover:-translate-y-0.5 ${
-                municipalityFilter === name 
-                  ? 'bg-blue-600 text-white' 
+                municipalityFilter === name
+                  ? 'bg-blue-600 text-white'
                   : 'bg-white dark:bg-gray-800 opacity-60'
               }`}
             >
@@ -93,6 +107,34 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
             </button>
           ))}
         </div>
+
+        {leaderNames.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            <button
+              onClick={() => setLeaderFilter('')}
+              className={`whitespace-nowrap px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ease-out hover:-translate-y-0.5 ${
+                leaderFilter === ''
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-white dark:bg-gray-800 opacity-60'
+              }`}
+            >
+              Todos líderes
+            </button>
+            {leaderNames.map(name => (
+              <button
+                key={name}
+                onClick={() => setLeaderFilter(name)}
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ease-out hover:-translate-y-0.5 ${
+                  leaderFilter === name
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-white dark:bg-gray-800 opacity-60'
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-3">

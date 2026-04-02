@@ -55,7 +55,8 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
     }
 
     if (leaderFilter) {
-      result = result.filter(s => s.createdByName === leaderFilter);
+      const lq = leaderFilter.toLowerCase();
+      result = result.filter(s => (s.createdByName || '').toLowerCase().includes(lq));
     }
 
     return result;
@@ -109,30 +110,29 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
         </div>
 
         {leaderNames.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-            <button
-              onClick={() => setLeaderFilter('')}
-              className={`whitespace-nowrap px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ease-out hover:-translate-y-0.5 ${
-                leaderFilter === ''
-                  ? 'bg-amber-500 text-white'
-                  : 'bg-white dark:bg-gray-800 opacity-60'
-              }`}
-            >
-              Todos líderes
-            </button>
-            {leaderNames.map(name => (
+          <div className="relative">
+            <i className="fa-solid fa-user-tie absolute left-4 top-1/2 -translate-y-1/2 opacity-40 pointer-events-none"></i>
+            <input
+              list="leader-list"
+              type="text"
+              placeholder="Filtrar por liderança que cadastrou..."
+              className="w-full bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl pl-11 pr-10 py-4 focus:ring-2 focus:ring-amber-400 outline-none transition-all shadow-sm"
+              value={leaderFilter}
+              onChange={(e) => setLeaderFilter(e.target.value)}
+            />
+            <datalist id="leader-list">
+              {leaderNames.map(name => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            {leaderFilter && (
               <button
-                key={name}
-                onClick={() => setLeaderFilter(name)}
-                className={`whitespace-nowrap px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ease-out hover:-translate-y-0.5 ${
-                  leaderFilter === name
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-white dark:bg-gray-800 opacity-60'
-                }`}
+                onClick={() => setLeaderFilter('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-80 transition-opacity"
               >
-                {name}
+                <i className="fa-solid fa-xmark"></i>
               </button>
-            ))}
+            )}
           </div>
         )}
       </div>

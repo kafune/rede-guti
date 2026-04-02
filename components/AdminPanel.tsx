@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   AdminUser,
   AppSettings,
@@ -65,7 +64,6 @@ const AdminPanel: React.FC<Props> = ({
   onSubmitRegistration
 }) => {
   const allowUserEditing = canManageUsers(currentUser.role);
-  const canExportData = currentUser.role === UserRole.COORDENADOR;
   const canImportData = currentUser.role === UserRole.COORDENADOR;
   const canViewSupporterDetails = canViewSupporterIdentity(currentUser.role);
 
@@ -87,31 +85,6 @@ const AdminPanel: React.FC<Props> = ({
     password: '',
     role: getDefaultCreatableUserRole(currentUser.role)
   });
-
-  const exportXLSX = () => {
-    const rows = supporters.map((supporter) => ({
-      Nome: supporter.name,
-      Cidade: supporter.notes || supporter.region,
-      Numero: supporter.whatsapp,
-      Email: supporter.email || '',
-      Igreja: supporter.church,
-      Status: supporter.status
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    worksheet['!cols'] = [
-      { wch: 28 },
-      { wch: 20 },
-      { wch: 18 },
-      { wch: 30 },
-      { wch: 28 },
-      { wch: 14 }
-    ];
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Apoiadores');
-    XLSX.writeFile(workbook, `rede_sp_${new Date().toISOString().split('T')[0]}.xlsx`);
-  };
 
   const loadUsers = async () => {
     setUsersLoading(true);
@@ -436,43 +409,17 @@ const AdminPanel: React.FC<Props> = ({
     <div className="space-y-6 animate-fade-up">
       <h2 className="text-2xl font-bold animate-soft-pop">Gestao da Rede</h2>
 
-      {(canExportData || canImportData) && (
-        <div
-          className={`grid grid-cols-1 ${
-            canExportData && canImportData ? 'md:grid-cols-2' : ''
-          } gap-4`}
-        >
-        {canExportData && (
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out hover:-translate-y-0.5">
-            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center text-blue-600 mb-4 text-xl">
-              <i className="fa-solid fa-file-export"></i>
-            </div>
-            <h3 className="text-lg font-bold mb-2">Exportar Dados</h3>
-            <p className="text-sm opacity-60 mb-6">
-              Baixe a base completa de apoiadores em formato XLSX.
-            </p>
-            <button
-              onClick={exportXLSX}
-              className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5"
-            >
-              Exportar XLSX
-            </button>
+      {canImportData && (
+        <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out hover:-translate-y-0.5">
+          <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center text-purple-600 mb-4 text-xl">
+            <i className="fa-solid fa-file-import"></i>
           </div>
-        )}
-
-        {canImportData && (
-          <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out hover:-translate-y-0.5">
-            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center text-purple-600 mb-4 text-xl">
-              <i className="fa-solid fa-file-import"></i>
-            </div>
-            <h3 className="text-lg font-bold mb-2">Importar Dados</h3>
-            <p className="text-sm opacity-60 mb-6">Suba uma lista de contatos em massa via arquivo CSV.</p>
-            <label className="theme-accent-button block w-full py-3 rounded-xl font-bold active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 text-center cursor-pointer">
-              Selecionar CSV
-              <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
-            </label>
-          </div>
-        )}
+          <h3 className="text-lg font-bold mb-2">Importar Dados</h3>
+          <p className="text-sm opacity-60 mb-6">Suba uma lista de contatos em massa via arquivo CSV.</p>
+          <label className="theme-accent-button block w-full py-3 rounded-xl font-bold active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 text-center cursor-pointer">
+            Selecionar CSV
+            <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+          </label>
         </div>
       )}
 

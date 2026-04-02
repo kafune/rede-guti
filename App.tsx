@@ -28,6 +28,7 @@ import SupporterForm from './components/SupporterForm';
 import SupporterList from './components/SupporterList';
 import SupporterDetail from './components/SupporterDetail';
 import AdminPanel from './components/AdminPanel';
+import ExportPanel from './components/ExportPanel';
 import Login from './components/Login';
 import MapView from './components/MapView';
 import PublicSignup from './components/PublicSignup';
@@ -70,7 +71,7 @@ const App: React.FC = () => {
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [view, setView] = useState<'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map'>(
+  const [view, setView] = useState<'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export'>(
     'dashboard'
   );
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
@@ -375,6 +376,7 @@ const App: React.FC = () => {
   const canOpenManagementPanel = canAccessManagementPanel(currentUser.role);
   const canAccessSupporterDirectory = canViewSupporterIdentity(currentUser.role);
   const canCreateNewEntries = canCreateRegistrations(currentUser.role);
+  const canExportData = currentUser.role === 'COORDENADOR';
   const isMapView = view === 'map';
   const mainWidthClass = isMapView ? 'max-w-none w-full px-2 sm:px-4 lg:px-8' : 'max-w-4xl';
 
@@ -491,6 +493,10 @@ const App: React.FC = () => {
             onSubmitRegistration={submitRegistration}
           />
         )}
+
+        {view === 'export' && canExportData && (
+          <ExportPanel supporters={allSupporters} />
+        )}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex justify-around items-center h-20 md:hidden px-4">
@@ -536,6 +542,15 @@ const App: React.FC = () => {
           >
             <i className="fa-solid fa-sitemap text-xl mb-1"></i>
             <span className="text-[9px] font-black uppercase">Rede</span>
+          </button>
+        )}
+        {canExportData && (
+          <button
+            onClick={() => setView('export')}
+            className={`flex flex-col items-center ${view === 'export' ? 'text-blue-600' : 'opacity-30'}`}
+          >
+            <i className="fa-solid fa-file-export text-xl mb-1"></i>
+            <span className="text-[9px] font-black uppercase">Exportar</span>
           </button>
         )}
       </nav>
@@ -592,6 +607,17 @@ const App: React.FC = () => {
             title="Rede"
           >
             <i className="fa-solid fa-sitemap text-xl"></i>
+          </button>
+        )}
+        {canExportData && (
+          <button
+            onClick={() => setView('export')}
+            className={`p-4 rounded-2xl transition-all ${
+              view === 'export' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
+            }`}
+            title="Exportar"
+          >
+            <i className="fa-solid fa-file-export text-xl"></i>
           </button>
         )}
       </nav>

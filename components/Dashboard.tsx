@@ -11,6 +11,7 @@ interface Props {
 
 const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onViewSupporter }) => {
   const [copyLabel, setCopyLabel] = useState('Copiar link');
+  const [topSort, setTopSort] = useState<'total' | 'lastMonth' | 'lastWeek'>('total');
   const baseUrl = `${window.location.origin}${window.location.pathname}#/cadastro`;
   const indicatorName = currentUser?.name?.trim();
   const indicatorId = currentUser?.id;
@@ -74,6 +75,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
       return acc;
     }, {} as Record<string, number>);
 
+    const sortKey = topSort === 'total' ? 'count' : topSort;
     const topInfluencers = Object.entries(indicatorCounts)
       .map(([name, count]) => ({
         name,
@@ -81,7 +83,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
         lastWeek: indicatorWeekCounts[name] || 0,
         lastMonth: indicatorMonthCounts[name] || 0,
       }))
-      .sort((a, b) => b.count - a.count)
+      .sort((a, b) => b[sortKey] - a[sortKey])
       .slice(0, 4);
 
     const cityCounts = supporters.reduce((acc, supporter) => {
@@ -121,7 +123,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
       last7Days,
       activeCities
     };
-  }, [supporters]);
+  }, [supporters, topSort]);
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -237,10 +239,26 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
 
       {!isRegionalViewer && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
-          <h3 className="text-lg font-black mb-4 flex items-center gap-2">
-            <i className="fa-solid fa-share-nodes text-blue-500"></i>
-            Top Indicadores
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-black flex items-center gap-2">
+              <i className="fa-solid fa-share-nodes text-blue-500"></i>
+              Top Indicadores
+            </h3>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setTopSort('total')}
+                className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase transition-colors ${topSort === 'total' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'opacity-40 hover:opacity-70'}`}
+              >Total</button>
+              <button
+                onClick={() => setTopSort('lastMonth')}
+                className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase transition-colors ${topSort === 'lastMonth' ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400' : 'opacity-40 hover:opacity-70'}`}
+              >30 dias</button>
+              <button
+                onClick={() => setTopSort('lastWeek')}
+                className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase transition-colors ${topSort === 'lastWeek' ? 'bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400' : 'opacity-40 hover:opacity-70'}`}
+              >7 dias</button>
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-3">
             {stats.topInfluencers.map((item, idx) => (
               <div

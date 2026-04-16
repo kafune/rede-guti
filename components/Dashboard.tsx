@@ -11,7 +11,7 @@ interface Props {
 
 const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onViewSupporter }) => {
   const [copyLabel, setCopyLabel] = useState('Copiar link');
-  const [topSort, setTopSort] = useState<'total' | 'lastMonth' | 'lastWeek'>('total');
+  const [topSort, setTopSort] = useState<'total' | 'lastMonth' | 'lastFifteenDays' | 'lastWeek'>('total');
   const baseUrl = `${window.location.origin}${window.location.pathname}#/cadastro`;
   const indicatorName = currentUser?.name?.trim();
   const indicatorId = currentUser?.id;
@@ -44,6 +44,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
   const stats = useMemo(() => {
     const now = Date.now();
     const oneWeek = 7 * 24 * 60 * 60 * 1000;
+    const twoWeeks = 15 * 24 * 60 * 60 * 1000;
     const oneMonth = 30 * 24 * 60 * 60 * 1000;
 
     const indicatorCounts = supporters.reduce((acc, supporter) => {
@@ -65,6 +66,16 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
       return acc;
     }, {} as Record<string, number>);
 
+    const indicatorFifteenDayCounts = supporters.reduce((acc, supporter) => {
+      const indicator = (supporter.indicatedBy || '').trim();
+      if (!indicator || indicator.toLowerCase() === 'cadastro direto') return acc;
+      const createdAt = new Date(supporter.createdAt);
+      if (!Number.isNaN(createdAt.getTime()) && now - createdAt.getTime() <= twoWeeks) {
+        acc[indicator] = (acc[indicator] || 0) + 1;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+
     const indicatorMonthCounts = supporters.reduce((acc, supporter) => {
       const indicator = (supporter.indicatedBy || '').trim();
       if (!indicator || indicator.toLowerCase() === 'cadastro direto') return acc;
@@ -81,6 +92,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
         name,
         count,
         lastWeek: indicatorWeekCounts[name] || 0,
+        lastFifteenDays: indicatorFifteenDayCounts[name] || 0,
         lastMonth: indicatorMonthCounts[name] || 0,
       }))
       .sort((a, b) => b[sortKey] - a[sortKey])
@@ -254,6 +266,10 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
                 className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase transition-colors ${topSort === 'lastMonth' ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400' : 'opacity-40 hover:opacity-70'}`}
               >30 dias</button>
               <button
+                onClick={() => setTopSort('lastFifteenDays')}
+                className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase transition-colors ${topSort === 'lastFifteenDays' ? 'bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-400' : 'opacity-40 hover:opacity-70'}`}
+              >15 dias</button>
+              <button
                 onClick={() => setTopSort('lastWeek')}
                 className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase transition-colors ${topSort === 'lastWeek' ? 'bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400' : 'opacity-40 hover:opacity-70'}`}
               >7 dias</button>
@@ -276,6 +292,10 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
                   <div className="text-right">
                     <p className="text-[9px] font-bold opacity-40 uppercase">7 dias</p>
                     <p className="text-base font-black text-violet-500">{item.lastWeek}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-bold opacity-40 uppercase">15 dias</p>
+                    <p className="text-base font-black text-sky-500">{item.lastFifteenDays}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[9px] font-bold opacity-40 uppercase">30 dias</p>

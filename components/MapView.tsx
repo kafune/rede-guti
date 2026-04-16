@@ -252,9 +252,9 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
 
         <div className={`space-y-4 h-full flex flex-col min-h-0 transition-all duration-700 ease-out ${hasSelection ? 'lg:pr-4' : ''}`}>
           {!hasSelection && (
-            <div className="bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm flex-1 min-h-0 animate-soft-pop">
-              <h3 className="text-sm font-black uppercase tracking-widest opacity-40 mb-3">Top Municípios</h3>
-              <div className="space-y-3">
+            <div className="bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm flex-1 min-h-0 animate-soft-pop flex flex-col overflow-hidden">
+              <h3 className="text-sm font-black uppercase tracking-widest opacity-40 mb-3 shrink-0">Top Municípios</h3>
+              <div className="space-y-3 overflow-y-auto min-h-0 flex-1">
                 {topMunicipalities.map((city, index) => (
                   <button
                     key={city.name}
@@ -281,11 +281,11 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
           )}
 
           <div
-            className={`bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm flex-1 min-h-0 ${
+            className={`bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden ${
               hasSelection ? 'ring-2 ring-blue-100 dark:ring-blue-500/20' : ''
             } transition-all duration-700 ease-out`}
           >
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 shrink-0">
               <h3 className="text-sm font-black uppercase tracking-widest opacity-40">
                 {selectedMunicipality ? `Apoiadores em ${selectedMunicipality}` : 'Últimos cadastrados'}
               </h3>
@@ -293,7 +293,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
                 <span className="text-xs font-black text-blue-600 animate-soft-pop">{selectedSupporters.length}</span>
               )}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-y-auto min-h-0 flex-1">
               {selectedSupporters.length > 0 ? (
                 selectedSupporters.map((supporter) => (
                   <button

@@ -251,12 +251,12 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
 
       {!isRegionalViewer && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-black flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <h3 className="text-base sm:text-lg font-black flex items-center gap-2">
               <i className="fa-solid fa-share-nodes text-blue-500"></i>
               Top Indicadores
             </h3>
-            <div className="flex gap-1">
+            <div className="flex gap-1 flex-wrap">
               <button
                 onClick={() => setTopSort('total')}
                 className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase transition-colors ${topSort === 'total' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'opacity-40 hover:opacity-70'}`}
@@ -279,31 +279,31 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
             {stats.topInfluencers.map((item, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border dark:border-gray-700 transition-transform duration-300 ease-out hover:-translate-y-0.5"
+                className="flex flex-wrap items-center gap-2 sm:gap-4 bg-gray-50 dark:bg-gray-900/50 p-3 sm:p-4 rounded-2xl border dark:border-gray-700 transition-transform duration-300 ease-out hover:-translate-y-0.5"
               >
-                <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 font-black">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 font-black text-sm shrink-0">
                   {idx + 1}o
                 </div>
-                <div className="flex-1">
-                  <p className="font-black text-sm">{item.name}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-sm truncate">{item.name}</p>
                   <p className="text-[10px] opacity-40 uppercase font-bold">Indicador</p>
                 </div>
-                <div className="flex gap-3 items-end">
+                <div className="grid grid-cols-4 gap-2 sm:gap-3 w-full sm:w-auto">
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">7 dias</p>
-                    <p className="text-base font-black text-violet-500">{item.lastWeek}</p>
+                    <p className="text-[9px] font-bold opacity-40 uppercase">7d</p>
+                    <p className="text-sm sm:text-base font-black text-violet-500">{item.lastWeek}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">15 dias</p>
-                    <p className="text-base font-black text-sky-500">{item.lastFifteenDays}</p>
+                    <p className="text-[9px] font-bold opacity-40 uppercase">15d</p>
+                    <p className="text-sm sm:text-base font-black text-sky-500">{item.lastFifteenDays}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">30 dias</p>
-                    <p className="text-base font-black text-indigo-500">{item.lastMonth}</p>
+                    <p className="text-[9px] font-bold opacity-40 uppercase">30d</p>
+                    <p className="text-sm sm:text-base font-black text-indigo-500">{item.lastMonth}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[9px] font-bold opacity-40 uppercase">Total</p>
-                    <p className="text-xl font-black text-blue-600">{item.count}</p>
+                    <p className="text-base sm:text-xl font-black text-blue-600">{item.count}</p>
                   </div>
                 </div>
               </div>

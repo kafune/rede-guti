@@ -30,8 +30,8 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
       </div>
 
       {/* Video Section */}
-      <div className="px-6 -mt-16 relative z-20 max-w-lg mx-auto w-full">
-        <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-2xl overflow-hidden p-3 border dark:border-gray-700">
+      <div className="px-3 sm:px-6 -mt-12 sm:-mt-16 relative z-20 max-w-lg mx-auto w-full">
+        <div className="bg-white dark:bg-gray-800 rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden p-2 sm:p-3 border dark:border-gray-700">
           <video
             className="aspect-video w-full rounded-[2rem] bg-black object-cover"
             controls
@@ -45,7 +45,7 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
       </div>
 
       {/* Content Section */}
-      <div className="flex-1 px-8 py-12 max-w-lg mx-auto w-full space-y-8 text-center">
+      <div className="flex-1 px-4 sm:px-8 py-8 sm:py-12 max-w-lg mx-auto w-full space-y-6 sm:space-y-8 text-center">
         <div className="space-y-4">
           <h2 className="text-2xl font-black text-gray-900 dark:text-white leading-tight">
             Assista à mensagem e siga para o próximo passo

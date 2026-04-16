@@ -152,20 +152,20 @@ const SupporterDetail: React.FC<Props> = ({
           {/* Card: Igreja Mapeada */}
           <div className="space-y-4">
              <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-[0.2em] mb-4">Dados da Igreja</h4>
-             <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
+             <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
                   <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Denominação</p>
                   <p className="font-bold text-sm">{supporter.churchDenomination || 'Livre / Independente'}</p>
                 </div>
-                <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
+                <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
                   <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Tipo Unidade</p>
                   <p className="font-bold text-sm">{supporter.isMainBranch ? 'Sede / Campo' : 'Congregação'}</p>
                 </div>
-                <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
+                <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
                   <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Membros</p>
                   <p className="font-bold text-sm">{supporter.churchMembersCount || '-'}</p>
                 </div>
-                <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
+                <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
                   <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Cidade</p>
                   <p className="font-bold text-sm truncate">{supporter.notes || supporter.region}</p>
                 </div>
@@ -279,13 +279,13 @@ const SupporterDetail: React.FC<Props> = ({
             )}
 
             {isConfirmingDelete && (
-              <div className="fixed inset-0 z-[100] flex items-end p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-                <div className="w-full bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 shadow-2xl animate-in slide-in-from-bottom-10">
-                  <h5 className="text-xl font-black text-center mb-2">Excluir Registro?</h5>
-                  <p className="text-sm text-center opacity-50 mb-8 font-medium">Esta acao nao pode ser desfeita. O cadastro e suas referencias serao afetados.</p>
+              <div className="fixed inset-0 z-[100] flex items-end p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="w-full bg-white dark:bg-gray-800 rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl animate-in slide-in-from-bottom-10">
+                  <h5 className="text-lg sm:text-xl font-black text-center mb-2">Excluir Registro?</h5>
+                  <p className="text-sm text-center opacity-50 mb-5 sm:mb-8 font-medium">Esta acao nao pode ser desfeita. O cadastro e suas referencias serao afetados.</p>
                   <div className="flex gap-3">
-                    <button onClick={() => setIsConfirmingDelete(false)} className="flex-1 py-4 bg-gray-100 dark:bg-gray-700 rounded-2xl font-black text-sm">CANCELAR</button>
-                    <button onClick={() => onDelete(supporter.id)} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-sm">SIM, EXCLUIR</button>
+                    <button onClick={() => setIsConfirmingDelete(false)} className="flex-1 py-4 bg-gray-100 dark:bg-gray-700 rounded-2xl font-black text-sm min-h-[48px]">CANCELAR</button>
+                    <button onClick={() => onDelete(supporter.id)} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-sm min-h-[48px]">SIM, EXCLUIR</button>
                   </div>
                 </div>
               </div>

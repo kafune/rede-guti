@@ -121,7 +121,7 @@ const ExportPanel: React.FC<Props> = ({ supporters }) => {
             >
               {allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
             </button>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 sm:max-h-64 overflow-y-auto pr-1">
               {leaders.map((leader) => (
                 <label
                   key={leader.id}

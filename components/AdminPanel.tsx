@@ -503,8 +503,8 @@ const AdminPanel: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+      <div className="theme-panel bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div>
             <h3 className="text-lg font-bold mb-1">Cadastros da rede</h3>
             <p className="text-sm opacity-60">O formulario abaixo respeita sua hierarquia de permissao.</p>
@@ -682,7 +682,7 @@ const AdminPanel: React.FC<Props> = ({
         {canViewSupporterDetails ? (
           <div className="space-y-4">{rootNetworkIds.map((rootId) => renderNetworkNode(rootId))}</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <div className="rounded-2xl border dark:border-gray-700 p-5 bg-blue-50/70 dark:bg-blue-900/10">
               <p className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-2">Total da rede</p>
               <p className="text-3xl font-black text-blue-700 dark:text-blue-300">{regionalSummary.totalSupporters}</p>

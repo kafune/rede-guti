@@ -386,7 +386,7 @@ const App: React.FC = () => {
         isMapView ? 'pb-0' : 'pb-24 md:pb-0'
       }`}
     >
-      <header className="fixed top-0 left-0 md:left-24 right-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b dark:border-gray-800 px-6 h-20 flex items-center justify-between">
+      <header className="fixed top-0 left-0 md:left-24 right-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b dark:border-gray-800 px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
         <div
           className="flex items-center gap-3 cursor-pointer"
           onClick={() => setView('dashboard')}
@@ -409,8 +409,8 @@ const App: React.FC = () => {
       <main
         className={`w-full mx-auto ${mainWidthClass} ${
           isMapView
-            ? 'mt-20 h-[calc(100vh-10rem)] md:h-[calc(100vh-5rem)] overflow-hidden'
-            : 'p-6 pt-28'
+            ? 'mt-16 sm:mt-20 h-[calc(100vh-9rem)] sm:h-[calc(100vh-10rem)] md:h-[calc(100vh-5rem)] overflow-hidden'
+            : 'px-4 sm:px-6 py-6 pt-24 sm:pt-28'
         }`}
       >
         {(isLoading || dataError) && (

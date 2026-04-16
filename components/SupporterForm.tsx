@@ -187,7 +187,7 @@ const SupporterForm: React.FC<Props> = ({
                     key={allowedTarget}
                     type="button"
                     onClick={() => setTarget(allowedTarget)}
-                    className={`rounded-2xl px-4 py-3 text-sm font-black transition-all duration-300 ease-out ${
+                    className={`rounded-2xl px-4 py-3 text-sm font-black transition-all duration-300 ease-out min-h-[44px] ${
                       isActive
                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
                         : 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300'

@@ -41,6 +41,10 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
   };
 
   const stats = useMemo(() => {
+    const now = Date.now();
+    const oneWeek = 7 * 24 * 60 * 60 * 1000;
+    const oneMonth = 30 * 24 * 60 * 60 * 1000;
+
     const indicatorCounts = supporters.reduce((acc, supporter) => {
       const indicator = (supporter.indicatedBy || '').trim();
       if (!indicator || indicator.toLowerCase() === 'cadastro direto') {
@@ -50,8 +54,33 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
       return acc;
     }, {} as Record<string, number>);
 
+    const indicatorWeekCounts = supporters.reduce((acc, supporter) => {
+      const indicator = (supporter.indicatedBy || '').trim();
+      if (!indicator || indicator.toLowerCase() === 'cadastro direto') return acc;
+      const createdAt = new Date(supporter.createdAt);
+      if (!Number.isNaN(createdAt.getTime()) && now - createdAt.getTime() <= oneWeek) {
+        acc[indicator] = (acc[indicator] || 0) + 1;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+
+    const indicatorMonthCounts = supporters.reduce((acc, supporter) => {
+      const indicator = (supporter.indicatedBy || '').trim();
+      if (!indicator || indicator.toLowerCase() === 'cadastro direto') return acc;
+      const createdAt = new Date(supporter.createdAt);
+      if (!Number.isNaN(createdAt.getTime()) && now - createdAt.getTime() <= oneMonth) {
+        acc[indicator] = (acc[indicator] || 0) + 1;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+
     const topInfluencers = Object.entries(indicatorCounts)
-      .map(([name, count]) => ({ name, count }))
+      .map(([name, count]) => ({
+        name,
+        count,
+        lastWeek: indicatorWeekCounts[name] || 0,
+        lastMonth: indicatorMonthCounts[name] || 0,
+      }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 4);
 
@@ -225,9 +254,19 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
                   <p className="font-black text-sm">{item.name}</p>
                   <p className="text-[10px] opacity-40 uppercase font-bold">Indicador</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl font-black text-blue-600">{item.count}</p>
-                  <p className="text-[9px] font-bold opacity-40 uppercase">Indicacoes</p>
+                <div className="flex gap-3 items-end">
+                  <div className="text-right">
+                    <p className="text-[9px] font-bold opacity-40 uppercase">7 dias</p>
+                    <p className="text-base font-black text-violet-500">{item.lastWeek}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-bold opacity-40 uppercase">30 dias</p>
+                    <p className="text-base font-black text-indigo-500">{item.lastMonth}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-bold opacity-40 uppercase">Total</p>
+                    <p className="text-xl font-black text-blue-600">{item.count}</p>
+                  </div>
                 </div>
               </div>
             ))}

@@ -200,6 +200,17 @@ export async function publicRoutes(app: FastifyInstance) {
       select: indicationQuerySelect
     });
 
-    return reply.code(201).send({ indication: serializeIndicationRecord(indication) });
+    const record = serializeIndicationRecord(indication);
+
+    const sheetsUrl = process.env.SHEETS_WEBHOOK_URL;
+    if (sheetsUrl) {
+      fetch(sheetsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+      }).catch(() => {});
+    }
+
+    return reply.code(201).send({ indication: record });
   });
 }

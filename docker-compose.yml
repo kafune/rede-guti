@@ -1,4 +1,4 @@
-﻿services:
+services:
   db:
     image: postgres:16-alpine
     environment:
@@ -9,6 +9,8 @@
       - db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    networks:
+      - dokploy-network
 
   api:
     build:
@@ -21,8 +23,44 @@
       DATABASE_URL: postgres://postgres:postgres@db:5432/rede_evangelica?schema=public
     depends_on:
       - db
-    ports:
-      - "4000:4000"
+    networks:
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rede-guti-api.rule=Host(`redeguti.ddnsfree.com`) && PathPrefix(`/api`)
+      - traefik.http.routers.rede-guti-api.entrypoints=websecure
+      - traefik.http.routers.rede-guti-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.rede-guti-api.middlewares=rede-guti-strip
+      - traefik.http.middlewares.rede-guti-strip.stripprefix.prefixes=/api
+      - traefik.http.services.rede-guti-api.loadbalancer.server.port=4000
+      - traefik.http.routers.rede-guti-api.priority=10
+
+  frontend:
+    image: nginx:alpine
+    volumes:
+      - /var/www/rede/dist:/usr/share/nginx/html:ro
+      - /home/paiva/rede-guti/nginx-spa.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      # HTTPS
+      - traefik.http.routers.rede-guti-frontend.rule=Host(`redeguti.ddnsfree.com`)
+      - traefik.http.routers.rede-guti-frontend.entrypoints=websecure
+      - traefik.http.routers.rede-guti-frontend.tls.certresolver=letsencrypt
+      - traefik.http.services.rede-guti-frontend.loadbalancer.server.port=80
+      - traefik.http.routers.rede-guti-frontend.priority=1
+      # HTTP → HTTPS redirect
+      - traefik.http.routers.rede-guti-frontend-http.rule=Host(`redeguti.ddnsfree.com`)
+      - traefik.http.routers.rede-guti-frontend-http.entrypoints=web
+      - traefik.http.routers.rede-guti-frontend-http.middlewares=redirect-to-https@file
+      - traefik.http.routers.rede-guti-frontend-http.priority=1
 
 volumes:
   db_data:
+    external: true
+    name: rede-guti_db_data
+
+networks:
+  dokploy-network:
+    external: true

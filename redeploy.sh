@@ -54,8 +54,7 @@ echo "==> Publicando frontend"
 sudo mkdir -p /var/www/rede/dist
 sudo rsync -av --delete dist/ /var/www/rede/dist/
 
-echo "==> Recarregando nginx"
-sudo nginx -t
-sudo systemctl reload nginx
+echo "==> Restart do container frontend"
+$DC restart frontend
 
 echo "Redeploy concluido."

@@ -16,24 +16,43 @@ jobs:
     timeout-minutes: 40
     env:
       VPS_HOST: 76.13.112.138
-      VPS_PORT: 22
       VPS_USER: paiva
       VPS_APP_DIR: /home/paiva/rede-guti
 
     steps:
-      - name: Run redeploy script on VPS
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Build frontend
+        run: |
+          echo "VITE_API_URL=/api" > .env.local
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Sync frontend to VPS
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -az --delete
+          path: dist/
+          remote_path: /var/www/rede/dist/
+          remote_host: ${{ env.VPS_HOST }}
+          remote_user: ${{ env.VPS_USER }}
+          remote_key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Rebuild backend + migrate
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ env.VPS_HOST }}
           username: ${{ env.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ env.VPS_PORT }}
-          debug: true
           request_pty: true
-          command_timeout: 30m
+          command_timeout: 20m
           script: |
             set -euo pipefail
-            export PATH="$HOME/.bun/bin:$PATH"
-            cd "${{ env.VPS_APP_DIR }}"
-            chmod +x ./redeploy.sh
-            ./redeploy.sh
+            cd ${{ env.VPS_APP_DIR }}
+            git pull origin main
+            docker compose build api
+            docker compose up -d
+            docker compose exec -T api npm run prisma:deploy
+            docker compose exec -T api npm run seed

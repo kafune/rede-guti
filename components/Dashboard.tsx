@@ -12,6 +12,7 @@ interface Props {
 const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onViewSupporter }) => {
   const [copyLabel, setCopyLabel] = useState('Copiar link');
   const [topSort, setTopSort] = useState<'total' | 'lastMonth' | 'lastFifteenDays' | 'lastWeek'>('total');
+  const [showAllIndicators, setShowAllIndicators] = useState(false);
   const baseUrl = `${window.location.origin}${window.location.pathname}#/cadastro`;
   const indicatorName = currentUser?.name?.trim();
   const indicatorId = currentUser?.id;
@@ -96,7 +97,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
         lastMonth: indicatorMonthCounts[name] || 0,
       }))
       .sort((a, b) => b[sortKey] - a[sortKey])
-      .slice(0, 4);
+      .slice(0, 10);
 
     const cityCounts = supporters.reduce((acc, supporter) => {
       const city = supporter.notes || 'Nao informado';
@@ -276,7 +277,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3">
-            {stats.topInfluencers.map((item, idx) => (
+            {stats.topInfluencers.slice(0, showAllIndicators ? 10 : 4).map((item, idx) => (
               <div
                 key={idx}
                 className="flex flex-wrap items-center gap-2 sm:gap-4 bg-gray-50 dark:bg-gray-900/50 p-3 sm:p-4 rounded-2xl border dark:border-gray-700 transition-transform duration-300 ease-out hover:-translate-y-0.5"
@@ -312,6 +313,14 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
               <p className="text-center py-4 opacity-40 text-xs">
                 A rede de indicacoes ainda esta comecando.
               </p>
+            )}
+            {stats.topInfluencers.length > 4 && (
+              <button
+                onClick={() => setShowAllIndicators(prev => !prev)}
+                className="w-full text-[11px] font-bold uppercase tracking-widest opacity-50 hover:opacity-80 py-2 transition-opacity"
+              >
+                {showAllIndicators ? 'Ver menos' : `Ver mais ${stats.topInfluencers.length - 4} indicadores`}
+              </button>
             )}
           </div>
         </div>

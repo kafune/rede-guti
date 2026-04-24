@@ -224,7 +224,7 @@ const PublicSignup: React.FC = () => {
           <div className="text-center mb-8">
             <div className="theme-brand-mark w-20 h-20 rounded-3xl flex items-center justify-center text-white text-4xl font-black mx-auto mb-5">G</div>
             <h1 className="text-3xl font-black tracking-tight mb-2">Cadastro de Apoiador</h1>
-            <p className="text-gray-500 dark:text-gray-400 font-medium">Rede Evangelica do Estado de SP</p>
+            <p className="text-gray-500 dark:text-gray-400 font-medium">Rede de Apoiadores do Estado de SP</p>
           </div>
 
           {optionsError && (

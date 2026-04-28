@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Church,
+  Evento,
   Municipality,
   Region,
   RegistrationPayload,
@@ -33,6 +34,10 @@ import Login from './components/Login';
 import MapView from './components/MapView';
 import PublicSignup from './components/PublicSignup';
 import PublicThanks from './components/PublicThanks';
+import EventoList from './components/eventos/EventoList';
+import EventoForm from './components/eventos/EventoForm';
+import EventoDetail from './components/eventos/EventoDetail';
+import PublicEventoIndicacao from './components/PublicEventoIndicacao';
 import {
   canAccessManagementPanel,
   canCreateRegistrations,
@@ -71,15 +76,24 @@ const App: React.FC = () => {
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [view, setView] = useState<'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export'>(
-    'dashboard'
-  );
+  const [view, setView] = useState<
+    'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' |
+    'eventos' | 'evento-novo' | 'evento-detalhe'
+  >('dashboard');
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
+  const [selectedEventoId, setSelectedEventoId] = useState<string | null>(null);
+
+  const isPublicEventoIndicacao = (hash: string) =>
+    hash.startsWith('#/eventos/') && hash.includes('/indicacao');
+
   const [isPublicRoute, setIsPublicRoute] = useState(() =>
     window.location.hash.startsWith('#/cadastro')
   );
   const [isPublicThanks, setIsPublicThanks] = useState(() =>
     window.location.hash.startsWith('#/obrigado')
+  );
+  const [isPublicEventoRoute, setIsPublicEventoRoute] = useState(() =>
+    isPublicEventoIndicacao(window.location.hash)
   );
   const refreshInFlight = useRef(false);
   const POLL_INTERVAL_MS = 15000;
@@ -91,6 +105,7 @@ const App: React.FC = () => {
       const hash = window.location.hash || '';
       setIsPublicRoute(hash.startsWith('#/cadastro'));
       setIsPublicThanks(hash.startsWith('#/obrigado'));
+      setIsPublicEventoRoute(isPublicEventoIndicacao(hash));
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -369,6 +384,10 @@ const App: React.FC = () => {
     return <PublicSignup />;
   }
 
+  if (isPublicEventoRoute) {
+    return <PublicEventoIndicacao />;
+  }
+
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
@@ -497,6 +516,35 @@ const App: React.FC = () => {
         {view === 'export' && canExportData && (
           <ExportPanel supporters={allSupporters} />
         )}
+
+        {view === 'eventos' && (
+          <EventoList
+            currentUser={currentUser}
+            onSelect={(evento: Evento) => {
+              setSelectedEventoId(evento.id);
+              setView('evento-detalhe');
+            }}
+            onNovo={() => setView('evento-novo')}
+            onLogout={handleLogout}
+          />
+        )}
+
+        {view === 'evento-novo' && currentUser.role === 'COORDENADOR' && (
+          <EventoForm
+            onSave={() => setView('eventos')}
+            onCancel={() => setView('eventos')}
+            onLogout={handleLogout}
+          />
+        )}
+
+        {view === 'evento-detalhe' && selectedEventoId && (
+          <EventoDetail
+            eventoId={selectedEventoId}
+            currentUser={currentUser}
+            onBack={() => setView('eventos')}
+            onLogout={handleLogout}
+          />
+        )}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex justify-around items-center h-20 md:hidden px-4">
@@ -553,6 +601,13 @@ const App: React.FC = () => {
             <span className="text-[9px] font-black uppercase">Exportar</span>
           </button>
         )}
+        <button
+          onClick={() => setView('eventos')}
+          className={`flex flex-col items-center ${['eventos', 'evento-novo', 'evento-detalhe'].includes(view) ? 'text-blue-600' : 'opacity-30'}`}
+        >
+          <i className="fa-solid fa-calendar-days text-xl mb-1"></i>
+          <span className="text-[9px] font-black uppercase">Eventos</span>
+        </button>
       </nav>
 
       <nav className="hidden md:flex fixed top-0 left-0 bottom-0 w-24 bg-white dark:bg-gray-900 border-r dark:border-gray-800 z-50 flex-col items-center pt-28 gap-8">
@@ -620,6 +675,17 @@ const App: React.FC = () => {
             <i className="fa-solid fa-file-export text-xl"></i>
           </button>
         )}
+        <button
+          onClick={() => setView('eventos')}
+          className={`p-4 rounded-2xl transition-all ${
+            ['eventos', 'evento-novo', 'evento-detalhe'].includes(view)
+              ? 'bg-blue-600 text-white shadow-lg'
+              : 'opacity-30'
+          }`}
+          title="Eventos"
+        >
+          <i className="fa-solid fa-calendar-days text-xl"></i>
+        </button>
       </nav>
     </div>
   );

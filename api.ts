@@ -2,6 +2,10 @@ import {
   AdminUser,
   AppSettings,
   Church,
+  Evento,
+  EventoIndicado,
+  EventoIndicadoStatus,
+  EventoPublicInfo,
   HierarchyPathItem,
   Municipality,
   SupportStatus,
@@ -253,6 +257,104 @@ export const getApiErrorMessage = (error: unknown, fallback = 'Falha ao carregar
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
   return fallback;
+};
+
+// ── EVENTOS ──────────────────────────────────────────────────────────────────
+
+export const fetchEventos = async () => {
+  const data = await request<{ eventos: Evento[] }>('/eventos');
+  return data.eventos;
+};
+
+export const createEvento = async (payload: {
+  nome: string;
+  data: string;
+  hora: string;
+  local: string;
+  limitePorLider: number;
+  observacao?: string;
+}) => {
+  const data = await request<{ evento: Evento }>('/eventos', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return data.evento;
+};
+
+export const updateEvento = async (
+  id: string,
+  payload: { nome?: string; data?: string; hora?: string; local?: string; limitePorLider?: number; observacao?: string }
+) => {
+  const data = await request<{ evento: Evento }>(`/eventos/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+  return data.evento;
+};
+
+export const encerrarEvento = async (id: string) => {
+  const data = await request<{ evento: Evento }>(`/eventos/${id}/encerrar`, { method: 'PATCH' });
+  return data.evento;
+};
+
+export const fetchEvento = async (id: string) => {
+  const data = await request<{ evento: Evento }>(`/eventos/${id}`);
+  return data.evento;
+};
+
+export const fetchEventoIndicados = async (
+  eventoId: string,
+  params?: { status?: EventoIndicadoStatus; liderId?: string; q?: string }
+) => {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set('status', params.status);
+  if (params?.liderId) qs.set('liderId', params.liderId);
+  if (params?.q) qs.set('q', params.q);
+  const query = qs.toString();
+  const data = await request<{ indicados: EventoIndicado[] }>(
+    `/eventos/${eventoId}/indicados${query ? `?${query}` : ''}`
+  );
+  return data.indicados;
+};
+
+export const updateEventoIndicadoStatus = async (
+  eventoId: string,
+  indicadoId: string,
+  status: EventoIndicadoStatus
+) => {
+  const data = await request<{ indicado: EventoIndicado }>(
+    `/eventos/${eventoId}/indicados/${indicadoId}/status`,
+    { method: 'PATCH', body: JSON.stringify({ status }) }
+  );
+  return data.indicado;
+};
+
+export const checkinEventoIndicado = async (
+  eventoId: string,
+  payload: { telefone?: string; nome?: string; indicadoId?: string }
+) => {
+  const data = await request<{ indicado: EventoIndicado }>(`/eventos/${eventoId}/checkin`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return data.indicado;
+};
+
+export const fetchPublicEvento = async (eventoId: string, liderId?: string) => {
+  const qs = liderId ? `?lider=${encodeURIComponent(liderId)}` : '';
+  const data = await request<{ evento: EventoPublicInfo }>(`/public/eventos/${eventoId}${qs}`);
+  return data.evento;
+};
+
+export const submitPublicEventoIndicacao = async (
+  eventoId: string,
+  payload: { nome: string; telefone: string; liderId: string }
+) => {
+  const data = await request<{ indicado: EventoIndicado }>(`/public/eventos/${eventoId}/indicacao`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return data.indicado;
 };
 
 export { getApiBase };

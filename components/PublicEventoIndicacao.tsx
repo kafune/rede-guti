@@ -12,7 +12,8 @@ const parseHashParams = (): { eventoId: string; liderId: string } => {
 };
 
 const formatDate = (iso: string) => {
-  const d = new Date(iso);
+  const [year, month, day] = iso.slice(0, 10).split('-').map(Number);
+  const d = new Date(year, month - 1, day);
   return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 };
 

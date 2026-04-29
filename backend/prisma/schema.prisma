@@ -33,6 +33,7 @@ model User {
   indicatedUsers     User[]       @relation("UserIndications")
   createdIndications Indication[] @relation("CreatedBy")
   indicatedSupporters Indication[] @relation("IndicatedByUser")
+  eventoIndicacoes EventoIndicado[] @relation("LiderEventoIndicados")
 
   @@index([role])
   @@index([indicatedByUserId])
@@ -66,6 +67,45 @@ model Municipality {
 
   @@unique([name, stateCode])
   @@map("municipalities")
+}
+
+enum EventoIndicadoStatus {
+  INDICADO
+  APROVADO
+  RECUSADO
+  PRESENTE
+}
+
+model Evento {
+  id             String           @id @default(cuid())
+  nome           String
+  data           DateTime
+  hora           String
+  local          String
+  limitePorLider Int              @default(0) @map("limite_por_lider")
+  observacao     String?
+  encerrado      Boolean          @default(false)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  indicados      EventoIndicado[]
+
+  @@map("eventos")
+}
+
+model EventoIndicado {
+  id        String               @id @default(cuid())
+  eventoId  String               @map("evento_id")
+  nome      String
+  telefone  String
+  liderId   String               @map("lider_id")
+  status    EventoIndicadoStatus @default(INDICADO)
+  createdAt DateTime             @default(now()) @map("created_at")
+  evento    Evento               @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  lider     User                 @relation("LiderEventoIndicados", fields: [liderId], references: [id])
+
+  @@unique([eventoId, telefone])
+  @@index([eventoId])
+  @@index([liderId])
+  @@map("evento_indicados")
 }
 
 model Indication {

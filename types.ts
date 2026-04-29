@@ -133,6 +133,45 @@ export interface Supporter {
   socialProjectsDescription?: string;
 }
 
+export type EventoIndicadoStatus = 'INDICADO' | 'APROVADO' | 'RECUSADO' | 'PRESENTE';
+
+export interface Evento {
+  id: string;
+  nome: string;
+  data: string;
+  hora: string;
+  local: string;
+  limitePorLider: number;
+  observacao?: string | null;
+  encerrado: boolean;
+  createdAt: string;
+  totalIndicados: number;
+  totalAprovados: number;
+  totalPresentes: number;
+}
+
+export interface EventoIndicado {
+  id: string;
+  eventoId: string;
+  nome: string;
+  telefone: string;
+  liderId: string;
+  liderNome: string;
+  status: EventoIndicadoStatus;
+  createdAt: string;
+}
+
+export interface EventoPublicInfo {
+  id: string;
+  nome: string;
+  data: string;
+  hora: string;
+  local: string;
+  encerrado: boolean;
+  lider?: { id: string; nome: string } | null;
+  limiteAtingido: boolean;
+}
+
 export interface DashboardStats {
   total: number;
   last7Days: number;

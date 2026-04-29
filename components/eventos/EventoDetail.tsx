@@ -1,0 +1,625 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Evento,
+  EventoIndicado,
+  EventoIndicadoStatus,
+  User,
+  AdminUser
+} from '../../types';
+import {
+  checkinEventoIndicado,
+  fetchEvento,
+  fetchEventoIndicados,
+  fetchUsers,
+  getApiErrorMessage,
+  isUnauthorized,
+  updateEventoIndicadoStatus
+} from '../../api';
+
+interface Props {
+  eventoId: string;
+  currentUser: User;
+  onBack: () => void;
+  onLogout: () => void;
+}
+
+type Tab = 'resumo' | 'indicados' | 'convites' | 'checkin';
+
+const formatDate = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const statusLabel: Record<EventoIndicadoStatus, string> = {
+  INDICADO: 'Indicado',
+  APROVADO: 'Aprovado',
+  RECUSADO: 'Recusado',
+  PRESENTE: 'Presente'
+};
+
+const statusClass: Record<EventoIndicadoStatus, string> = {
+  INDICADO: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400',
+  APROVADO: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400',
+  RECUSADO: 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400',
+  PRESENTE: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
+};
+
+const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout }) => {
+  const [evento, setEvento] = useState<Evento | null>(null);
+  const [indicados, setIndicados] = useState<EventoIndicado[]>([]);
+  const [lideres, setLideres] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('resumo');
+
+  // Filtros da aba Indicados
+  const [searchIndicados, setSearchIndicados] = useState('');
+  const [filterStatus, setFilterStatus] = useState<EventoIndicadoStatus | ''>('');
+  const [filterLiderId, setFilterLiderId] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Check-in
+  const [checkinQuery, setCheckinQuery] = useState('');
+  const [checkinResult, setCheckinResult] = useState<EventoIndicado | null>(null);
+  const [checkinError, setCheckinError] = useState<string | null>(null);
+  const [checkinLoading, setCheckinLoading] = useState(false);
+
+  // Link de indicação (aba Resumo - coord)
+  const [selectedLiderId, setSelectedLiderId] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const isCoord = currentUser.role === 'COORDENADOR';
+  const isVerif = currentUser.role === 'VERIFICADORA';
+  const isLider = currentUser.role === 'LIDER_REGIONAL';
+  const canValidate = isCoord || isVerif;
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [ev, indList] = await Promise.all([
+        fetchEvento(eventoId),
+        fetchEventoIndicados(eventoId)
+      ]);
+      setEvento(ev);
+      setIndicados(indList);
+
+      if (isCoord) {
+        const users = await fetchUsers();
+        setLideres(users.filter((u) => u.role === 'LIDER_REGIONAL'));
+      }
+    } catch (err) {
+      if (isUnauthorized(err)) { onLogout(); return; }
+      setError(getApiErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [eventoId, isCoord]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // ── Indicados filtrados ───────────────────────────────────────────────────
+  const filteredIndicados = useMemo(() => {
+    let list = indicados;
+    if (isLider) list = list.filter((i) => i.liderId === currentUser.id);
+    if (filterStatus) list = list.filter((i) => i.status === filterStatus);
+    if (filterLiderId) list = list.filter((i) => i.liderId === filterLiderId);
+    if (searchIndicados) {
+      const q = searchIndicados.toLowerCase();
+      list = list.filter(
+        (i) =>
+          i.nome.toLowerCase().includes(q) || i.telefone.includes(q)
+      );
+    }
+    return list;
+  }, [indicados, filterStatus, filterLiderId, searchIndicados, isLider, currentUser.id]);
+
+  const approvedForLider = useMemo(
+    () => indicados.filter((i) => i.liderId === currentUser.id && i.status === 'APROVADO'),
+    [indicados, currentUser.id]
+  );
+
+  const allApproved = useMemo(
+    () => indicados.filter((i) => i.status === 'APROVADO'),
+    [indicados]
+  );
+
+  // Indicadores por liderança (para COORDENADOR na aba Resumo)
+  const statsByLider = useMemo(() => {
+    const map = new Map<string, { nome: string; indicados: number; aprovados: number; presentes: number }>();
+    for (const ind of indicados) {
+      const entry = map.get(ind.liderId) ?? { nome: ind.liderNome, indicados: 0, aprovados: 0, presentes: 0 };
+      entry.indicados++;
+      if (ind.status === 'APROVADO') entry.aprovados++;
+      if (ind.status === 'PRESENTE') entry.presentes++;
+      map.set(ind.liderId, entry);
+    }
+    return Array.from(map.values()).sort((a, b) => b.indicados - a.indicados);
+  }, [indicados]);
+
+  // ── Ações de validação ────────────────────────────────────────────────────
+  const updateStatus = async (id: string, status: EventoIndicadoStatus) => {
+    setActionLoading(id);
+    try {
+      const updated = await updateEventoIndicadoStatus(eventoId, id, status);
+      setIndicados((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      setSelectedIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    } catch (err) {
+      if (isUnauthorized(err)) { onLogout(); return; }
+      alert(getApiErrorMessage(err, 'Erro ao atualizar status.'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const approveSelected = async () => {
+    for (const id of selectedIds) {
+      await updateStatus(id, 'APROVADO');
+    }
+    setSelectedIds(new Set());
+  };
+
+  // ── Check-in ──────────────────────────────────────────────────────────────
+  const handleCheckin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!checkinQuery.trim()) return;
+    setCheckinLoading(true);
+    setCheckinResult(null);
+    setCheckinError(null);
+
+    const digits = checkinQuery.replace(/\D/g, '');
+    const payload = digits.length >= 8
+      ? { telefone: digits }
+      : { nome: checkinQuery.trim() };
+
+    try {
+      const ind = await checkinEventoIndicado(eventoId, payload);
+      setCheckinResult(ind);
+      setIndicados((prev) => prev.map((i) => (i.id === ind.id ? ind : i)));
+      setCheckinQuery('');
+    } catch (err) {
+      if (isUnauthorized(err)) { onLogout(); return; }
+      setCheckinError(getApiErrorMessage(err, 'Indicado não encontrado.'));
+    } finally {
+      setCheckinLoading(false);
+    }
+  };
+
+  // ── Link de indicação ─────────────────────────────────────────────────────
+  const getIndicacaoLink = (liderId: string) => {
+    const base = window.location.origin + window.location.pathname;
+    return `${base}#/eventos/${eventoId}/indicacao?lider=${liderId}`;
+  };
+
+  const handleCopyLink = async (liderId: string) => {
+    await navigator.clipboard.writeText(getIndicacaoLink(liderId));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyMsg = async (nome: string) => {
+    const msg = `Olá ${nome}, sua presença foi confirmada para o nosso encontro especial com o Guti! 🙏 Aguardamos você com muita expectativa.`;
+    await navigator.clipboard.writeText(msg);
+  };
+
+  // ── Tabs disponíveis ──────────────────────────────────────────────────────
+  const tabs: { id: Tab; label: string; icon: string; visible: boolean }[] = [
+    { id: 'resumo', label: 'Resumo', icon: 'fa-chart-pie', visible: true },
+    { id: 'indicados', label: 'Validação', icon: 'fa-user-check', visible: canValidate },
+    { id: 'convites', label: 'Convites', icon: 'fa-envelope', visible: true },
+    { id: 'checkin', label: 'Check-in', icon: 'fa-qrcode', visible: canValidate }
+  ].filter((t) => t.visible);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 opacity-40">
+        <i className="fa-solid fa-circle-notch fa-spin text-3xl"></i>
+      </div>
+    );
+  }
+
+  if (error || !evento) {
+    return (
+      <div className="space-y-4">
+        <button onClick={onBack} className="flex items-center gap-2 text-sm font-bold opacity-60 hover:opacity-100">
+          <i className="fa-solid fa-arrow-left"></i> Voltar
+        </button>
+        <div className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold">
+          {error ?? 'Evento não encontrado.'}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 animate-fade-up">
+      {/* Header */}
+      <div className="flex items-start gap-3 animate-soft-pop">
+        <button onClick={onBack} className="p-2 rounded-2xl opacity-40 hover:opacity-80 transition-opacity mt-0.5">
+          <i className="fa-solid fa-arrow-left text-xl"></i>
+        </button>
+        <div className="min-w-0">
+          <h2 className="text-xl font-black truncate">{evento.nome}</h2>
+          <p className="text-[10px] opacity-40 font-bold uppercase">
+            {formatDate(evento.data)} às {evento.hora} · {evento.local}
+          </p>
+          {evento.encerrado && (
+            <span className="text-[9px] bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded-md font-black uppercase tracking-tighter">
+              Encerrado
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-2xl p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex-1 flex flex-col items-center py-2 px-1 rounded-xl text-[9px] font-black uppercase tracking-tight transition-all ${
+              tab === t.id
+                ? 'bg-white dark:bg-gray-700 shadow text-blue-600'
+                : 'opacity-40'
+            }`}
+          >
+            <i className={`fa-solid ${t.icon} text-sm mb-0.5`}></i>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── RESUMO ── */}
+      {tab === 'resumo' && (
+        <div className="space-y-4">
+          {/* Stats cards */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Indicados', value: evento.totalIndicados, color: 'blue', icon: 'fa-user-plus' },
+              { label: 'Aprovados', value: evento.totalAprovados, color: 'green', icon: 'fa-user-check' },
+              { label: 'Presentes', value: evento.totalPresentes, color: 'amber', icon: 'fa-circle-check' }
+            ].map(({ label, value, color, icon }) => (
+              <div key={label} className={`bg-${color}-50 dark:bg-${color}-900/20 rounded-2xl p-3 text-center`}>
+                <i className={`fa-solid ${icon} text-${color}-500 text-lg mb-1`}></i>
+                <p className={`text-2xl font-black text-${color}-600`}>{value}</p>
+                <p className="text-[9px] font-black uppercase opacity-60">{label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Link de indicação (COORDENADOR) */}
+          {isCoord && !evento.encerrado && (
+            <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-4 space-y-3">
+              <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">
+                Link de indicação por liderança
+              </p>
+              <div className="relative">
+                <i className="fa-solid fa-user-tie absolute left-4 top-1/2 -translate-y-1/2 opacity-40 pointer-events-none"></i>
+                <select
+                  value={selectedLiderId}
+                  onChange={(e) => setSelectedLiderId(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl pl-11 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm appearance-none"
+                >
+                  <option value="">Selecionar liderança...</option>
+                  {lideres.map((l) => (
+                    <option key={l.id} value={l.id}>{l.name ?? l.email}</option>
+                  ))}
+                </select>
+              </div>
+              {selectedLiderId && (
+                <div className="space-y-2">
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl px-4 py-3 text-xs font-mono opacity-60 break-all">
+                    {getIndicacaoLink(selectedLiderId)}
+                  </div>
+                  <button
+                    onClick={() => handleCopyLink(selectedLiderId)}
+                    className={`w-full font-black uppercase tracking-widest text-xs py-3 rounded-2xl transition-all active:scale-95 ${
+                      copied
+                        ? 'bg-green-50 text-green-700 dark:bg-green-900/20'
+                        : 'bg-blue-600 text-white shadow-lg'
+                    }`}
+                  >
+                    <i className={`fa-solid ${copied ? 'fa-check' : 'fa-copy'} mr-2`}></i>
+                    {copied ? 'Link copiado!' : 'Copiar link'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Link do próprio lider */}
+          {isLider && !evento.encerrado && (
+            <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-4 space-y-3">
+              <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">
+                Seu link de indicação
+              </p>
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl px-4 py-3 text-xs font-mono opacity-60 break-all">
+                {getIndicacaoLink(currentUser.id)}
+              </div>
+              <button
+                onClick={() => handleCopyLink(currentUser.id)}
+                className={`w-full font-black uppercase tracking-widest text-xs py-3 rounded-2xl transition-all active:scale-95 ${
+                  copied
+                    ? 'bg-green-50 text-green-700 dark:bg-green-900/20'
+                    : 'bg-blue-600 text-white shadow-lg'
+                }`}
+              >
+                <i className={`fa-solid ${copied ? 'fa-check' : 'fa-copy'} mr-2`}></i>
+                {copied ? 'Link copiado!' : 'Copiar meu link'}
+              </button>
+            </div>
+          )}
+
+          {/* Tabela por liderança (COORDENADOR) */}
+          {isCoord && statsByLider.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-4 space-y-3">
+              <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">
+                Por liderança
+              </p>
+              <div className="space-y-2">
+                {statsByLider.map((row) => (
+                  <div key={row.nome} className="flex items-center justify-between py-2 border-b dark:border-gray-700 last:border-0">
+                    <span className="text-sm font-bold truncate max-w-[40%]">{row.nome}</span>
+                    <div className="flex gap-3 text-xs font-black">
+                      <span className="text-blue-500">{row.indicados} ind.</span>
+                      <span className="text-green-500">{row.aprovados} apr.</span>
+                      <span className="text-amber-500">{row.presentes} pres.</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── VALIDAÇÃO ── */}
+      {tab === 'indicados' && canValidate && (
+        <div className="space-y-3">
+          {/* Busca e filtros */}
+          <div className="relative">
+            <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 opacity-40"></i>
+            <input
+              type="text"
+              placeholder="Buscar por nome ou telefone..."
+              value={searchIndicados}
+              onChange={(e) => setSearchIndicados(e.target.value)}
+              className="w-full bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl pl-11 pr-4 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm text-sm"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as EventoIndicadoStatus | '')}
+              className="flex-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl px-3 py-3 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="">Todos os status</option>
+              <option value="INDICADO">Indicado</option>
+              <option value="APROVADO">Aprovado</option>
+              <option value="RECUSADO">Recusado</option>
+              <option value="PRESENTE">Presente</option>
+            </select>
+            {isCoord && (
+              <select
+                value={filterLiderId}
+                onChange={(e) => setFilterLiderId(e.target.value)}
+                className="flex-1 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl px-3 py-3 text-xs font-bold focus:ring-2 focus:ring-amber-400 outline-none"
+              >
+                <option value="">Todas as lideranças</option>
+                {lideres.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name ?? l.email}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Ação em lote */}
+          {selectedIds.size > 0 && (
+            <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded-2xl px-4 py-3">
+              <span className="text-xs font-black text-blue-700">
+                {selectedIds.size} selecionado(s)
+              </span>
+              <button
+                onClick={approveSelected}
+                className="text-xs font-black uppercase tracking-widest bg-green-600 text-white px-4 py-2 rounded-xl active:scale-95 transition-transform"
+              >
+                <i className="fa-solid fa-check mr-1"></i> Aprovar todos
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] bg-blue-600 text-white px-3 py-1 rounded-full font-black uppercase tracking-wider">
+              {filteredIndicados.length} registros
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {filteredIndicados.length === 0 ? (
+              <div className="py-16 text-center opacity-40 flex flex-col items-center gap-3">
+                <i className="fa-solid fa-user-slash text-3xl"></i>
+                <p className="font-bold text-sm">Nenhum indicado</p>
+              </div>
+            ) : (
+              filteredIndicados.map((ind) => (
+                <div
+                  key={ind.id}
+                  className="bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 shadow-sm p-3"
+                >
+                  <div className="flex items-start gap-2">
+                    {ind.status === 'INDICADO' && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(ind.id)}
+                        onChange={(e) => {
+                          setSelectedIds((prev) => {
+                            const s = new Set(prev);
+                            e.target.checked ? s.add(ind.id) : s.delete(ind.id);
+                            return s;
+                          });
+                        }}
+                        className="mt-1 w-4 h-4 accent-blue-600 shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <span className="font-black text-sm truncate">{ind.nome}</span>
+                        <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0 ${statusClass[ind.status]}`}>
+                          {statusLabel[ind.status]}
+                        </span>
+                      </div>
+                      <p className="text-[10px] opacity-40 font-semibold">{ind.telefone}</p>
+                      <p className="text-[10px] opacity-60 font-bold">
+                        <i className="fa-solid fa-user-tie mr-1"></i>{ind.liderNome}
+                      </p>
+                    </div>
+                  </div>
+
+                  {ind.status === 'INDICADO' && canValidate && (
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => updateStatus(ind.id, 'APROVADO')}
+                        disabled={actionLoading === ind.id}
+                        className="flex-1 text-[10px] font-black uppercase tracking-widest bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                      >
+                        <i className="fa-solid fa-check mr-1"></i> Aprovar
+                      </button>
+                      <button
+                        onClick={() => updateStatus(ind.id, 'RECUSADO')}
+                        disabled={actionLoading === ind.id}
+                        className="flex-1 text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                      >
+                        <i className="fa-solid fa-xmark mr-1"></i> Recusar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── CONVITES ── */}
+      {tab === 'convites' && (
+        <div className="space-y-3">
+          <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">
+            {isCoord ? 'Aprovados por liderança' : 'Seus aprovados — envie o convite'}
+          </p>
+
+          {(isLider ? approvedForLider : allApproved).length === 0 ? (
+            <div className="py-16 text-center opacity-40 flex flex-col items-center gap-3">
+              <i className="fa-solid fa-envelope-open text-3xl"></i>
+              <p className="font-bold text-sm">Nenhum aprovado ainda</p>
+            </div>
+          ) : (
+            (isLider ? approvedForLider : allApproved).map((ind) => (
+              <div
+                key={ind.id}
+                className="bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 shadow-sm p-4 flex items-center gap-3"
+              >
+                <div className="w-10 h-10 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 font-black text-base shrink-0">
+                  {ind.nome.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-sm truncate">{ind.nome}</p>
+                  <p className="text-[10px] opacity-40 font-semibold">{ind.telefone}</p>
+                  {isCoord && (
+                    <p className="text-[10px] opacity-60 font-bold">
+                      <i className="fa-solid fa-user-tie mr-1"></i>{ind.liderNome}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleCopyMsg(ind.nome)}
+                  className="shrink-0 text-[9px] font-black uppercase tracking-tight bg-green-600 text-white px-3 py-2 rounded-xl active:scale-95 transition-transform"
+                  title="Copiar mensagem de convite"
+                >
+                  <i className="fa-brands fa-whatsapp mr-1"></i>Copiar
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* ── CHECK-IN ── */}
+      {tab === 'checkin' && canValidate && (
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-5 space-y-4">
+            <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">
+              Buscar por nome ou telefone
+            </p>
+            <form onSubmit={handleCheckin} className="space-y-3">
+              <div className="relative">
+                <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 opacity-40"></i>
+                <input
+                  type="text"
+                  value={checkinQuery}
+                  onChange={(e) => setCheckinQuery(e.target.value)}
+                  placeholder="Nome ou WhatsApp..."
+                  className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl pl-11 pr-4 py-4 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                  autoFocus
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={checkinLoading || !checkinQuery.trim()}
+                className="w-full theme-brand-mark text-white font-black uppercase tracking-widest text-sm py-4 rounded-2xl shadow-lg active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {checkinLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <i className="fa-solid fa-circle-notch fa-spin"></i> Buscando...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <i className="fa-solid fa-circle-check"></i> Confirmar presença
+                  </span>
+                )}
+              </button>
+            </form>
+
+            {checkinError && (
+              <div className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold">
+                <i className="fa-solid fa-triangle-exclamation mr-2"></i>{checkinError}
+              </div>
+            )}
+
+            {checkinResult && (
+              <div className="px-4 py-4 rounded-2xl bg-green-50 dark:bg-green-900/20 space-y-1 animate-soft-pop">
+                <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                  <i className="fa-solid fa-circle-check text-xl"></i>
+                  <span className="font-black text-base">Presença confirmada!</span>
+                </div>
+                <p className="text-sm font-bold text-green-800 dark:text-green-300">
+                  {checkinResult.nome}
+                </p>
+                <p className="text-[10px] opacity-60 font-semibold">
+                  <i className="fa-solid fa-user-tie mr-1"></i>{checkinResult.liderNome}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Contagem em tempo real */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-3 text-center">
+              <p className="text-2xl font-black text-green-600">{evento.totalAprovados}</p>
+              <p className="text-[9px] font-black uppercase opacity-60">Aprovados</p>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3 text-center">
+              <p className="text-2xl font-black text-blue-600">
+                {indicados.filter((i) => i.status === 'PRESENTE').length}
+              </p>
+              <p className="text-[9px] font-black uppercase opacity-60">Presentes</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EventoDetail;

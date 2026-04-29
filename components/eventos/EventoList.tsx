@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Evento, User } from '../../types';
-import { encerrarEvento, fetchEventos, getApiErrorMessage, isUnauthorized } from '../../api';
+import { deleteEvento, encerrarEvento, fetchEventos, getApiErrorMessage, isUnauthorized } from '../../api';
 
 interface Props {
   currentUser: User;
@@ -24,6 +24,7 @@ const EventoList: React.FC<Props> = ({ currentUser, onSelect, onNovo, onLogout }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [encerrandoId, setEncerrandoId] = useState<string | null>(null);
+  const [deletandoId, setDeletandoId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +38,20 @@ const EventoList: React.FC<Props> = ({ currentUser, onSelect, onNovo, onLogout }
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  const handleDeletar = async (evento: Evento) => {
+    if (!confirm(`Excluir permanentemente o evento "${evento.nome}"?\n\nTodos os indicados serão removidos. Esta ação não pode ser desfeita.`)) return;
+    setDeletandoId(evento.id);
+    try {
+      await deleteEvento(evento.id);
+      setEventos((prev) => prev.filter((e) => e.id !== evento.id));
+    } catch (err) {
+      if (isUnauthorized(err)) { onLogout(); return; }
+      alert(getApiErrorMessage(err, 'Erro ao excluir evento.'));
+    } finally {
+      setDeletandoId(null);
+    }
+  };
 
   const handleEncerrar = async (evento: Evento) => {
     if (!confirm(`Encerrar o evento "${evento.nome}"? Esta ação não pode ser desfeita.`)) return;
@@ -128,7 +143,7 @@ const EventoList: React.FC<Props> = ({ currentUser, onSelect, onNovo, onLogout }
               </div>
             </div>
 
-            {currentUser.role === 'COORDENADOR' && !evento.encerrado && (
+            {currentUser.role === 'COORDENADOR' && (
               <div className="px-4 pb-4 flex gap-2">
                 <button
                   onClick={() => onSelect(evento)}
@@ -136,13 +151,23 @@ const EventoList: React.FC<Props> = ({ currentUser, onSelect, onNovo, onLogout }
                 >
                   <i className="fa-solid fa-eye mr-1"></i> Ver
                 </button>
+                {!evento.encerrado && (
+                  <button
+                    onClick={() => handleEncerrar(evento)}
+                    disabled={encerrandoId === evento.id}
+                    className="flex-1 text-[10px] font-black uppercase tracking-widest bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                  >
+                    <i className="fa-solid fa-lock mr-1"></i>
+                    {encerrandoId === evento.id ? 'Encerrando...' : 'Encerrar'}
+                  </button>
+                )}
                 <button
-                  onClick={() => handleEncerrar(evento)}
-                  disabled={encerrandoId === evento.id}
+                  onClick={() => handleDeletar(evento)}
+                  disabled={deletandoId === evento.id}
                   className="flex-1 text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
                 >
-                  <i className="fa-solid fa-lock mr-1"></i>
-                  {encerrandoId === evento.id ? 'Encerrando...' : 'Encerrar'}
+                  <i className="fa-solid fa-trash mr-1"></i>
+                  {deletandoId === evento.id ? 'Excluindo...' : 'Excluir'}
                 </button>
               </div>
             )}

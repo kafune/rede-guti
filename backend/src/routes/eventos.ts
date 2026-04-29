@@ -209,6 +209,22 @@ export async function eventoRoutes(app: FastifyInstance) {
     return { evento: serializeEvento(evento) };
   });
 
+  // ── DELETE EVENT ─────────────────────────────────────────────────────────
+  app.delete('/eventos/:id', { preHandler: app.authenticate }, async (request, reply) => {
+    if (normalizeRole(request.user.role) !== 'COORDENADOR') {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+
+    const params = paramsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'ID inválido.' });
+
+    const existing = await prisma.evento.findUnique({ where: { id: params.data.id }, select: { id: true } });
+    if (!existing) return reply.code(404).send({ error: 'Evento não encontrado.' });
+
+    await prisma.evento.delete({ where: { id: params.data.id } });
+    return reply.code(204).send();
+  });
+
   // ── CLOSE EVENT ───────────────────────────────────────────────────────────
   app.patch('/eventos/:id/encerrar', { preHandler: app.authenticate }, async (request, reply) => {
     if (normalizeRole(request.user.role) !== 'COORDENADOR') {

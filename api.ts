@@ -292,6 +292,10 @@ export const updateEvento = async (
   return data.evento;
 };
 
+export const deleteEvento = async (id: string) => {
+  await request<void>(`/eventos/${id}`, { method: 'DELETE' });
+};
+
 export const encerrarEvento = async (id: string) => {
   const data = await request<{ evento: Evento }>(`/eventos/${id}/encerrar`, { method: 'PATCH' });
   return data.evento;

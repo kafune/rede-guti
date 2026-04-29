@@ -66,7 +66,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
   const [checkinQuery, setCheckinQuery] = useState('');
   const [checkinResult, setCheckinResult] = useState<EventoIndicado | null>(null);
   const [checkinError, setCheckinError] = useState<string | null>(null);
-  const [checkinLoading, setCheckinLoading] = useState(false);
+  const [checkinLoading, setCheckinLoading] = useState<string | null>(null);
 
   // Link de indicação (aba Resumo - coord)
   const [selectedLiderId, setSelectedLiderId] = useState('');
@@ -152,6 +152,18 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
     return Array.from(map.values()).sort((a, b) => b.indicados - a.indicados);
   }, [indicados]);
 
+  const checkinMatches = useMemo(() => {
+    const q = checkinQuery.trim();
+    if (!q) return [];
+    const digits = q.replace(/\D/g, '');
+    const lower = q.toLowerCase();
+    return indicados.filter((i) => {
+      if (i.status !== 'APROVADO' && i.status !== 'CONFIRMADO') return false;
+      if (digits.length >= 4) return i.telefone.includes(digits);
+      return i.nome.toLowerCase().includes(lower);
+    });
+  }, [indicados, checkinQuery]);
+
   // ── Ações de validação ────────────────────────────────────────────────────
   const updateStatus = async (id: string, status: EventoIndicadoStatus) => {
     setActionLoading(id);
@@ -175,28 +187,20 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
   };
 
   // ── Check-in ──────────────────────────────────────────────────────────────
-  const handleCheckin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!checkinQuery.trim()) return;
-    setCheckinLoading(true);
+  const handleCheckinById = async (ind: EventoIndicado) => {
+    setCheckinLoading(ind.id);
     setCheckinResult(null);
     setCheckinError(null);
-
-    const digits = checkinQuery.replace(/\D/g, '');
-    const payload = digits.length >= 8
-      ? { telefone: digits }
-      : { nome: checkinQuery.trim() };
-
     try {
-      const ind = await checkinEventoIndicado(eventoId, payload);
-      setCheckinResult(ind);
-      setIndicados((prev) => prev.map((i) => (i.id === ind.id ? ind : i)));
+      const updated = await checkinEventoIndicado(eventoId, { indicadoId: ind.id });
+      setIndicados((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      setCheckinResult(updated);
       setCheckinQuery('');
     } catch (err) {
       if (isUnauthorized(err)) { onLogout(); return; }
-      setCheckinError(getApiErrorMessage(err, 'Indicado não encontrado.'));
+      setCheckinError(getApiErrorMessage(err, 'Erro ao confirmar presença.'));
     } finally {
-      setCheckinLoading(false);
+      setCheckinLoading(null);
     }
   };
 
@@ -754,66 +758,13 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
       {/* ── CHECK-IN ── */}
       {tab === 'checkin' && canValidate && (
         <div className="space-y-4">
-          <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-5 space-y-4">
-            <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">
-              Buscar por nome ou telefone
-            </p>
-            <form onSubmit={handleCheckin} className="space-y-3">
-              <div className="relative">
-                <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 opacity-40"></i>
-                <input
-                  type="text"
-                  value={checkinQuery}
-                  onChange={(e) => setCheckinQuery(e.target.value)}
-                  placeholder="Nome ou WhatsApp..."
-                  className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl pl-11 pr-4 py-4 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                  autoFocus
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={checkinLoading || !checkinQuery.trim()}
-                className="w-full theme-brand-mark text-white font-black uppercase tracking-widest text-sm py-4 rounded-2xl shadow-lg active:scale-95 transition-transform disabled:opacity-50"
-              >
-                {checkinLoading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <i className="fa-solid fa-circle-notch fa-spin"></i> Buscando...
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <i className="fa-solid fa-circle-check"></i> Confirmar presença
-                  </span>
-                )}
-              </button>
-            </form>
-
-            {checkinError && (
-              <div className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold">
-                <i className="fa-solid fa-triangle-exclamation mr-2"></i>{checkinError}
-              </div>
-            )}
-
-            {checkinResult && (
-              <div className="px-4 py-4 rounded-2xl bg-green-50 dark:bg-green-900/20 space-y-1 animate-soft-pop">
-                <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                  <i className="fa-solid fa-circle-check text-xl"></i>
-                  <span className="font-black text-base">Presença confirmada!</span>
-                </div>
-                <p className="text-sm font-bold text-green-800 dark:text-green-300">
-                  {checkinResult.nome}
-                </p>
-                <p className="text-[10px] opacity-60 font-semibold">
-                  <i className="fa-solid fa-user-tie mr-1"></i>{checkinResult.liderNome}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Contagem em tempo real */}
+          {/* Contador */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-3 text-center">
-              <p className="text-2xl font-black text-green-600">{evento.totalAprovados}</p>
-              <p className="text-[9px] font-black uppercase opacity-60">Aprovados</p>
+              <p className="text-2xl font-black text-green-600">
+                {indicados.filter((i) => i.status === 'APROVADO' || i.status === 'CONFIRMADO').length}
+              </p>
+              <p className="text-[9px] font-black uppercase opacity-60">Aguardando</p>
             </div>
             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3 text-center">
               <p className="text-2xl font-black text-blue-600">
@@ -822,6 +773,131 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
               <p className="text-[9px] font-black uppercase opacity-60">Presentes</p>
             </div>
           </div>
+
+          {/* Flash de sucesso */}
+          {checkinResult && (
+            <div className="px-4 py-4 rounded-2xl bg-green-50 dark:bg-green-900/20 flex items-center gap-3 animate-soft-pop">
+              <i className="fa-solid fa-circle-check text-2xl text-green-500 shrink-0"></i>
+              <div>
+                <p className="font-black text-sm text-green-700 dark:text-green-400">Presença confirmada!</p>
+                <p className="text-xs font-bold text-green-800 dark:text-green-300">{checkinResult.nome}</p>
+                <p className="text-[10px] opacity-60 font-semibold">
+                  <i className="fa-solid fa-user-tie mr-1"></i>{checkinResult.liderNome}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {checkinError && (
+            <div className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold">
+              <i className="fa-solid fa-triangle-exclamation mr-2"></i>{checkinError}
+            </div>
+          )}
+
+          {/* Campo de busca */}
+          <div className="relative">
+            <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 opacity-40 pointer-events-none"></i>
+            <input
+              type="text"
+              value={checkinQuery}
+              onChange={(e) => { setCheckinQuery(e.target.value); setCheckinResult(null); setCheckinError(null); }}
+              placeholder="Digite nome ou telefone..."
+              className="w-full bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl pl-11 pr-4 py-4 focus:ring-2 focus:ring-blue-500 outline-none text-sm shadow-sm"
+              autoFocus
+            />
+            {checkinQuery && (
+              <button
+                onClick={() => { setCheckinQuery(''); setCheckinResult(null); setCheckinError(null); }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-80"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            )}
+          </div>
+
+          {/* Lista de resultados */}
+          {checkinQuery.trim() && (
+            <div className="space-y-2">
+              {checkinMatches.length === 0 ? (
+                <div className="py-8 text-center opacity-40 flex flex-col items-center gap-2">
+                  <i className="fa-solid fa-user-slash text-2xl"></i>
+                  <p className="text-sm font-bold">Nenhum resultado</p>
+                  <p className="text-xs">Apenas aprovados e confirmados aparecem aqui</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-[10px] font-black uppercase opacity-40 tracking-widest px-1">
+                    {checkinMatches.length} resultado{checkinMatches.length !== 1 ? 's' : ''}
+                  </p>
+                  {checkinMatches.map((ind) => (
+                    <div
+                      key={ind.id}
+                      className="bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 shadow-sm p-3 flex items-center gap-3"
+                    >
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-base shrink-0 ${
+                        ind.status === 'CONFIRMADO'
+                          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600'
+                          : 'bg-green-100 dark:bg-green-900/30 text-green-600'
+                      }`}>
+                        {ind.nome.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-sm truncate">{ind.nome}</p>
+                        <p className="text-[10px] opacity-40 font-semibold">{ind.telefone}</p>
+                        <p className="text-[10px] opacity-60 font-bold">
+                          <i className="fa-solid fa-user-tie mr-1"></i>{ind.liderNome}
+                          {ind.status === 'CONFIRMADO' && (
+                            <span className="ml-2 text-purple-600 dark:text-purple-400">· Confirmado</span>
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleCheckinById(ind)}
+                        disabled={checkinLoading === ind.id}
+                        className="shrink-0 text-[9px] font-black uppercase tracking-tight bg-blue-600 text-white px-3 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                      >
+                        {checkinLoading === ind.id ? (
+                          <i className="fa-solid fa-circle-notch fa-spin"></i>
+                        ) : (
+                          <><i className="fa-solid fa-circle-check mr-1"></i>Check-in</>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Estado inicial - lista de presentes */}
+          {!checkinQuery.trim() && (
+            <div className="space-y-2">
+              {indicados.filter((i) => i.status === 'PRESENTE').length > 0 && (
+                <>
+                  <p className="text-[10px] font-black uppercase opacity-40 tracking-widest px-1">
+                    Já fizeram check-in
+                  </p>
+                  {indicados
+                    .filter((i) => i.status === 'PRESENTE')
+                    .map((ind) => (
+                      <div
+                        key={ind.id}
+                        className="bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30 p-3 flex items-center gap-3"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 font-black text-sm shrink-0">
+                          {ind.nome.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-sm truncate">{ind.nome}</p>
+                          <p className="text-[10px] opacity-40 font-semibold">{ind.liderNome}</p>
+                        </div>
+                        <i className="fa-solid fa-circle-check text-blue-500 shrink-0"></i>
+                      </div>
+                    ))}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

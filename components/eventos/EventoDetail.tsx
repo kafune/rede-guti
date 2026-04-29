@@ -13,6 +13,7 @@ import {
   fetchUsers,
   getApiErrorMessage,
   isUnauthorized,
+  updateEvento,
   updateEventoIndicadoStatus
 } from '../../api';
 
@@ -69,6 +70,17 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
   const [selectedLiderId, setSelectedLiderId] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // Edição do evento
+  const [editMode, setEditMode] = useState(false);
+  const [editNome, setEditNome] = useState('');
+  const [editData, setEditData] = useState('');
+  const [editHora, setEditHora] = useState('');
+  const [editLocal, setEditLocal] = useState('');
+  const [editLimite, setEditLimite] = useState('0');
+  const [editObs, setEditObs] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   const isCoord = currentUser.role === 'COORDENADOR';
   const isVerif = currentUser.role === 'VERIFICADORA';
   const isLider = currentUser.role === 'LIDER_REGIONAL';
@@ -87,7 +99,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
 
       if (isCoord) {
         const users = await fetchUsers();
-        setLideres(users.filter((u) => u.role === 'LIDER_REGIONAL'));
+        setLideres(users.filter((u) => u.role === 'LIDER_REGIONAL' || u.role === 'COORDENADOR'));
       }
     } catch (err) {
       if (isUnauthorized(err)) { onLogout(); return; }
@@ -203,6 +215,46 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
     await navigator.clipboard.writeText(msg);
   };
 
+  // ── Edição do evento ──────────────────────────────────────────────────────
+  const openEdit = () => {
+    if (!evento) return;
+    setEditNome(evento.nome);
+    setEditData(evento.data.slice(0, 10));
+    setEditHora(evento.hora);
+    setEditLocal(evento.local);
+    setEditLimite(String(evento.limitePorLider));
+    setEditObs(evento.observacao ?? '');
+    setEditError(null);
+    setEditMode(true);
+  };
+
+  const handleEditSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editNome.trim() || !editData || !editHora || !editLocal.trim()) {
+      setEditError('Preencha todos os campos obrigatórios.');
+      return;
+    }
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const updated = await updateEvento(eventoId, {
+        nome: editNome.trim(),
+        data: editData,
+        hora: editHora,
+        local: editLocal.trim(),
+        limitePorLider: parseInt(editLimite, 10) || 0,
+        observacao: editObs.trim() || undefined
+      });
+      setEvento(updated);
+      setEditMode(false);
+    } catch (err) {
+      if (isUnauthorized(err)) { onLogout(); return; }
+      setEditError(getApiErrorMessage(err, 'Erro ao salvar evento.'));
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   // ── Tabs disponíveis ──────────────────────────────────────────────────────
   const tabs: { id: Tab; label: string; icon: string; visible: boolean }[] = [
     { id: 'resumo', label: 'Resumo', icon: 'fa-chart-pie', visible: true },
@@ -239,7 +291,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
         <button onClick={onBack} className="p-2 rounded-2xl opacity-40 hover:opacity-80 transition-opacity mt-0.5">
           <i className="fa-solid fa-arrow-left text-xl"></i>
         </button>
-        <div className="min-w-0">
+        <div className="flex-1 min-w-0">
           <h2 className="text-xl font-black truncate">{evento.nome}</h2>
           <p className="text-[10px] opacity-40 font-bold uppercase">
             {formatDate(evento.data)} às {evento.hora} · {evento.local}
@@ -250,7 +302,126 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
             </span>
           )}
         </div>
+        {isCoord && !evento.encerrado && (
+          <button
+            onClick={openEdit}
+            className="p-2 rounded-2xl opacity-40 hover:opacity-80 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all mt-0.5"
+            title="Editar evento"
+          >
+            <i className="fa-solid fa-pen text-blue-500 text-base"></i>
+          </button>
+        )}
       </div>
+
+      {/* Painel de edição inline */}
+      {editMode && (
+        <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-5 animate-fade-up">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">Editar evento</p>
+            <button
+              onClick={() => setEditMode(false)}
+              className="text-xs opacity-40 hover:opacity-80 transition-opacity"
+            >
+              <i className="fa-solid fa-xmark text-base"></i>
+            </button>
+          </div>
+          <form onSubmit={handleEditSave} className="space-y-4">
+            {editError && (
+              <div className="px-4 py-3 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold">{editError}</div>
+            )}
+            <div>
+              <label className="text-[10px] font-black uppercase opacity-40 tracking-widest block mb-1">Nome *</label>
+              <input
+                type="text"
+                value={editNome}
+                onChange={(e) => setEditNome(e.target.value)}
+                className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-black uppercase opacity-40 tracking-widest block mb-1">Data *</label>
+                <input
+                  type="date"
+                  value={editData}
+                  onChange={(e) => setEditData(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase opacity-40 tracking-widest block mb-1">Hora *</label>
+                <input
+                  type="time"
+                  value={editHora}
+                  onChange={(e) => setEditHora(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-black uppercase opacity-40 tracking-widest block mb-1">Local *</label>
+              <input
+                type="text"
+                value={editLocal}
+                onChange={(e) => setEditLocal(e.target.value)}
+                className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-black uppercase opacity-40 tracking-widest block mb-1">
+                Limite por liderança
+              </label>
+              <input
+                type="number"
+                value={editLimite}
+                onChange={(e) => setEditLimite(e.target.value)}
+                min="0"
+                className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+              />
+              <p className="text-[10px] opacity-40 mt-1 ml-1">0 = sem limite</p>
+            </div>
+            <div>
+              <label className="text-[10px] font-black uppercase opacity-40 tracking-widest block mb-1">
+                Observação interna
+              </label>
+              <textarea
+                value={editObs}
+                onChange={(e) => setEditObs(e.target.value)}
+                rows={2}
+                className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setEditMode(false)}
+                className="flex-1 text-xs font-black uppercase tracking-widest bg-gray-100 dark:bg-gray-700 py-3 rounded-2xl active:scale-95 transition-transform"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={editSaving}
+                className="flex-1 text-xs font-black uppercase tracking-widest theme-brand-mark text-white py-3 rounded-2xl shadow-lg active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {editSaving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <i className="fa-solid fa-circle-notch fa-spin"></i> Salvando...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <i className="fa-solid fa-floppy-disk"></i> Salvar
+                  </span>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-2xl p-1">

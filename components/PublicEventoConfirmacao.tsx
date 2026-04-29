@@ -85,8 +85,9 @@ const PublicEventoConfirmacao: React.FC = () => {
     );
   }
 
-  // ── Já confirmado ─────────────────────────────────────────────────────────
-  if (pageState === 'ja_confirmado') {
+  // ── Confirmado agora ou já estava confirmado ──────────────────────────────
+  if (pageState === 'confirmado' || pageState === 'ja_confirmado') {
+    const freshlyConfirmed = pageState === 'confirmado';
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 py-8 flex flex-col items-center">
         <div className="w-full max-w-md space-y-5">
@@ -97,10 +98,17 @@ const PublicEventoConfirmacao: React.FC = () => {
             <h1 className="font-black text-xl">Rede SP · Guti 2026</h1>
           </div>
 
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-3xl p-6 text-center space-y-3">
-            <i className="fa-solid fa-circle-check text-5xl text-green-500"></i>
-            <p className="font-black text-xl text-green-700 dark:text-green-400">Presença confirmada!</p>
-            <p className="text-sm font-semibold text-green-800 dark:text-green-300">{nome}</p>
+          <div className={`bg-green-50 dark:bg-green-900/20 rounded-3xl p-8 text-center space-y-3 ${freshlyConfirmed ? 'animate-soft-pop' : ''}`}>
+            <i className="fa-solid fa-circle-check text-6xl text-green-500"></i>
+            <p className="font-black text-2xl text-green-700 dark:text-green-400">
+              {freshlyConfirmed ? 'Presença confirmada!' : 'Já confirmado!'}
+            </p>
+            <p className="text-base font-bold text-green-800 dark:text-green-300">{nome}</p>
+            {freshlyConfirmed && (
+              <p className="text-xs text-green-700 dark:text-green-400 opacity-70 font-semibold">
+                Obrigado! Te esperamos no evento. 🙏
+              </p>
+            )}
           </div>
 
           {evento && (

@@ -10,8 +10,8 @@ interface Props {
 }
 
 const formatDate = (iso: string) => {
-  const d = new Date(iso);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const [year, month, day] = iso.slice(0, 10).split('-');
+  return `${day}/${month}/${year}`;
 };
 
 const statusBadge = (encerrado: boolean) =>

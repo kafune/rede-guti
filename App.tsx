@@ -38,6 +38,7 @@ import EventoList from './components/eventos/EventoList';
 import EventoForm from './components/eventos/EventoForm';
 import EventoDetail from './components/eventos/EventoDetail';
 import PublicEventoIndicacao from './components/PublicEventoIndicacao';
+import PublicEventoConfirmacao from './components/PublicEventoConfirmacao';
 import {
   canAccessManagementPanel,
   canCreateRegistrations,
@@ -86,6 +87,9 @@ const App: React.FC = () => {
   const isPublicEventoIndicacao = (hash: string) =>
     hash.startsWith('#/eventos/') && hash.includes('/indicacao');
 
+  const isPublicEventoConfirmacao = (hash: string) =>
+    hash.startsWith('#/eventos/') && hash.includes('/confirmacao');
+
   const [isPublicRoute, setIsPublicRoute] = useState(() =>
     window.location.hash.startsWith('#/cadastro')
   );
@@ -94,6 +98,9 @@ const App: React.FC = () => {
   );
   const [isPublicEventoRoute, setIsPublicEventoRoute] = useState(() =>
     isPublicEventoIndicacao(window.location.hash)
+  );
+  const [isPublicConfirmacaoRoute, setIsPublicConfirmacaoRoute] = useState(() =>
+    isPublicEventoConfirmacao(window.location.hash)
   );
   const refreshInFlight = useRef(false);
   const POLL_INTERVAL_MS = 15000;
@@ -106,6 +113,7 @@ const App: React.FC = () => {
       setIsPublicRoute(hash.startsWith('#/cadastro'));
       setIsPublicThanks(hash.startsWith('#/obrigado'));
       setIsPublicEventoRoute(isPublicEventoIndicacao(hash));
+      setIsPublicConfirmacaoRoute(isPublicEventoConfirmacao(hash));
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -386,6 +394,10 @@ const App: React.FC = () => {
 
   if (isPublicEventoRoute) {
     return <PublicEventoIndicacao />;
+  }
+
+  if (isPublicConfirmacaoRoute) {
+    return <PublicEventoConfirmacao />;
   }
 
   if (!currentUser) {

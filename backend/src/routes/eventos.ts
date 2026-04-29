@@ -29,7 +29,7 @@ const indicadoParamsSchema = z.object({
 });
 
 const updateStatusSchema = z.object({
-  status: z.enum(['APROVADO', 'RECUSADO', 'INDICADO', 'PRESENTE'])
+  status: z.enum(['APROVADO', 'RECUSADO', 'INDICADO', 'CONFIRMADO', 'PRESENTE'])
 });
 
 const checkinSchema = z.object({
@@ -411,6 +411,80 @@ export async function eventoRoutes(app: FastifyInstance) {
         limiteAtingido
       }
     };
+  });
+
+  // ── PUBLIC: GET INDICADO INFO (for confirmation page) ────────────────────
+  const indicadoPublicParamsSchema = z.object({
+    id: z.string().min(1),
+    indicadoId: z.string().min(1)
+  });
+
+  app.get('/public/eventos/:id/indicados/:indicadoId', async (request, reply) => {
+    const params = indicadoPublicParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'Parâmetros inválidos.' });
+
+    const indicado = await prisma.eventoIndicado.findFirst({
+      where: { id: params.data.indicadoId, eventoId: params.data.id },
+      select: {
+        id: true,
+        nome: true,
+        status: true,
+        evento: {
+          select: { id: true, nome: true, data: true, hora: true, local: true, encerrado: true }
+        }
+      }
+    });
+
+    if (!indicado) return reply.code(404).send({ error: 'Convite não encontrado.' });
+
+    return {
+      indicado: {
+        id: indicado.id,
+        nome: indicado.nome,
+        status: indicado.status
+      },
+      evento: {
+        id: indicado.evento.id,
+        nome: indicado.evento.nome,
+        data: indicado.evento.data.toISOString(),
+        hora: indicado.evento.hora,
+        local: indicado.evento.local,
+        encerrado: indicado.evento.encerrado
+      }
+    };
+  });
+
+  // ── PUBLIC: CONFIRM ATTENDANCE ────────────────────────────────────────────
+  app.post('/public/eventos/:id/indicados/:indicadoId/confirmar', async (request, reply) => {
+    const params = indicadoPublicParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'Parâmetros inválidos.' });
+
+    const indicado = await prisma.eventoIndicado.findFirst({
+      where: { id: params.data.indicadoId, eventoId: params.data.id },
+      select: { id: true, status: true, evento: { select: { encerrado: true } } }
+    });
+
+    if (!indicado) return reply.code(404).send({ error: 'Convite não encontrado.' });
+    if (indicado.evento.encerrado) return reply.code(409).send({ error: 'Este evento já foi encerrado.' });
+    if (indicado.status === 'RECUSADO') return reply.code(409).send({ error: 'Este convite foi recusado.' });
+    if (indicado.status === 'CONFIRMADO' || indicado.status === 'PRESENTE') {
+      const updated = await prisma.eventoIndicado.findUnique({
+        where: { id: indicado.id },
+        select: indicadoSelect
+      });
+      return { indicado: serializeIndicado(updated!) };
+    }
+    if (indicado.status !== 'APROVADO') {
+      return reply.code(409).send({ error: 'Este convite ainda não foi aprovado.' });
+    }
+
+    const updated = await prisma.eventoIndicado.update({
+      where: { id: indicado.id },
+      data: { status: 'CONFIRMADO' },
+      select: indicadoSelect
+    });
+
+    return { indicado: serializeIndicado(updated) };
   });
 
   // ── PUBLIC: SUBMIT INDICATION ─────────────────────────────────────────────

@@ -27,14 +27,15 @@ interface Props {
 type Tab = 'resumo' | 'indicados' | 'convites' | 'checkin';
 
 const formatDate = (iso: string) => {
-  const d = new Date(iso);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const [year, month, day] = iso.slice(0, 10).split('-');
+  return `${day}/${month}/${year}`;
 };
 
 const statusLabel: Record<EventoIndicadoStatus, string> = {
   INDICADO: 'Indicado',
   APROVADO: 'Aprovado',
   RECUSADO: 'Recusado',
+  CONFIRMADO: 'Confirmado',
   PRESENTE: 'Presente'
 };
 
@@ -42,6 +43,7 @@ const statusClass: Record<EventoIndicadoStatus, string> = {
   INDICADO: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400',
   APROVADO: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400',
   RECUSADO: 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400',
+  CONFIRMADO: 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400',
   PRESENTE: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
 };
 
@@ -128,12 +130,12 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
   }, [indicados, filterStatus, filterLiderId, searchIndicados, isLider, currentUser.id]);
 
   const approvedForLider = useMemo(
-    () => indicados.filter((i) => i.liderId === currentUser.id && i.status === 'APROVADO'),
+    () => indicados.filter((i) => i.liderId === currentUser.id && (i.status === 'APROVADO' || i.status === 'CONFIRMADO')),
     [indicados, currentUser.id]
   );
 
   const allApproved = useMemo(
-    () => indicados.filter((i) => i.status === 'APROVADO'),
+    () => indicados.filter((i) => i.status === 'APROVADO' || i.status === 'CONFIRMADO'),
     [indicados]
   );
 
@@ -210,9 +212,25 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleCopyMsg = async (nome: string) => {
-    const msg = `Olá ${nome}, sua presença foi confirmada para o nosso encontro especial com o Guti! 🙏 Aguardamos você com muita expectativa.`;
-    await navigator.clipboard.writeText(msg);
+  const getConfirmacaoLink = (ind: EventoIndicado) => {
+    const base = window.location.origin + window.location.pathname;
+    return `${base}#/eventos/${eventoId}/confirmacao?ind=${ind.id}`;
+  };
+
+  const openWhatsApp = (ind: EventoIndicado) => {
+    if (!evento) return;
+    const phone = ind.telefone.replace(/\D/g, '');
+    const phoneWithCode = phone.startsWith('55') ? phone : `55${phone}`;
+    const link = getConfirmacaoLink(ind);
+    const msg =
+      `Olá ${ind.nome}! 🙏\n\n` +
+      `Você foi convidado(a) para um evento especial com o Guti!\n\n` +
+      `📅 *${evento.nome}*\n` +
+      `🗓 Data: ${formatDate(evento.data)}\n` +
+      `⏰ Hora: ${evento.hora}\n` +
+      `📍 Local: ${evento.local}\n\n` +
+      `Para confirmar sua presença, acesse o link abaixo:\n${link}`;
+    window.open(`https://wa.me/${phoneWithCode}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   // ── Edição do evento ──────────────────────────────────────────────────────
@@ -570,6 +588,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
               <option value="INDICADO">Indicado</option>
               <option value="APROVADO">Aprovado</option>
               <option value="RECUSADO">Recusado</option>
+              <option value="CONFIRMADO">Confirmado</option>
               <option value="PRESENTE">Presente</option>
             </select>
             {isCoord && (
@@ -691,11 +710,22 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                 key={ind.id}
                 className="bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 shadow-sm p-4 flex items-center gap-3"
               >
-                <div className="w-10 h-10 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 font-black text-base shrink-0">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-base shrink-0 ${
+                  ind.status === 'CONFIRMADO'
+                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600'
+                    : 'bg-green-100 dark:bg-green-900/30 text-green-600'
+                }`}>
                   {ind.nome.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-black text-sm truncate">{ind.nome}</p>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="font-black text-sm truncate">{ind.nome}</p>
+                    {ind.status === 'CONFIRMADO' && (
+                      <span className="text-[9px] bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400 px-2 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0">
+                        Confirmado
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[10px] opacity-40 font-semibold">{ind.telefone}</p>
                   {isCoord && (
                     <p className="text-[10px] opacity-60 font-bold">
@@ -704,11 +734,16 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                   )}
                 </div>
                 <button
-                  onClick={() => handleCopyMsg(ind.nome)}
-                  className="shrink-0 text-[9px] font-black uppercase tracking-tight bg-green-600 text-white px-3 py-2 rounded-xl active:scale-95 transition-transform"
-                  title="Copiar mensagem de convite"
+                  onClick={() => openWhatsApp(ind)}
+                  className={`shrink-0 text-[9px] font-black uppercase tracking-tight px-3 py-2 rounded-xl active:scale-95 transition-transform ${
+                    ind.status === 'CONFIRMADO'
+                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                      : 'bg-green-600 text-white'
+                  }`}
+                  title={ind.status === 'CONFIRMADO' ? 'Reenviar convite' : 'Enviar convite pelo WhatsApp'}
                 >
-                  <i className="fa-brands fa-whatsapp mr-1"></i>Copiar
+                  <i className="fa-brands fa-whatsapp mr-1"></i>
+                  {ind.status === 'CONFIRMADO' ? 'Reenviar' : 'Convidar'}
                 </button>
               </div>
             ))

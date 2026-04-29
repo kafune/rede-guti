@@ -73,6 +73,7 @@ enum EventoIndicadoStatus {
   INDICADO
   APROVADO
   RECUSADO
+  CONFIRMADO
   PRESENTE
 }
 

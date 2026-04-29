@@ -133,7 +133,7 @@ export interface Supporter {
   socialProjectsDescription?: string;
 }
 
-export type EventoIndicadoStatus = 'INDICADO' | 'APROVADO' | 'RECUSADO' | 'PRESENTE';
+export type EventoIndicadoStatus = 'INDICADO' | 'APROVADO' | 'RECUSADO' | 'CONFIRMADO' | 'PRESENTE';
 
 export interface Evento {
   id: string;

@@ -361,4 +361,20 @@ export const submitPublicEventoIndicacao = async (
   return data.indicado;
 };
 
+export const fetchPublicEventoIndicado = async (eventoId: string, indicadoId: string) => {
+  const data = await request<{
+    indicado: { id: string; nome: string; status: EventoIndicadoStatus };
+    evento: { id: string; nome: string; data: string; hora: string; local: string; encerrado: boolean };
+  }>(`/public/eventos/${eventoId}/indicados/${indicadoId}`);
+  return data;
+};
+
+export const confirmarPublicEventoIndicado = async (eventoId: string, indicadoId: string) => {
+  const data = await request<{ indicado: EventoIndicado }>(
+    `/public/eventos/${eventoId}/indicados/${indicadoId}/confirmar`,
+    { method: 'POST' }
+  );
+  return data.indicado;
+};
+
 export { getApiBase };

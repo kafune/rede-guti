@@ -161,7 +161,7 @@ const SupporterForm: React.FC<Props> = ({
   }
 
   return (
-    <div className={isEmbedded ? 'space-y-5' : 'max-w-xl mx-auto animate-fade-up'}>
+    <div className={isEmbedded ? 'space-y-5 max-w-2xl' : 'max-w-xl mx-auto animate-fade-up'}>
       {!isEmbedded && (
         <div className="flex items-center gap-4 mb-8 animate-soft-pop">
           {onCancel && (

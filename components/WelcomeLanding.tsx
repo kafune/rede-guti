@@ -31,9 +31,9 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
 
       {/* Video Section */}
       <div className="px-3 sm:px-6 -mt-12 sm:-mt-16 relative z-20 max-w-lg mx-auto w-full">
-        <div className="bg-white dark:bg-gray-800 rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden p-2 sm:p-3 border dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden p-2 sm:p-3 border dark:border-gray-700">
           <video
-            className="aspect-video w-full rounded-[2rem] bg-black object-cover"
+            className="aspect-video w-full rounded-[1.5rem] sm:rounded-[2rem] bg-black object-cover"
             controls
             playsInline
             preload="metadata"

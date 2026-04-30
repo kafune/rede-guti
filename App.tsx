@@ -432,7 +432,10 @@ const App: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <button onClick={handleLogout} className="text-red-500 font-bold text-sm">
+          <button
+            onClick={handleLogout}
+            className="text-red-500 font-bold text-sm px-3 py-2 -mr-2 min-h-[44px] inline-flex items-center justify-center rounded-xl active:bg-red-500/10 transition-colors"
+          >
             Sair
           </button>
         </div>

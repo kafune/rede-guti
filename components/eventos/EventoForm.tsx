@@ -79,7 +79,7 @@ const EventoForm: React.FC<Props> = ({ onSave, onCancel, onLogout }) => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             <div>
               <label className="text-[10px] font-black uppercase opacity-40 tracking-widest block mb-1">
                 Data *
@@ -88,7 +88,7 @@ const EventoForm: React.FC<Props> = ({ onSave, onCancel, onLogout }) => {
                 type="date"
                 value={data}
                 onChange={(e) => setData(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-3 sm:px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
                 required
               />
             </div>
@@ -100,7 +100,7 @@ const EventoForm: React.FC<Props> = ({ onSave, onCancel, onLogout }) => {
                 type="time"
                 value={hora}
                 onChange={(e) => setHora(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-3 sm:px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
                 required
               />
             </div>

@@ -157,10 +157,10 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
                 </div>
                 <p className="text-[10px] opacity-40 font-bold uppercase truncate mb-2">{s.church}</p>
                 <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                  <span className="text-[9px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-md font-black uppercase tracking-tighter max-w-full truncate">
+                  <span className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-md font-black uppercase tracking-tighter max-w-full truncate">
                     {s.notes || s.region}
                   </span>
-                  <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter whitespace-nowrap ${
+                  <span className={`text-[10px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter whitespace-nowrap ${
                     s.status === 'Ativo'
                       ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
                       : s.status === 'Inativo'

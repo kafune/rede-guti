@@ -148,8 +148,8 @@ const ExportPanel: React.FC<Props> = ({ supporters }) => {
       </div>
 
       <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
             <h3 className="text-lg font-bold">Apoiadores a exportar</h3>
             <p className="text-sm opacity-60">
               {noneSelected
@@ -160,7 +160,7 @@ const ExportPanel: React.FC<Props> = ({ supporters }) => {
           <button
             onClick={exportXLSX}
             disabled={filteredSupporters.length === 0}
-            className="py-3 px-6 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+            className="w-full sm:w-auto min-h-[44px] py-3 px-6 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 inline-flex items-center justify-center"
           >
             <i className="fa-solid fa-file-export mr-2"></i>
             Exportar XLSX

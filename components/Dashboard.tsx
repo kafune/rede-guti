@@ -206,7 +206,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
               type="text"
               readOnly
               value={shareUrl}
-              className="flex-1 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 text-xs font-semibold truncate"
+              className="flex-1 min-w-0 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 text-xs font-semibold truncate"
             />
             <button
               onClick={handleCopy}
@@ -291,19 +291,19 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 w-full sm:w-auto">
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">7d</p>
+                    <p className="text-[10px] font-bold opacity-40 uppercase">7d</p>
                     <p className="text-sm sm:text-base font-black text-violet-500">{item.lastWeek}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">15d</p>
+                    <p className="text-[10px] font-bold opacity-40 uppercase">15d</p>
                     <p className="text-sm sm:text-base font-black text-sky-500">{item.lastFifteenDays}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">30d</p>
+                    <p className="text-[10px] font-bold opacity-40 uppercase">30d</p>
                     <p className="text-sm sm:text-base font-black text-indigo-500">{item.lastMonth}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">Total</p>
+                    <p className="text-[10px] font-bold opacity-40 uppercase">Total</p>
                     <p className="text-base sm:text-xl font-black text-blue-600">{item.count}</p>
                   </div>
                 </div>

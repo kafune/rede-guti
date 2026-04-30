@@ -147,7 +147,7 @@ const EventoList: React.FC<Props> = ({ currentUser, onSelect, onNovo, onLogout }
               <div className="px-4 pb-4 flex gap-2">
                 <button
                   onClick={() => onSelect(evento)}
-                  className="flex-1 min-w-0 min-h-[40px] text-[10px] font-black uppercase tracking-widest bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 py-2 rounded-xl active:scale-95 transition-transform truncate"
+                  className="flex-1 min-w-0 min-h-[44px] text-[10px] font-black uppercase tracking-widest bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 py-2 rounded-xl active:scale-95 transition-transform truncate"
                 >
                   <i className="fa-solid fa-eye mr-1"></i> Ver
                 </button>
@@ -155,7 +155,7 @@ const EventoList: React.FC<Props> = ({ currentUser, onSelect, onNovo, onLogout }
                   <button
                     onClick={() => handleEncerrar(evento)}
                     disabled={encerrandoId === evento.id}
-                    className="flex-1 min-w-0 min-h-[40px] text-[10px] font-black uppercase tracking-widest bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50 truncate"
+                    className="flex-1 min-w-0 min-h-[44px] text-[10px] font-black uppercase tracking-widest bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50 truncate"
                   >
                     <i className="fa-solid fa-lock mr-1"></i>
                     {encerrandoId === evento.id ? 'Encerrando...' : 'Encerrar'}
@@ -164,7 +164,7 @@ const EventoList: React.FC<Props> = ({ currentUser, onSelect, onNovo, onLogout }
                 <button
                   onClick={() => handleDeletar(evento)}
                   disabled={deletandoId === evento.id}
-                  className="flex-1 min-w-0 min-h-[40px] text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50 truncate"
+                  className="flex-1 min-w-0 min-h-[44px] text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50 truncate"
                 >
                   <i className="fa-solid fa-trash mr-1"></i>
                   {deletandoId === evento.id ? 'Excluindo...' : 'Excluir'}

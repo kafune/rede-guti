@@ -66,7 +66,15 @@ const Login: React.FC<Props> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-blue-600 to-indigo-900 animate-fade-up">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-blue-600 to-indigo-900 animate-fade-up"
+      style={{
+        paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+        paddingLeft: 'max(1rem, env(safe-area-inset-left, 0px))',
+        paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))'
+      }}
+    >
       <div className="theme-panel w-full max-w-md bg-white dark:bg-gray-800 rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl animate-soft-pop transition-all duration-500 ease-out">
         <div className="text-center mb-6 sm:mb-10">
           <img src="/logo.jpeg" alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl mx-auto mb-4 sm:mb-6 object-cover" />
@@ -80,7 +88,7 @@ const Login: React.FC<Props> = ({ onLogin }) => {
             <input 
               type="email" 
               placeholder="Ex: nome@exemplo.com"
-              className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
@@ -94,7 +102,7 @@ const Login: React.FC<Props> = ({ onLogin }) => {
             <input 
               type="password" 
               placeholder="••••••••" 
-              className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);

@@ -16,7 +16,10 @@
 
 html {
   background: #080f2a;
-  color-scheme: dark;
+  /* Tema visual e' forçado para escuro via overrides Tailwind, mas permitimos
+     ao user-agent escolher o esquema dos controles nativos (date/time/select)
+     conforme o SO do usuario, evitando pickers escuros forçados em SO claro. */
+  color-scheme: light dark;
 }
 
 body {

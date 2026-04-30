@@ -137,7 +137,8 @@ export async function eventoRoutes(app: FastifyInstance) {
 
   // ── CREATE EVENT ─────────────────────────────────────────────────────────
   app.post('/eventos', { preHandler: app.authenticate }, async (request, reply) => {
-    if (normalizeRole(request.user.role) !== 'COORDENADOR') {
+    const role = normalizeRole(request.user.role);
+    if (role !== 'COORDENADOR' && role !== 'VERIFICADORA') {
       return reply.code(403).send({ error: 'Forbidden' });
     }
 
@@ -178,7 +179,8 @@ export async function eventoRoutes(app: FastifyInstance) {
 
   // ── UPDATE EVENT ─────────────────────────────────────────────────────────
   app.patch('/eventos/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    if (normalizeRole(request.user.role) !== 'COORDENADOR') {
+    const role = normalizeRole(request.user.role);
+    if (role !== 'COORDENADOR' && role !== 'VERIFICADORA') {
       return reply.code(403).send({ error: 'Forbidden' });
     }
 
@@ -211,7 +213,8 @@ export async function eventoRoutes(app: FastifyInstance) {
 
   // ── DELETE EVENT ─────────────────────────────────────────────────────────
   app.delete('/eventos/:id', { preHandler: app.authenticate }, async (request, reply) => {
-    if (normalizeRole(request.user.role) !== 'COORDENADOR') {
+    const role = normalizeRole(request.user.role);
+    if (role !== 'COORDENADOR' && role !== 'VERIFICADORA') {
       return reply.code(403).send({ error: 'Forbidden' });
     }
 
@@ -227,7 +230,8 @@ export async function eventoRoutes(app: FastifyInstance) {
 
   // ── CLOSE EVENT ───────────────────────────────────────────────────────────
   app.patch('/eventos/:id/encerrar', { preHandler: app.authenticate }, async (request, reply) => {
-    if (normalizeRole(request.user.role) !== 'COORDENADOR') {
+    const role = normalizeRole(request.user.role);
+    if (role !== 'COORDENADOR' && role !== 'VERIFICADORA') {
       return reply.code(403).send({ error: 'Forbidden' });
     }
 

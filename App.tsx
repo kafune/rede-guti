@@ -541,7 +541,7 @@ const App: React.FC = () => {
           />
         )}
 
-        {view === 'evento-novo' && currentUser.role === 'COORDENADOR' && (
+        {view === 'evento-novo' && (currentUser.role === 'COORDENADOR' || currentUser.role === 'VERIFICADORA') && (
           <EventoForm
             onSave={() => setView('eventos')}
             onCancel={() => setView('eventos')}

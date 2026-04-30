@@ -71,7 +71,7 @@ const EventoList: React.FC<Props> = ({ currentUser, onSelect, onNovo, onLogout }
     <div className="space-y-4 animate-fade-up">
       <div className="flex items-center justify-between animate-soft-pop">
         <h2 className="text-2xl font-bold">Eventos</h2>
-        {currentUser.role === 'COORDENADOR' && (
+        {(currentUser.role === 'COORDENADOR' || currentUser.role === 'VERIFICADORA') && (
           <button
             onClick={onNovo}
             className="theme-brand-mark text-white text-xs font-black uppercase tracking-widest px-4 py-2 rounded-2xl flex items-center gap-2 shadow-lg active:scale-95 transition-transform"
@@ -143,7 +143,7 @@ const EventoList: React.FC<Props> = ({ currentUser, onSelect, onNovo, onLogout }
               </div>
             </div>
 
-            {currentUser.role === 'COORDENADOR' && (
+            {(currentUser.role === 'COORDENADOR' || currentUser.role === 'VERIFICADORA') && (
               <div className="px-4 pb-4 flex gap-2">
                 <button
                   onClick={() => onSelect(evento)}

@@ -324,7 +324,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
             </span>
           )}
         </div>
-        {isCoord && !evento.encerrado && (
+        {(isCoord || isVerif) && !evento.encerrado && (
           <button
             onClick={openEdit}
             className="p-2 rounded-2xl opacity-40 hover:opacity-80 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all mt-0.5"
@@ -481,8 +481,8 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
             ))}
           </div>
 
-          {/* Link de indicação (COORDENADOR) */}
-          {isCoord && !evento.encerrado && (
+          {/* Link de indicação */}
+          {(isCoord || isVerif) && !evento.encerrado && (
             <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-4 space-y-3">
               <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">
                 Link de indicação por liderança
@@ -544,8 +544,8 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
             </div>
           )}
 
-          {/* Tabela por liderança (COORDENADOR) */}
-          {isCoord && statsByLider.length > 0 && (
+          {/* Tabela por liderança */}
+          {(isCoord || isVerif) && statsByLider.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-4 space-y-3">
               <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">
                 Por liderança

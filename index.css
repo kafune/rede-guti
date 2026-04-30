@@ -16,11 +16,15 @@
 
 html {
   background: #080f2a;
-  color-scheme: dark;
+  /* Tema visual e' forçado para escuro via overrides Tailwind, mas permitimos
+     ao user-agent escolher o esquema dos controles nativos (date/time/select)
+     conforme o SO do usuario, evitando pickers escuros forçados em SO claro. */
+  color-scheme: light dark;
 }
 
 body {
   min-height: 100vh;
+  min-height: 100dvh;
   background:
     radial-gradient(circle at top, rgba(122, 159, 212, 0.18), transparent 28%),
     radial-gradient(circle at 85% 12%, rgba(201, 168, 76, 0.08), transparent 22%),
@@ -30,6 +34,15 @@ body {
 
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Sobrescreve Tailwind .min-h-screen para usar dvh quando disponível,
+   evitando overflow indesejado em iOS Safari por causa da URL bar */
+@supports (min-height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
+  }
 }
 
 ::selection {
@@ -47,6 +60,15 @@ button {
 input::placeholder,
 textarea::placeholder {
   color: rgba(16, 26, 64, 0.46);
+}
+
+/* Evita zoom automatico do iOS Safari ao focar campos com fonte menor que 16px */
+@media (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 header.fixed,

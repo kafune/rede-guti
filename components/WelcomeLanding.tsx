@@ -13,7 +13,7 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 flex flex-col">
       {/* Hero Section */}
-      <div className="bg-gradient-to-b from-blue-700 to-blue-900 pt-12 pb-24 px-6 text-center text-white relative overflow-hidden">
+      <div className="bg-gradient-to-b from-blue-700 to-blue-900 pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-24 px-6 text-center text-white relative overflow-hidden">
         {/* Decorative Elements */}
         <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
           <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-white rounded-full blur-3xl"></div>
@@ -31,9 +31,9 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
 
       {/* Video Section */}
       <div className="px-3 sm:px-6 -mt-12 sm:-mt-16 relative z-20 max-w-lg mx-auto w-full">
-        <div className="bg-white dark:bg-gray-800 rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden p-2 sm:p-3 border dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden p-2 sm:p-3 border dark:border-gray-700">
           <video
-            className="aspect-video w-full rounded-[2rem] bg-black object-cover"
+            className="aspect-video w-full rounded-[1.5rem] sm:rounded-[2rem] bg-black object-cover"
             controls
             playsInline
             preload="metadata"

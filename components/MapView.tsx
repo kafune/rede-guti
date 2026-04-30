@@ -212,12 +212,12 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
 
   // ───────────────────────────────────────────────────────────────────────────
   return (
-    <div className="h-full min-h-0 flex flex-col gap-4 animate-fade-up">
+    <div className="md:h-full min-h-0 flex flex-col gap-4 animate-fade-up">
       {/* HEADER ─────────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="min-w-0">
           <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">Mapa político de São Paulo</p>
-          <h2 className="text-3xl font-black">Apoiadores por Município</h2>
+          <h2 className="text-2xl sm:text-3xl font-black">Apoiadores por Município</h2>
         </div>
         {selectedName && (
           <div className="flex items-center gap-4 animate-soft-pop">
@@ -239,14 +239,14 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
       </div>
 
       <div
-        className={`grid grid-cols-1 gap-4 flex-1 min-h-0 ${
+        className={`grid grid-cols-1 gap-4 md:flex-1 md:min-h-0 ${
           hasSelection
             ? 'lg:grid-cols-[1.4fr_1.6fr] xl:grid-cols-[1.2fr_1.8fr]'
             : 'lg:grid-cols-[3fr_1fr] xl:grid-cols-[3.5fr_1fr]'
         } transition-all duration-700 ease-out`}
       >
         {/* MAPA ──────────────────────────────────────────────────────────────── */}
-        <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-[#0a1530] p-6 rounded-[2rem] border dark:border-gray-800 shadow-sm relative overflow-hidden flex flex-col min-h-0">
+        <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-[#0a1530] p-4 sm:p-6 rounded-[2rem] border dark:border-gray-800 shadow-sm relative overflow-hidden flex flex-col min-h-[55dvh] md:min-h-0">
           {/* glow ambiente */}
           <div className="theme-map-glow absolute inset-0 pointer-events-none" />
           <div
@@ -552,17 +552,17 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
 
         {/* PAINEL LATERAL ─────────────────────────────────────────────────── */}
         <div
-          className={`space-y-4 h-full flex flex-col min-h-0 transition-all duration-700 ease-out ${
+          className={`space-y-4 md:h-full flex flex-col md:min-h-0 transition-all duration-700 ease-out ${
             hasSelection ? 'lg:pr-4' : ''
           }`}
         >
           {!hasSelection && (
-            <div className="bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm flex-1 min-h-0 animate-soft-pop flex flex-col overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm md:flex-1 md:min-h-0 animate-soft-pop flex flex-col md:overflow-hidden">
               <div className="flex items-center justify-between mb-3 shrink-0">
                 <h3 className="text-sm font-black uppercase tracking-widest opacity-40">Top Municípios</h3>
                 <span className="text-[10px] font-black uppercase opacity-40">{ranking.length}</span>
               </div>
-              <div className="space-y-2 overflow-y-auto min-h-0 flex-1">
+              <div className="space-y-2 md:overflow-y-auto md:min-h-0 md:flex-1">
                 {ranking.slice(0, 12).map((city, index) => {
                   const pct = maxCount > 0 ? (city.count / maxCount) * 100 : 0;
                   return (
@@ -611,7 +611,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
           )}
 
           <div
-            className={`bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden ${
+            className={`bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm md:flex-1 md:min-h-0 flex flex-col md:overflow-hidden ${
               hasSelection ? 'ring-2 ring-blue-100 dark:ring-blue-500/20' : ''
             } transition-all duration-700 ease-out`}
           >
@@ -625,7 +625,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
                 </span>
               )}
             </div>
-            <div className="space-y-2 overflow-y-auto min-h-0 flex-1">
+            <div className="space-y-2 md:overflow-y-auto md:min-h-0 md:flex-1">
               {selectedSupporters.length > 0 ? (
                 selectedSupporters.map((supporter) => (
                   <button

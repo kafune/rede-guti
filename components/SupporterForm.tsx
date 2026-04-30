@@ -161,7 +161,7 @@ const SupporterForm: React.FC<Props> = ({
   }
 
   return (
-    <div className={isEmbedded ? 'space-y-5' : 'max-w-xl mx-auto animate-fade-up'}>
+    <div className={isEmbedded ? 'space-y-5 max-w-2xl' : 'max-w-xl mx-auto animate-fade-up'}>
       {!isEmbedded && (
         <div className="flex items-center gap-4 mb-8 animate-soft-pop">
           {onCancel && (
@@ -174,7 +174,7 @@ const SupporterForm: React.FC<Props> = ({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="theme-panel bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border dark:border-gray-700 space-y-5 transition-all duration-500 ease-out">
+        <div className="theme-panel bg-white dark:bg-gray-800 p-5 sm:p-8 rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border dark:border-gray-700 space-y-5 transition-all duration-500 ease-out">
           <div>
             <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-2">
               Perfil a cadastrar
@@ -215,7 +215,7 @@ const SupporterForm: React.FC<Props> = ({
                 <input
                   type="text"
                   placeholder={`Ex: ${getRegistrationTargetLabel(target)}`}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   value={userForm.name}
                   onChange={(event) =>
                     setUserForm((previous) => ({ ...previous, name: event.target.value }))
@@ -231,7 +231,7 @@ const SupporterForm: React.FC<Props> = ({
                   <input
                     type="email"
                     placeholder="usuario@exemplo.com"
-                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none"
                     value={userForm.email}
                     onChange={(event) =>
                       setUserForm((previous) => ({ ...previous, email: event.target.value }))
@@ -245,7 +245,7 @@ const SupporterForm: React.FC<Props> = ({
                   <input
                     type="password"
                     placeholder="Minimo 6 caracteres"
-                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none"
                     value={userForm.password}
                     onChange={(event) =>
                       setUserForm((previous) => ({ ...previous, password: event.target.value }))
@@ -264,7 +264,7 @@ const SupporterForm: React.FC<Props> = ({
                 <input
                   type="text"
                   placeholder="Ex: Joao Silva"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   value={supporterForm.name}
                   onChange={(event) =>
                     setSupporterForm((previous) => ({ ...previous, name: event.target.value }))
@@ -280,7 +280,7 @@ const SupporterForm: React.FC<Props> = ({
                   <input
                     type="tel"
                     placeholder="119..."
-                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none"
                     value={supporterForm.whatsapp}
                     onChange={(event) =>
                       setSupporterForm((previous) => ({
@@ -298,7 +298,7 @@ const SupporterForm: React.FC<Props> = ({
                     type="text"
                     list="registration-municipalities"
                     placeholder="Ex: Sao Paulo"
-                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none"
                     value={supporterForm.municipalityName}
                     onChange={(event) =>
                       setSupporterForm((previous) => ({
@@ -323,7 +323,7 @@ const SupporterForm: React.FC<Props> = ({
                   type="text"
                   list="registration-churches"
                   placeholder="Ex: Igreja Batista Viva"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none"
                   value={supporterForm.churchName}
                   onChange={(event) =>
                     setSupporterForm((previous) => ({
@@ -348,7 +348,7 @@ const SupporterForm: React.FC<Props> = ({
             <input
               type="text"
               readOnly
-              className="w-full bg-blue-50 dark:bg-blue-900/20 border-none rounded-2xl px-6 py-4 text-blue-700 dark:text-blue-300 font-bold"
+              className="w-full bg-blue-50 dark:bg-blue-900/20 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 text-blue-700 dark:text-blue-300 font-bold"
               value={currentUser.name || currentUser.email}
             />
             <p className="text-[10px] mt-2 opacity-50 font-bold">

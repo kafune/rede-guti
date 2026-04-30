@@ -361,14 +361,14 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                 required
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
               <div>
                 <label className="text-[10px] font-black uppercase opacity-40 tracking-widest block mb-1">Data *</label>
                 <input
                   type="date"
                   value={editData}
                   onChange={(e) => setEditData(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-3 sm:px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                   required
                 />
               </div>
@@ -378,7 +378,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                   type="time"
                   value={editHora}
                   onChange={(e) => setEditHora(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-3 sm:px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                   required
                 />
               </div>
@@ -451,14 +451,16 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 flex flex-col items-center py-2 px-1 rounded-xl text-[9px] font-black uppercase tracking-tight transition-all ${
+            title={t.label}
+            aria-label={t.label}
+            className={`flex-1 min-w-0 flex flex-col items-center py-2 px-1 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all ${
               tab === t.id
                 ? 'bg-white dark:bg-gray-700 shadow text-blue-600'
                 : 'opacity-40'
             }`}
           >
             <i className={`fa-solid ${t.icon} text-sm mb-0.5`}></i>
-            {t.label}
+            <span className="w-full truncate text-center">{t.label}</span>
           </button>
         ))}
       </div>
@@ -469,13 +471,34 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
           {/* Stats cards */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'Indicados', value: evento.totalIndicados, color: 'blue', icon: 'fa-user-plus' },
-              { label: 'Aprovados', value: evento.totalAprovados, color: 'green', icon: 'fa-user-check' },
-              { label: 'Presentes', value: evento.totalPresentes, color: 'amber', icon: 'fa-circle-check' }
-            ].map(({ label, value, color, icon }) => (
-              <div key={label} className={`bg-${color}-50 dark:bg-${color}-900/20 rounded-2xl p-3 text-center`}>
-                <i className={`fa-solid ${icon} text-${color}-500 text-lg mb-1`}></i>
-                <p className={`text-2xl font-black text-${color}-600`}>{value}</p>
+              {
+                label: 'Indicados',
+                value: evento.totalIndicados,
+                icon: 'fa-user-plus',
+                bg: 'bg-blue-50 dark:bg-blue-900/20',
+                iconColor: 'text-blue-500',
+                valueColor: 'text-blue-600'
+              },
+              {
+                label: 'Aprovados',
+                value: evento.totalAprovados,
+                icon: 'fa-user-check',
+                bg: 'bg-green-50 dark:bg-green-900/20',
+                iconColor: 'text-green-500',
+                valueColor: 'text-green-600'
+              },
+              {
+                label: 'Presentes',
+                value: evento.totalPresentes,
+                icon: 'fa-circle-check',
+                bg: 'bg-amber-50 dark:bg-amber-900/20',
+                iconColor: 'text-amber-500',
+                valueColor: 'text-amber-600'
+              }
+            ].map(({ label, value, icon, bg, iconColor, valueColor }) => (
+              <div key={label} className={`${bg} rounded-2xl p-3 text-center`}>
+                <i className={`fa-solid ${icon} ${iconColor} text-lg mb-1`}></i>
+                <p className={`text-2xl font-black ${valueColor}`}>{value}</p>
                 <p className="text-[9px] font-black uppercase opacity-60">{label}</p>
               </div>
             ))}
@@ -676,14 +699,14 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                       <button
                         onClick={() => updateStatus(ind.id, 'APROVADO')}
                         disabled={actionLoading === ind.id}
-                        className="flex-1 text-[10px] font-black uppercase tracking-widest bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                        className="flex-1 min-h-[44px] text-[10px] font-black uppercase tracking-widest bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
                       >
                         <i className="fa-solid fa-check mr-1"></i> Aprovar
                       </button>
                       <button
                         onClick={() => updateStatus(ind.id, 'RECUSADO')}
                         disabled={actionLoading === ind.id}
-                        className="flex-1 text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                        className="flex-1 min-h-[44px] text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
                       >
                         <i className="fa-solid fa-xmark mr-1"></i> Recusar
                       </button>
@@ -739,7 +762,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                 </div>
                 <button
                   onClick={() => openWhatsApp(ind)}
-                  className={`shrink-0 text-[9px] font-black uppercase tracking-tight px-3 py-2 rounded-xl active:scale-95 transition-transform ${
+                  className={`shrink-0 min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-[9px] font-black uppercase tracking-tight px-3 py-2 rounded-xl active:scale-95 transition-transform ${
                     ind.status === 'CONFIRMADO'
                       ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                       : 'bg-green-600 text-white'
@@ -854,7 +877,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                       <button
                         onClick={() => handleCheckinById(ind)}
                         disabled={checkinLoading === ind.id}
-                        className="shrink-0 text-[9px] font-black uppercase tracking-tight bg-blue-600 text-white px-3 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                        className="shrink-0 min-h-[44px] min-w-[44px] text-[9px] font-black uppercase tracking-tight bg-blue-600 text-white px-3 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50 inline-flex items-center justify-center"
                       >
                         {checkinLoading === ind.id ? (
                           <i className="fa-solid fa-circle-notch fa-spin"></i>
@@ -903,7 +926,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                         <button
                           onClick={() => handleCheckinById(ind)}
                           disabled={checkinLoading === ind.id}
-                          className="shrink-0 text-[9px] font-black uppercase tracking-tight bg-blue-600 text-white px-3 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                          className="shrink-0 min-h-[44px] min-w-[44px] text-[9px] font-black uppercase tracking-tight bg-blue-600 text-white px-3 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50 inline-flex items-center justify-center"
                         >
                           {checkinLoading === ind.id
                             ? <i className="fa-solid fa-circle-notch fa-spin"></i>

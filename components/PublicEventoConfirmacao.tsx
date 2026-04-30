@@ -89,7 +89,7 @@ const PublicEventoConfirmacao: React.FC = () => {
   if (pageState === 'confirmado' || pageState === 'ja_confirmado') {
     const freshlyConfirmed = pageState === 'confirmado';
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 py-8 flex flex-col items-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 pb-8 pt-[calc(env(safe-area-inset-top,0px)+2rem)] flex flex-col items-center">
         <div className="w-full max-w-md space-y-5">
           <div className="text-center mb-6">
             <div className="theme-brand-mark w-14 h-14 rounded-3xl flex items-center justify-center text-white font-black text-2xl mx-auto mb-3 shadow-lg">

@@ -151,12 +151,12 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
             </h2>
           </div>
         </div>
-        <div className="flex gap-4">
-          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 transition-all duration-500 ease-out">
+        <div className="flex flex-wrap gap-3 sm:gap-4">
+          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 transition-all duration-500 ease-out min-w-0">
             <p className="text-[10px] font-bold opacity-60">Municipios ativos</p>
             <p className="font-black">{stats.activeCities}</p>
           </div>
-          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 transition-all duration-500 ease-out">
+          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 transition-all duration-500 ease-out min-w-0">
             <p className="text-[10px] font-bold opacity-60">Taxa de indicacao</p>
             <p className="font-black">
               {((stats.indicatedCount / Math.max(1, stats.total)) * 100).toFixed(1)}%
@@ -206,7 +206,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
               type="text"
               readOnly
               value={shareUrl}
-              className="flex-1 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 text-xs font-semibold truncate"
+              className="flex-1 min-w-0 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 text-xs font-semibold truncate"
             />
             <button
               onClick={handleCopy}
@@ -289,21 +289,21 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
                   <p className="font-black text-sm truncate">{item.name}</p>
                   <p className="text-[10px] opacity-40 uppercase font-bold">Indicador</p>
                 </div>
-                <div className="grid grid-cols-4 gap-2 sm:gap-3 w-full sm:w-auto">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 w-full sm:w-auto">
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">7d</p>
+                    <p className="text-[10px] font-bold opacity-40 uppercase">7d</p>
                     <p className="text-sm sm:text-base font-black text-violet-500">{item.lastWeek}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">15d</p>
+                    <p className="text-[10px] font-bold opacity-40 uppercase">15d</p>
                     <p className="text-sm sm:text-base font-black text-sky-500">{item.lastFifteenDays}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">30d</p>
+                    <p className="text-[10px] font-bold opacity-40 uppercase">30d</p>
                     <p className="text-sm sm:text-base font-black text-indigo-500">{item.lastMonth}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[9px] font-bold opacity-40 uppercase">Total</p>
+                    <p className="text-[10px] font-bold opacity-40 uppercase">Total</p>
                     <p className="text-base sm:text-xl font-black text-blue-600">{item.count}</p>
                   </div>
                 </div>

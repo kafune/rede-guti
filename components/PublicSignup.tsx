@@ -218,9 +218,17 @@ const PublicSignup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-blue-600 to-indigo-900 animate-fade-up">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-blue-600 to-indigo-900 animate-fade-up"
+      style={{
+        paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+        paddingLeft: 'max(1rem, env(safe-area-inset-left, 0px))',
+        paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))'
+      }}
+    >
       <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-6">
-        <div className="theme-panel bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 shadow-2xl animate-soft-pop transition-all duration-700 ease-out">
+        <div className="theme-panel bg-white dark:bg-gray-800 rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl animate-soft-pop transition-all duration-700 ease-out">
           <div className="text-center mb-8">
             <div className="theme-brand-mark w-20 h-20 rounded-3xl flex items-center justify-center text-white text-4xl font-black mx-auto mb-5">G</div>
             <h1 className="text-3xl font-black tracking-tight mb-2">Cadastro de Apoiador</h1>
@@ -240,7 +248,7 @@ const PublicSignup: React.FC = () => {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 placeholder="Digite seu nome"
                 required
               />
@@ -259,7 +267,7 @@ const PublicSignup: React.FC = () => {
                     if (submitError) setSubmitError(null);
                   }}
                   onBlur={normalizePhoneInput}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   placeholder="(11) 9 9999-9999"
                   required
                 />
@@ -271,7 +279,7 @@ const PublicSignup: React.FC = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   placeholder="nome@exemplo.com"
                   required
                 />
@@ -291,7 +299,7 @@ const PublicSignup: React.FC = () => {
                     if (submitError) setSubmitError(null);
                   }}
                   onBlur={normalizeMunicipalityInput}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   placeholder="Comece a digitar e selecione"
                   required
                 />
@@ -316,7 +324,7 @@ const PublicSignup: React.FC = () => {
                   list="public-churches"
                   value={churchName}
                   onChange={(e) => setChurchName(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   placeholder="Nome da igreja"
                   required
                 />
@@ -334,7 +342,7 @@ const PublicSignup: React.FC = () => {
                 type="text"
                 readOnly
                 value={refIndicator || (refIndicatorId ? 'Indicador identificado' : 'Link sem indicador')}
-                className="w-full bg-gray-100 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 text-sm font-semibold opacity-80"
+                className="w-full bg-gray-100 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 text-sm font-semibold opacity-80"
               />
               {!refIndicator && !refIndicatorId && (
                 <p className="text-[10px] mt-2 text-yellow-700 font-bold">

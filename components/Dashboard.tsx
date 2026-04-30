@@ -140,14 +140,14 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-[2rem] text-white shadow-xl shadow-blue-500/20 animate-soft-pop transition-all duration-500 ease-out">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-4 sm:p-6 rounded-[2rem] text-white shadow-xl shadow-blue-500/20 animate-soft-pop transition-all duration-500 ease-out">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
           <div>
             <p className="text-xs font-black uppercase tracking-widest opacity-60 mb-1">
               {networkLabel}
             </p>
-            <h2 className="text-5xl font-black mb-4">
-              {stats.total} <span className="text-lg opacity-40 font-normal">apoiadores</span>
+            <h2 className="text-4xl sm:text-5xl font-black mb-3 sm:mb-4">
+              {stats.total} <span className="text-base sm:text-lg opacity-40 font-normal">apoiadores</span>
             </h2>
           </div>
         </div>

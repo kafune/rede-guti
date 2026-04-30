@@ -69,7 +69,7 @@ const Login: React.FC<Props> = ({ onLogin }) => {
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-blue-600 to-indigo-900 animate-fade-up">
       <div className="theme-panel w-full max-w-md bg-white dark:bg-gray-800 rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl animate-soft-pop transition-all duration-500 ease-out">
         <div className="text-center mb-6 sm:mb-10">
-          <div className="theme-brand-mark w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl flex items-center justify-center text-white text-3xl sm:text-4xl font-black mx-auto mb-4 sm:mb-6">G</div>
+          <img src="/logo.jpeg" alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl mx-auto mb-4 sm:mb-6 object-cover" />
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight mb-2">Guti 2026</h1>
           <p className="text-gray-500 dark:text-gray-400 font-medium">Rede de Apoiadores do Estado de SP</p>
         </div>

@@ -109,9 +109,7 @@ const PublicEventoIndicacao: React.FC = () => {
 
         {/* Logo / Cabeçalho */}
         <div className="text-center mb-6">
-          <div className="theme-brand-mark w-14 h-14 rounded-3xl flex items-center justify-center text-white font-black text-2xl mx-auto mb-3 shadow-lg">
-            G
-          </div>
+          <img src="/logo.jpeg" alt="Logo" className="w-14 h-14 rounded-3xl mx-auto mb-3 object-cover shadow-lg" />
           <h1 className="font-black text-xl">Rede SP · Guti 2026</h1>
           <p className="text-xs opacity-40 font-bold uppercase tracking-widest">Indicação para evento</p>
         </div>

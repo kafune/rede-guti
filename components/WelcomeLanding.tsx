@@ -21,7 +21,7 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
         </div>
 
         <div className="relative z-10 max-w-lg mx-auto">
-          <div className="theme-brand-mark w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-black mx-auto mb-6">G</div>
+          <img src="/logo.jpeg" alt="Logo" className="w-16 h-16 rounded-2xl mx-auto mb-6 object-cover" />
           <h1 className="text-3xl font-black mb-2 tracking-tight">Bem-vindo à Família Guti 2026!</h1>
           <p className="text-blue-100 font-medium opacity-80">
             Olá, <span className="text-white font-bold">{name.split(' ')[0]}</span>! Seu cadastro foi realizado com sucesso.

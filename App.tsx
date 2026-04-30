@@ -559,67 +559,72 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex justify-around items-center h-20 md:hidden px-4">
-        <button
-          onClick={() => setView('dashboard')}
-          className={`flex flex-col items-center ${view === 'dashboard' ? 'text-blue-600' : 'opacity-30'}`}
-        >
-          <i className="fa-solid fa-chart-line text-xl mb-1"></i>
-          <span className="text-[9px] font-black uppercase">Dashboard</span>
-        </button>
-        {canAccessSupporterDirectory && (
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 md:hidden"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <div className="flex items-stretch h-14 sm:h-16">
           <button
-            onClick={() => setView('list')}
-            className={`flex flex-col items-center ${view === 'list' ? 'text-blue-600' : 'opacity-30'}`}
+            onClick={() => setView('dashboard')}
+            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${view === 'dashboard' ? 'text-blue-600' : 'opacity-40'}`}
           >
-            <i className="fa-solid fa-users text-xl mb-1"></i>
-            <span className="text-[9px] font-black uppercase">Apoiadores</span>
+            <i className="fa-solid fa-chart-line text-lg leading-none"></i>
+            <span className="text-[9px] font-black uppercase leading-none">Dashboard</span>
           </button>
-        )}
-        {canCreateNewEntries && (
-          <div className="relative -top-10">
+          {canAccessSupporterDirectory && (
             <button
-              onClick={() => setView('form')}
-              className="theme-brand-mark w-16 h-16 rounded-[1.75rem] flex items-center justify-center text-3xl transition-transform active:scale-90"
+              onClick={() => setView('list')}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${view === 'list' ? 'text-blue-600' : 'opacity-40'}`}
             >
-              <i className="fa-solid fa-plus"></i>
+              <i className="fa-solid fa-users text-lg leading-none"></i>
+              <span className="text-[9px] font-black uppercase leading-none">Apoiadores</span>
             </button>
-          </div>
-        )}
-        {canAccessSupporterDirectory && (
+          )}
+          {canCreateNewEntries && (
+            <div className="relative -top-5 sm:-top-6 flex-shrink-0 w-14 sm:w-16 flex items-center justify-center">
+              <button
+                onClick={() => setView('form')}
+                className="theme-brand-mark w-12 h-12 sm:w-14 sm:h-14 rounded-[1.25rem] sm:rounded-[1.5rem] flex items-center justify-center text-xl sm:text-2xl transition-transform active:scale-90"
+              >
+                <i className="fa-solid fa-plus"></i>
+              </button>
+            </div>
+          )}
+          {canAccessSupporterDirectory && (
+            <button
+              onClick={() => setView('map')}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${view === 'map' ? 'text-blue-600' : 'opacity-40'}`}
+            >
+              <i className="fa-solid fa-map-location-dot text-lg leading-none"></i>
+              <span className="text-[9px] font-black uppercase leading-none">Mapa</span>
+            </button>
+          )}
+          {canOpenManagementPanel && (
+            <button
+              onClick={() => setView('admin')}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${view === 'admin' ? 'text-blue-600' : 'opacity-40'}`}
+            >
+              <i className="fa-solid fa-sitemap text-lg leading-none"></i>
+              <span className="text-[9px] font-black uppercase leading-none">Rede</span>
+            </button>
+          )}
+          {canExportData && (
+            <button
+              onClick={() => setView('export')}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${view === 'export' ? 'text-blue-600' : 'opacity-40'}`}
+            >
+              <i className="fa-solid fa-file-export text-lg leading-none"></i>
+              <span className="text-[9px] font-black uppercase leading-none">Exportar</span>
+            </button>
+          )}
           <button
-            onClick={() => setView('map')}
-            className={`flex flex-col items-center ${view === 'map' ? 'text-blue-600' : 'opacity-30'}`}
+            onClick={() => setView('eventos')}
+            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${['eventos', 'evento-novo', 'evento-detalhe'].includes(view) ? 'text-blue-600' : 'opacity-40'}`}
           >
-            <i className="fa-solid fa-map-location-dot text-xl mb-1"></i>
-            <span className="text-[9px] font-black uppercase">Mapa</span>
+            <i className="fa-solid fa-calendar-days text-lg leading-none"></i>
+            <span className="text-[9px] font-black uppercase leading-none">Eventos</span>
           </button>
-        )}
-        {canOpenManagementPanel && (
-          <button
-            onClick={() => setView('admin')}
-            className={`flex flex-col items-center ${view === 'admin' ? 'text-blue-600' : 'opacity-30'}`}
-          >
-            <i className="fa-solid fa-sitemap text-xl mb-1"></i>
-            <span className="text-[9px] font-black uppercase">Rede</span>
-          </button>
-        )}
-        {canExportData && (
-          <button
-            onClick={() => setView('export')}
-            className={`flex flex-col items-center ${view === 'export' ? 'text-blue-600' : 'opacity-30'}`}
-          >
-            <i className="fa-solid fa-file-export text-xl mb-1"></i>
-            <span className="text-[9px] font-black uppercase">Exportar</span>
-          </button>
-        )}
-        <button
-          onClick={() => setView('eventos')}
-          className={`flex flex-col items-center ${['eventos', 'evento-novo', 'evento-detalhe'].includes(view) ? 'text-blue-600' : 'opacity-30'}`}
-        >
-          <i className="fa-solid fa-calendar-days text-xl mb-1"></i>
-          <span className="text-[9px] font-black uppercase">Eventos</span>
-        </button>
+        </div>
       </nav>
 
       <nav className="hidden md:flex fixed top-0 left-0 bottom-0 w-24 bg-white dark:bg-gray-900 border-r dark:border-gray-800 z-50 flex-col items-center pt-28 gap-8">

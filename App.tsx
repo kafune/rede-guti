@@ -441,7 +441,7 @@ const App: React.FC = () => {
       <main
         className={`w-full mx-auto ${mainWidthClass} ${
           isMapView
-            ? 'mt-[calc(env(safe-area-inset-top,0px)+4rem)] sm:mt-[calc(env(safe-area-inset-top,0px)+5rem)] h-[calc(100dvh-9rem-env(safe-area-inset-top,0px))] sm:h-[calc(100dvh-10rem-env(safe-area-inset-top,0px))] md:h-[calc(100dvh-5rem-env(safe-area-inset-top,0px))] overflow-hidden'
+            ? 'mt-[calc(env(safe-area-inset-top,0px)+4rem)] sm:mt-[calc(env(safe-area-inset-top,0px)+5rem)] pb-4 md:pb-0 md:h-[calc(100dvh-5rem-env(safe-area-inset-top,0px))] md:overflow-hidden'
             : 'px-4 sm:px-6 py-6 pt-[calc(env(safe-area-inset-top,0px)+6rem)] sm:pt-[calc(env(safe-area-inset-top,0px)+7rem)]'
         }`}
       >

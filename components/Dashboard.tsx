@@ -151,12 +151,12 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
             </h2>
           </div>
         </div>
-        <div className="flex gap-4">
-          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 transition-all duration-500 ease-out">
+        <div className="flex flex-wrap gap-3 sm:gap-4">
+          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 transition-all duration-500 ease-out min-w-0">
             <p className="text-[10px] font-bold opacity-60">Municipios ativos</p>
             <p className="font-black">{stats.activeCities}</p>
           </div>
-          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 transition-all duration-500 ease-out">
+          <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 transition-all duration-500 ease-out min-w-0">
             <p className="text-[10px] font-bold opacity-60">Taxa de indicacao</p>
             <p className="font-black">
               {((stats.indicatedCount / Math.max(1, stats.total)) * 100).toFixed(1)}%
@@ -289,7 +289,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
                   <p className="font-black text-sm truncate">{item.name}</p>
                   <p className="text-[10px] opacity-40 uppercase font-bold">Indicador</p>
                 </div>
-                <div className="grid grid-cols-4 gap-2 sm:gap-3 w-full sm:w-auto">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 w-full sm:w-auto">
                   <div className="text-right">
                     <p className="text-[9px] font-bold opacity-40 uppercase">7d</p>
                     <p className="text-sm sm:text-base font-black text-violet-500">{item.lastWeek}</p>

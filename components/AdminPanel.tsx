@@ -572,18 +572,18 @@ const AdminPanel: React.FC<Props> = ({
               >
                 <div className="flex-1 space-y-2">
                   {isEditing ? (
-                    <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                       <input
                         type="text"
                         value={editUser.name}
                         onChange={(event) => setEditUser((prev) => ({ ...prev, name: event.target.value }))}
-                        className="md:col-span-2 w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        className="lg:col-span-2 w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       />
                       <input
                         type="email"
                         value={editUser.email}
                         onChange={(event) => setEditUser((prev) => ({ ...prev, email: event.target.value }))}
-                        className="md:col-span-2 w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        className="lg:col-span-2 w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       />
                       <select
                         value={editUser.role}

@@ -198,15 +198,15 @@ const SupporterDetail: React.FC<Props> = ({
           {/* Online Presence */}
           {supporter.churchSocialMedia && (
             <div className="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-3xl border border-indigo-100 dark:border-indigo-800">
-               <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <i className="fa-brands fa-instagram text-2xl text-pink-500"></i>
-                    <div>
+               <div className="flex items-center justify-between gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <i className="fa-brands fa-instagram text-2xl text-pink-500 shrink-0"></i>
+                    <div className="min-w-0 flex-1">
                        <p className="text-[10px] font-black opacity-40 uppercase tracking-widest leading-none mb-1">Redes Sociais</p>
-                       <p className="font-bold text-sm text-indigo-700 dark:text-indigo-300">{supporter.churchSocialMedia}</p>
+                       <p className="font-bold text-sm text-indigo-700 dark:text-indigo-300 truncate">{supporter.churchSocialMedia}</p>
                     </div>
                   </div>
-                  <button onClick={() => window.open(`https://instagram.com/${supporter.churchSocialMedia.replace('@', '')}`, '_blank')} className="px-4 py-2 bg-white dark:bg-gray-800 rounded-xl text-[10px] font-black shadow-sm">VER PERFIL</button>
+                  <button onClick={() => window.open(`https://instagram.com/${supporter.churchSocialMedia.replace('@', '')}`, '_blank')} className="px-3 sm:px-4 py-2 bg-white dark:bg-gray-800 rounded-xl text-[10px] font-black shadow-sm shrink-0 whitespace-nowrap">VER PERFIL</button>
                </div>
             </div>
           )}
@@ -279,8 +279,8 @@ const SupporterDetail: React.FC<Props> = ({
             )}
 
             {isConfirmingDelete && (
-              <div className="fixed inset-0 z-[100] flex items-end p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-                <div className="w-full bg-white dark:bg-gray-800 rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl animate-in slide-in-from-bottom-10">
+              <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300 overflow-y-auto">
+                <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-white dark:bg-gray-800 rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl animate-in slide-in-from-bottom-10">
                   <h5 className="text-lg sm:text-xl font-black text-center mb-2">Excluir Registro?</h5>
                   <p className="text-sm text-center opacity-50 mb-5 sm:mb-8 font-medium">Esta acao nao pode ser desfeita. O cadastro e suas referencias serao afetados.</p>
                   <div className="flex gap-3">

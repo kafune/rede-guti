@@ -451,14 +451,16 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 flex flex-col items-center py-2 px-1 rounded-xl text-[9px] font-black uppercase tracking-tight transition-all ${
+            title={t.label}
+            aria-label={t.label}
+            className={`flex-1 min-w-0 flex flex-col items-center py-2 px-1 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all ${
               tab === t.id
                 ? 'bg-white dark:bg-gray-700 shadow text-blue-600'
                 : 'opacity-40'
             }`}
           >
             <i className={`fa-solid ${t.icon} text-sm mb-0.5`}></i>
-            {t.label}
+            <span className="w-full truncate text-center">{t.label}</span>
           </button>
         ))}
       </div>

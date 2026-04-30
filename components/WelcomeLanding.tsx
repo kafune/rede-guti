@@ -85,7 +85,7 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
 
       {/* Footer Info */}
       <div className="p-8 text-center opacity-30">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em]">Guti 2026 • Rede Evangélica SP</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em]">Guti 2026 • Rede de Apoiadores SP</p>
       </div>
     </div>
   );

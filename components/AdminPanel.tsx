@@ -348,22 +348,32 @@ const AdminPanel: React.FC<Props> = ({
     );
     const hierarchyLabel = user.hierarchyPath?.map((item) => item.name).join(' > ') ?? '';
 
+    const cappedDepth = Math.min(depth, 4);
+    const indentClass =
+      depth === 0
+        ? ''
+        : 'pl-3 sm:pl-4 border-l-2 border-blue-100 dark:border-blue-900/30';
+
     return (
-      <div key={user.id} className="space-y-3" style={{ marginLeft: depth * 16 }}>
-        <div className="rounded-2xl border dark:border-gray-700 p-4 bg-white dark:bg-gray-900/40">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-bold">{user.name || user.email}</span>
-            <span className={`text-xs font-bold px-3 py-1 rounded-full ${getRoleBadgeClass(user.role)}`}>
+      <div
+        key={user.id}
+        className={`space-y-3 min-w-0 ${indentClass}`}
+        style={{ marginLeft: cappedDepth * 8 }}
+      >
+        <div className="rounded-2xl border dark:border-gray-700 p-4 bg-white dark:bg-gray-900/40 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+            <span className="font-bold truncate max-w-full">{user.name || user.email}</span>
+            <span className={`text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${getRoleBadgeClass(user.role)}`}>
               {getRoleLabel(user.role)}
             </span>
             {user.id === currentUser.id && (
-              <span className="text-[10px] font-black uppercase px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+              <span className="text-[10px] font-black uppercase px-2 py-1 rounded-full whitespace-nowrap bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
                 Voce
               </span>
             )}
           </div>
-          <div className="text-xs opacity-60 mt-2 space-y-1">
-            <div>{user.email}</div>
+          <div className="text-xs opacity-60 mt-2 space-y-1 break-words">
+            <div className="break-all">{user.email}</div>
             {user.indicatedByUser && <div>Indicado por: {user.indicatedByUser.name}</div>}
             {hierarchyLabel && <div>Rede: {hierarchyLabel}</div>}
             <div>
@@ -373,20 +383,19 @@ const AdminPanel: React.FC<Props> = ({
         </div>
 
         {childSupporters.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-2 pl-3 sm:pl-4 border-l-2 border-dashed border-blue-100 dark:border-blue-900/30">
             {childSupporters.map((supporter) => (
               <div
                 key={supporter.id}
-                className="rounded-2xl border border-dashed dark:border-gray-700 px-4 py-3 bg-blue-50/60 dark:bg-blue-900/10"
-                style={{ marginLeft: 16 }}
+                className="rounded-2xl border border-dashed dark:border-gray-700 px-4 py-3 bg-blue-50/60 dark:bg-blue-900/10 min-w-0"
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="font-bold text-sm">{supporter.name}</span>
-                  <span className="text-[10px] font-black uppercase px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+                  <span className="font-bold text-sm truncate max-w-full">{supporter.name}</span>
+                  <span className="text-[10px] font-black uppercase px-2 py-1 rounded-full whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                     Apoiador
                   </span>
                 </div>
-                <div className="text-xs opacity-60 mt-1 space-y-1">
+                <div className="text-xs opacity-60 mt-1 space-y-1 break-words">
                   <div>{supporter.church}</div>
                   <div>{supporter.notes || supporter.region}</div>
                   {supporter.hierarchyPath && supporter.hierarchyPath.length > 0 && (
@@ -670,7 +679,7 @@ const AdminPanel: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="theme-panel bg-white dark:bg-gray-800 p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
+      <div className="theme-panel bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out overflow-hidden">
         <div className="mb-6">
           <h3 className="text-lg font-bold mb-1">Visualizacao multinivel</h3>
           <p className="text-sm opacity-60">

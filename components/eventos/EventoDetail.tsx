@@ -469,13 +469,34 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
           {/* Stats cards */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'Indicados', value: evento.totalIndicados, color: 'blue', icon: 'fa-user-plus' },
-              { label: 'Aprovados', value: evento.totalAprovados, color: 'green', icon: 'fa-user-check' },
-              { label: 'Presentes', value: evento.totalPresentes, color: 'amber', icon: 'fa-circle-check' }
-            ].map(({ label, value, color, icon }) => (
-              <div key={label} className={`bg-${color}-50 dark:bg-${color}-900/20 rounded-2xl p-3 text-center`}>
-                <i className={`fa-solid ${icon} text-${color}-500 text-lg mb-1`}></i>
-                <p className={`text-2xl font-black text-${color}-600`}>{value}</p>
+              {
+                label: 'Indicados',
+                value: evento.totalIndicados,
+                icon: 'fa-user-plus',
+                bg: 'bg-blue-50 dark:bg-blue-900/20',
+                iconColor: 'text-blue-500',
+                valueColor: 'text-blue-600'
+              },
+              {
+                label: 'Aprovados',
+                value: evento.totalAprovados,
+                icon: 'fa-user-check',
+                bg: 'bg-green-50 dark:bg-green-900/20',
+                iconColor: 'text-green-500',
+                valueColor: 'text-green-600'
+              },
+              {
+                label: 'Presentes',
+                value: evento.totalPresentes,
+                icon: 'fa-circle-check',
+                bg: 'bg-amber-50 dark:bg-amber-900/20',
+                iconColor: 'text-amber-500',
+                valueColor: 'text-amber-600'
+              }
+            ].map(({ label, value, icon, bg, iconColor, valueColor }) => (
+              <div key={label} className={`${bg} rounded-2xl p-3 text-center`}>
+                <i className={`fa-solid ${icon} ${iconColor} text-lg mb-1`}></i>
+                <p className={`text-2xl font-black ${valueColor}`}>{value}</p>
                 <p className="text-[9px] font-black uppercase opacity-60">{label}</p>
               </div>
             ))}

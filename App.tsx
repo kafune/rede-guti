@@ -417,7 +417,8 @@ const App: React.FC = () => {
         isMapView ? 'pb-0' : 'pb-24 md:pb-0'
       }`}
     >
-      <header className="fixed top-0 left-0 md:left-24 right-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b dark:border-gray-800 px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
+      <header
+        className="fixed top-0 left-0 md:left-24 right-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b dark:border-gray-800 px-4 sm:px-6 pt-[env(safe-area-inset-top,0px)] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))] h-[calc(env(safe-area-inset-top,0px)+4rem)] sm:h-[calc(env(safe-area-inset-top,0px)+5rem)] flex items-center justify-between">
         <div
           className="flex items-center gap-3 cursor-pointer"
           onClick={() => setView('dashboard')}
@@ -440,8 +441,8 @@ const App: React.FC = () => {
       <main
         className={`w-full mx-auto ${mainWidthClass} ${
           isMapView
-            ? 'mt-16 sm:mt-20 h-[calc(100vh-9rem)] sm:h-[calc(100vh-10rem)] md:h-[calc(100vh-5rem)] overflow-hidden'
-            : 'px-4 sm:px-6 py-6 pt-24 sm:pt-28'
+            ? 'mt-[calc(env(safe-area-inset-top,0px)+4rem)] sm:mt-[calc(env(safe-area-inset-top,0px)+5rem)] h-[calc(100dvh-9rem-env(safe-area-inset-top,0px))] sm:h-[calc(100dvh-10rem-env(safe-area-inset-top,0px))] md:h-[calc(100dvh-5rem-env(safe-area-inset-top,0px))] overflow-hidden'
+            : 'px-4 sm:px-6 py-6 pt-[calc(env(safe-area-inset-top,0px)+6rem)] sm:pt-[calc(env(safe-area-inset-top,0px)+7rem)]'
         }`}
       >
         {(isLoading || dataError) && (
@@ -561,23 +562,27 @@ const App: React.FC = () => {
 
       <nav
         className="fixed bottom-0 left-0 right-0 z-50 md:hidden"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          paddingLeft: 'env(safe-area-inset-left, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)'
+        }}
       >
         <div className="flex items-stretch h-14 sm:h-16">
           <button
             onClick={() => setView('dashboard')}
-            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${view === 'dashboard' ? 'text-blue-600' : 'opacity-40'}`}
+            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'dashboard' ? 'text-blue-600' : 'opacity-40'}`}
           >
             <i className="fa-solid fa-chart-line text-lg leading-none"></i>
-            <span className="text-[9px] font-black uppercase leading-none">Dashboard</span>
+            <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Dashboard</span>
           </button>
           {canAccessSupporterDirectory && (
             <button
               onClick={() => setView('list')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${view === 'list' ? 'text-blue-600' : 'opacity-40'}`}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'list' ? 'text-blue-600' : 'opacity-40'}`}
             >
               <i className="fa-solid fa-users text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none">Apoiadores</span>
+              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Apoiadores</span>
             </button>
           )}
           {canCreateNewEntries && (
@@ -585,6 +590,7 @@ const App: React.FC = () => {
               <button
                 onClick={() => setView('form')}
                 className="theme-brand-mark w-12 h-12 sm:w-14 sm:h-14 rounded-[1.25rem] sm:rounded-[1.5rem] flex items-center justify-center text-xl sm:text-2xl transition-transform active:scale-90"
+                aria-label="Novo cadastro"
               >
                 <i className="fa-solid fa-plus"></i>
               </button>
@@ -593,36 +599,36 @@ const App: React.FC = () => {
           {canAccessSupporterDirectory && (
             <button
               onClick={() => setView('map')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${view === 'map' ? 'text-blue-600' : 'opacity-40'}`}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'map' ? 'text-blue-600' : 'opacity-40'}`}
             >
               <i className="fa-solid fa-map-location-dot text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none">Mapa</span>
+              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Mapa</span>
             </button>
           )}
           {canOpenManagementPanel && (
             <button
               onClick={() => setView('admin')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${view === 'admin' ? 'text-blue-600' : 'opacity-40'}`}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'admin' ? 'text-blue-600' : 'opacity-40'}`}
             >
               <i className="fa-solid fa-sitemap text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none">Rede</span>
+              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Rede</span>
             </button>
           )}
           {canExportData && (
             <button
               onClick={() => setView('export')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${view === 'export' ? 'text-blue-600' : 'opacity-40'}`}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'export' ? 'text-blue-600' : 'opacity-40'}`}
             >
               <i className="fa-solid fa-file-export text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none">Exportar</span>
+              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Exportar</span>
             </button>
           )}
           <button
             onClick={() => setView('eventos')}
-            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:opacity-70 transition-opacity ${['eventos', 'evento-novo', 'evento-detalhe'].includes(view) ? 'text-blue-600' : 'opacity-40'}`}
+            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${['eventos', 'evento-novo', 'evento-detalhe'].includes(view) ? 'text-blue-600' : 'opacity-40'}`}
           >
             <i className="fa-solid fa-calendar-days text-lg leading-none"></i>
-            <span className="text-[9px] font-black uppercase leading-none">Eventos</span>
+            <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Eventos</span>
           </button>
         </div>
       </nav>

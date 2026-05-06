@@ -479,6 +479,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
   }
 
   return (
+    <>
     <div className="space-y-4 animate-fade-up">
       {/* Header */}
       <div className="flex items-start gap-3 animate-soft-pop">
@@ -1177,9 +1178,11 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
           })()}
         </div>
       )}
+    </div>
+
       {/* ── MODAL EDITAR INDICADO ── */}
       {editingIndicado && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-sm p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-black text-sm uppercase tracking-widest">Editar Indicado</h3>
@@ -1249,7 +1252,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

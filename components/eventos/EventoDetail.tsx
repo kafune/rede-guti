@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Evento,
   EventoIndicado,
@@ -277,6 +278,148 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
     }
   };
 
+  // ── Exportação XLSX ───────────────────────────────────────────────────────
+  const exportEventoXLSX = () => {
+    if (!evento) return;
+
+    const wb = XLSX.utils.book_new();
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const enc = (r: number, c: number) => XLSX.utils.encode_cell({ r, c });
+
+    const S = {
+      header: {
+        font: { bold: true, sz: 14, color: { rgb: 'FFFFFF' } },
+        fill: { patternType: 'solid' as const, fgColor: { rgb: '0D1B3E' } },
+        alignment: { horizontal: 'center' as const, vertical: 'center' as const }
+      },
+      subHeader: {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { patternType: 'solid' as const, fgColor: { rgb: '1E3A5F' } },
+        alignment: { horizontal: 'center' as const }
+      },
+      tableHeader: {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { patternType: 'solid' as const, fgColor: { rgb: '2563EB' } },
+        alignment: { horizontal: 'center' as const }
+      },
+      colLabel: {
+        font: { bold: true },
+        fill: { patternType: 'solid' as const, fgColor: { rgb: 'EFF6FF' } },
+        alignment: { horizontal: 'center' as const }
+      },
+      numBlue: { font: { bold: true, sz: 18, color: { rgb: '2563EB' } }, alignment: { horizontal: 'center' as const } },
+      numGreen: { font: { bold: true, sz: 18, color: { rgb: '16A34A' } }, alignment: { horizontal: 'center' as const } },
+      numAmber: { font: { bold: true, sz: 18, color: { rgb: 'D97706' } }, alignment: { horizontal: 'center' as const } },
+    };
+
+    const rowStyle = (i: number) => ({
+      fill: { patternType: 'solid' as const, fgColor: { rgb: i % 2 === 0 ? 'FFFFFF' : 'F1F5F9' } }
+    });
+
+    const statusColors: Record<EventoIndicadoStatus, string> = {
+      INDICADO: 'B45309',
+      APROVADO: '16A34A',
+      RECUSADO: 'DC2626',
+      CONFIRMADO: '7C3AED',
+      PRESENTE: '2563EB'
+    };
+
+    const exportList = isLider
+      ? indicados.filter((i) => i.liderId === currentUser.id)
+      : indicados;
+
+    // ── Sheet 1: Resumo (coord/verif only) ───────────────────────────────────
+    if (!isLider && statsByLider.length > 0) {
+      const resumoData = [
+        [evento.nome, '', '', ''],
+        [`${formatDate(evento.data)} às ${evento.hora} · ${evento.local}`, '', '', ''],
+        [''],
+        ['RESUMO GERAL', '', '', ''],
+        ['Indicados', 'Aprovados', 'Presentes', ''],
+        [evento.totalIndicados, evento.totalAprovados, evento.totalPresentes, ''],
+        [''],
+        ['POR LIDERANÇA', '', '', ''],
+        ['Liderança', 'Indicados', 'Aprovados', 'Presentes'],
+        ...statsByLider.map((row) => [row.nome, row.indicados, row.aprovados, row.presentes])
+      ];
+
+      const ws1 = XLSX.utils.aoa_to_sheet(resumoData);
+      ws1['!cols'] = [{ wch: 38 }, { wch: 13 }, { wch: 13 }, { wch: 13 }];
+      ws1['!rows'] = [{ hpt: 30 }, { hpt: 20 }];
+      ws1['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } },
+        { s: { r: 7, c: 0 }, e: { r: 7, c: 3 } }
+      ];
+
+      ['A1', 'B1', 'C1', 'D1'].forEach((a) => { if (ws1[a]) ws1[a].s = S.header; });
+      ['A2', 'B2', 'C2', 'D2'].forEach((a) => { if (ws1[a]) ws1[a].s = S.subHeader; });
+      ['A4', 'B4', 'C4', 'D4'].forEach((a) => { if (ws1[a]) ws1[a].s = S.tableHeader; });
+      if (ws1['A5']) ws1['A5'].s = S.colLabel;
+      if (ws1['B5']) ws1['B5'].s = S.colLabel;
+      if (ws1['C5']) ws1['C5'].s = S.colLabel;
+      if (ws1['A6']) ws1['A6'].s = S.numBlue;
+      if (ws1['B6']) ws1['B6'].s = S.numGreen;
+      if (ws1['C6']) ws1['C6'].s = S.numAmber;
+      ['A8', 'B8', 'C8', 'D8'].forEach((a) => { if (ws1[a]) ws1[a].s = S.tableHeader; });
+      ['A9', 'B9', 'C9', 'D9'].forEach((a) => { if (ws1[a]) ws1[a].s = S.colLabel; });
+
+      statsByLider.forEach((_, i) => {
+        const rs = rowStyle(i);
+        const r = 9 + i;
+        const c0 = ws1[enc(r, 0)]; if (c0) c0.s = rs;
+        const c1 = ws1[enc(r, 1)]; if (c1) c1.s = { ...rs, font: { bold: true, color: { rgb: '2563EB' } }, alignment: { horizontal: 'center' as const } };
+        const c2 = ws1[enc(r, 2)]; if (c2) c2.s = { ...rs, font: { bold: true, color: { rgb: '16A34A' } }, alignment: { horizontal: 'center' as const } };
+        const c3 = ws1[enc(r, 3)]; if (c3) c3.s = { ...rs, font: { bold: true, color: { rgb: 'D97706' } }, alignment: { horizontal: 'center' as const } };
+      });
+
+      XLSX.utils.book_append_sheet(wb, ws1, 'Resumo');
+    }
+
+    // ── Sheet 2: Lista de Indicados ───────────────────────────────────────────
+    const listaData = [
+      [evento.nome, '', '', '', ''],
+      [isLider ? 'Meus Indicados' : 'Lista de Indicados', '', '', '', ''],
+      [''],
+      ['Nome', 'Telefone', 'Liderança', 'Status', 'Indicado em'],
+      ...exportList.map((ind) => [
+        ind.nome,
+        ind.telefone,
+        ind.liderNome,
+        statusLabel[ind.status],
+        new Date(ind.createdAt).toLocaleDateString('pt-BR')
+      ])
+    ];
+
+    const ws2 = XLSX.utils.aoa_to_sheet(listaData);
+    ws2['!cols'] = [{ wch: 32 }, { wch: 18 }, { wch: 30 }, { wch: 14 }, { wch: 16 }];
+    ws2['!rows'] = [{ hpt: 30 }, { hpt: 20 }];
+    ws2['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }
+    ];
+
+    ['A1', 'B1', 'C1', 'D1', 'E1'].forEach((a) => { if (ws2[a]) ws2[a].s = S.header; });
+    ['A2', 'B2', 'C2', 'D2', 'E2'].forEach((a) => { if (ws2[a]) ws2[a].s = S.subHeader; });
+    ['A4', 'B4', 'C4', 'D4', 'E4'].forEach((a) => { if (ws2[a]) ws2[a].s = S.tableHeader; });
+
+    exportList.forEach((ind, i) => {
+      const rs = rowStyle(i);
+      const r = 4 + i;
+      const c0 = ws2[enc(r, 0)]; if (c0) c0.s = rs;
+      const c1 = ws2[enc(r, 1)]; if (c1) c1.s = { ...rs, alignment: { horizontal: 'center' as const } };
+      const c2 = ws2[enc(r, 2)]; if (c2) c2.s = rs;
+      const c3 = ws2[enc(r, 3)]; if (c3) c3.s = { ...rs, font: { bold: true, color: { rgb: statusColors[ind.status] } }, alignment: { horizontal: 'center' as const } };
+      const c4 = ws2[enc(r, 4)]; if (c4) c4.s = { ...rs, alignment: { horizontal: 'center' as const } };
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws2, isLider ? 'Meus Indicados' : 'Lista de Indicados');
+
+    const safeName = evento.nome.replace(/[^\w\sÀ-ú-]/g, '').replace(/\s+/g, '_').slice(0, 50);
+    XLSX.writeFile(wb, `${safeName}_${dateStr}.xlsx`, { cellStyles: true });
+  };
+
   // ── Tabs disponíveis ──────────────────────────────────────────────────────
   const tabs: { id: Tab; label: string; icon: string; visible: boolean }[] = [
     { id: 'resumo', label: 'Resumo', icon: 'fa-chart-pie', visible: true },
@@ -503,6 +646,21 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
               </div>
             ))}
           </div>
+
+          {/* Botão de exportação */}
+          <button
+            onClick={exportEventoXLSX}
+            disabled={indicados.length === 0}
+            className="w-full flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest bg-emerald-600 text-white py-3 rounded-2xl shadow-lg active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <i className="fa-solid fa-file-excel text-sm"></i>
+            Exportar planilha
+            {indicados.length > 0 && (
+              <span className="opacity-70 font-bold normal-case tracking-normal">
+                ({indicados.length} indicados)
+              </span>
+            )}
+          </button>
 
           {/* Link de indicação */}
           {(isCoord || isVerif) && !evento.encerrado && (

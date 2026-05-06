@@ -333,6 +333,18 @@ export const updateEventoIndicadoStatus = async (
   return data.indicado;
 };
 
+export const updateEventoIndicado = async (
+  eventoId: string,
+  indicadoId: string,
+  payload: { nome?: string; telefone?: string; liderId?: string }
+) => {
+  const data = await request<{ indicado: EventoIndicado }>(
+    `/eventos/${eventoId}/indicados/${indicadoId}`,
+    { method: 'PATCH', body: JSON.stringify(payload) }
+  );
+  return data.indicado;
+};
+
 export const checkinEventoIndicado = async (
   eventoId: string,
   payload: { telefone?: string; nome?: string; indicadoId?: string }

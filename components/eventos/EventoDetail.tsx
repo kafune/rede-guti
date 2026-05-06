@@ -15,6 +15,7 @@ import {
   getApiErrorMessage,
   isUnauthorized,
   updateEvento,
+  updateEventoIndicado,
   updateEventoIndicadoStatus
 } from '../../api';
 
@@ -83,6 +84,14 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
   const [editObs, setEditObs] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  // Edição de indicado
+  const [editingIndicado, setEditingIndicado] = useState<EventoIndicado | null>(null);
+  const [editIndNome, setEditIndNome] = useState('');
+  const [editIndTelefone, setEditIndTelefone] = useState('');
+  const [editIndLiderId, setEditIndLiderId] = useState('');
+  const [editIndSaving, setEditIndSaving] = useState(false);
+  const [editIndError, setEditIndError] = useState<string | null>(null);
 
   const isCoord = currentUser.role === 'COORDENADOR';
   const isVerif = currentUser.role === 'VERIFICADORA';
@@ -185,6 +194,26 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
       await updateStatus(id, 'APROVADO');
     }
     setSelectedIds(new Set());
+  };
+
+  const saveEditIndicado = async () => {
+    if (!editingIndicado) return;
+    setEditIndSaving(true);
+    setEditIndError(null);
+    try {
+      const updated = await updateEventoIndicado(eventoId, editingIndicado.id, {
+        nome: editIndNome.trim() || undefined,
+        telefone: editIndTelefone.trim() || undefined,
+        liderId: editIndLiderId || undefined
+      });
+      setIndicados((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      setEditingIndicado(null);
+    } catch (err) {
+      if (isUnauthorized(err)) { onLogout(); return; }
+      setEditIndError(getApiErrorMessage(err));
+    } finally {
+      setEditIndSaving(false);
+    }
   };
 
   // ── Check-in ──────────────────────────────────────────────────────────────
@@ -852,6 +881,23 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                     </div>
                   </div>
 
+                  {canValidate && (
+                    <div className="flex justify-end mt-1">
+                      <button
+                        onClick={() => {
+                          setEditingIndicado(ind);
+                          setEditIndNome(ind.nome);
+                          setEditIndTelefone(ind.telefone);
+                          setEditIndLiderId(ind.liderId);
+                          setEditIndError(null);
+                        }}
+                        className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 active:scale-95 transition-transform"
+                      >
+                        <i className="fa-solid fa-pen-to-square mr-1"></i> Editar
+                      </button>
+                    </div>
+                  )}
+
                   {ind.status === 'INDICADO' && canValidate && (
                     <div className="flex gap-2 mt-2">
                       <button
@@ -1129,6 +1175,78 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
               </div>
             );
           })()}
+        </div>
+      )}
+      {/* ── MODAL EDITAR INDICADO ── */}
+      {editingIndicado && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-4">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-black text-sm uppercase tracking-widest">Editar Indicado</h3>
+              <button
+                onClick={() => setEditingIndicado(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block mb-1">Nome</label>
+                <input
+                  type="text"
+                  value={editIndNome}
+                  onChange={(e) => setEditIndNome(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block mb-1">Telefone / WhatsApp</label>
+                <input
+                  type="tel"
+                  value={editIndTelefone}
+                  onChange={(e) => setEditIndTelefone(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {isCoord && (
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block mb-1">Liderança</label>
+                  <select
+                    value={editIndLiderId}
+                    onChange={(e) => setEditIndLiderId(e.target.value)}
+                    className="w-full bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione...</option>
+                    {lideres.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name ?? l.email}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {editIndError && (
+              <p className="text-xs text-red-600 font-bold">{editIndError}</p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditingIndicado(null)}
+                className="flex-1 min-h-[44px] text-xs font-black uppercase tracking-widest bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-2xl active:scale-95 transition-transform"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveEditIndicado}
+                disabled={editIndSaving}
+                className="flex-1 min-h-[44px] text-xs font-black uppercase tracking-widest bg-blue-600 text-white rounded-2xl active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {editIndSaving ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -167,6 +167,31 @@ export async function publicRoutes(app: FastifyInstance) {
       return reply.code(409).send({ error: 'Indicador nao encontrado.' });
     }
 
+    const [nameDup, phoneDup, emailDup] = await Promise.all([
+      prisma.indication.findFirst({
+        where: { name: { equals: name, mode: 'insensitive' } },
+        select: { id: true }
+      }),
+      prisma.indication.findFirst({
+        where: { phone: phoneResult.normalized },
+        select: { id: true }
+      }),
+      prisma.indication.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' } },
+        select: { id: true }
+      })
+    ]);
+
+    if (nameDup) {
+      return reply.code(409).send({ error: 'Esse nome ja esta cadastrado. Em caso de erro, contate o responsavel pelo seu link.' });
+    }
+    if (phoneDup) {
+      return reply.code(409).send({ error: 'Esse numero de WhatsApp ja esta cadastrado.' });
+    }
+    if (emailDup) {
+      return reply.code(409).send({ error: 'Esse e-mail ja esta cadastrado.' });
+    }
+
     let church = await prisma.church.findFirst({
       where: { name: { equals: churchName, mode: 'insensitive' } }
     });

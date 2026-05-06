@@ -224,6 +224,26 @@ export async function indicationRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: normalizedPhone.error });
     }
 
+    const normalizedName = body.data.name.trim();
+    const emailInput = body.data.email?.toLowerCase().trim() || undefined;
+
+    const [nameDup, phoneDup, emailDup] = await Promise.all([
+      prisma.indication.findFirst({
+        where: { name: { equals: normalizedName, mode: 'insensitive' } },
+        select: { id: true }
+      }),
+      normalizedPhone && !('error' in normalizedPhone)
+        ? prisma.indication.findFirst({ where: { phone: normalizedPhone.normalized }, select: { id: true } })
+        : Promise.resolve(null),
+      emailInput
+        ? prisma.indication.findFirst({ where: { email: { equals: emailInput, mode: 'insensitive' } }, select: { id: true } })
+        : Promise.resolve(null)
+    ]);
+
+    if (nameDup) return reply.code(409).send({ error: 'Apoiador com esse nome ja existe.' });
+    if (phoneDup) return reply.code(409).send({ error: 'Esse WhatsApp ja esta cadastrado.' });
+    if (emailDup) return reply.code(409).send({ error: 'Esse e-mail ja esta cadastrado.' });
+
     const indication = await prisma.indication.create({
       data: {
         name: body.data.name.trim(),

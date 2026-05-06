@@ -32,6 +32,12 @@ const updateStatusSchema = z.object({
   status: z.enum(['APROVADO', 'RECUSADO', 'INDICADO', 'CONFIRMADO', 'PRESENTE'])
 });
 
+const updateIndicadoSchema = z.object({
+  nome: z.string().trim().min(2, 'Nome muito curto.').optional(),
+  telefone: z.string().trim().min(8, 'Telefone muito curto.').optional(),
+  liderId: z.string().trim().min(1).optional()
+});
+
 const checkinSchema = z.object({
   telefone: z.string().min(6).optional(),
   nome: z.string().min(2).optional(),
@@ -315,6 +321,55 @@ export async function eventoRoutes(app: FastifyInstance) {
       });
 
       return { indicado: serializeIndicado(indicado) };
+    }
+  );
+
+  // ── UPDATE INDICADO (dados) ───────────────────────────────────────────────
+  app.patch(
+    '/eventos/:id/indicados/:indicadoId',
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const role = normalizeRole(request.user.role);
+      if (role !== 'COORDENADOR' && role !== 'VERIFICADORA') {
+        return reply.code(403).send({ error: 'Forbidden' });
+      }
+
+      const params = indicadoParamsSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: 'Parâmetros inválidos.' });
+
+      const body = updateIndicadoSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.code(400).send({ error: body.error.issues[0]?.message ?? 'Dados inválidos.' });
+      }
+
+      const existing = await prisma.eventoIndicado.findFirst({
+        where: { id: params.data.indicadoId, eventoId: params.data.id },
+        select: { id: true }
+      });
+      if (!existing) return reply.code(404).send({ error: 'Indicado não encontrado.' });
+
+      if (body.data.liderId !== undefined) {
+        const lider = await prisma.user.findFirst({ where: { id: body.data.liderId } });
+        if (!lider) return reply.code(400).send({ error: 'Liderança não encontrada.' });
+      }
+
+      try {
+        const updated = await prisma.eventoIndicado.update({
+          where: { id: params.data.indicadoId },
+          data: {
+            ...(body.data.nome !== undefined && { nome: body.data.nome }),
+            ...(body.data.telefone !== undefined && { telefone: body.data.telefone }),
+            ...(body.data.liderId !== undefined && { liderId: body.data.liderId })
+          },
+          select: indicadoSelect
+        });
+        return { indicado: serializeIndicado(updated) };
+      } catch (err: any) {
+        if (err?.code === 'P2002') {
+          return reply.code(409).send({ error: 'Telefone já cadastrado neste evento.' });
+        }
+        throw err;
+      }
     }
   );
 

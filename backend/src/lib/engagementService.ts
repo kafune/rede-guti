@@ -42,6 +42,20 @@ const fireRankChanged = (
 export type EngagementEventType = keyof typeof POINT_VALUES;
 
 // ---------------------------------------------------------------------------
+// ISO week helper — returns "YYYY-Www" for any date, e.g. "2026-W19"
+// Used to scope the weekly_goal_reached dedup key.
+// ---------------------------------------------------------------------------
+
+function isoWeekKey(date: Date): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7; // Sunday → 7
+  d.setUTCDate(d.getUTCDate() + 4 - day); // shift to nearest Thursday
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+// ---------------------------------------------------------------------------
 // Idempotency
 // ---------------------------------------------------------------------------
 //
@@ -203,9 +217,26 @@ export async function incrementLeaderIndication(
 
   fireAwarded(userId, eventType, points, metadata);
 
-  // Fire weekly_goal_reached only on the exact crossing
+  // Fire weekly_goal_reached only on the exact crossing, and at most once per
+  // ISO week. A 0-point ledger entry (eventType='weekly_goal_reached') acts as
+  // the dedup marker so a weekly counter reset cannot trigger a second dispatch.
   if (previousWeekly < WEEKLY_INDICATION_GOAL && previousWeekly + 1 >= WEEKLY_INDICATION_GOAL) {
-    fireWeeklyGoal(userId);
+    const weekKey = isoWeekKey(now);
+    const alreadyFired = await prisma.leaderPointsLedger.findFirst({
+      where: {
+        userId,
+        eventType: 'weekly_goal_reached',
+        metadata: { path: ['weekKey'], equals: weekKey },
+      },
+      select: { id: true },
+    });
+
+    if (!alreadyFired) {
+      await prisma.leaderPointsLedger.create({
+        data: { userId, eventType: 'weekly_goal_reached', points: 0, metadata: { weekKey } },
+      });
+      fireWeeklyGoal(userId);
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { SupportStatus, Supporter, User, UserRole } from '../types';
 import { canCreateRegistrations } from '../roleUtils';
+import LeaderImpactPanel from './LeaderImpactPanel';
 
 interface Props {
   supporters: Supporter[];
@@ -18,6 +19,10 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
   const indicatorId = currentUser?.id;
   const isRegionalViewer = currentUser.role === UserRole.LIDER_REGIONAL;
   const isVerifier = currentUser.role === UserRole.VERIFICADORA;
+  const showImpactPanel =
+    currentUser.role === UserRole.LIDER_REGIONAL ||
+    currentUser.role === UserRole.COORDENADOR ||
+    currentUser.role === UserRole.VERIFICADORA;
   const canShareRegistrationLink = canCreateRegistrations(currentUser.role);
   const networkLabel =
     currentUser.role === UserRole.COORDENADOR
@@ -164,6 +169,8 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
           </div>
         </div>
       </div>
+
+      {showImpactPanel && <LeaderImpactPanel />}
 
       {isRegionalViewer && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

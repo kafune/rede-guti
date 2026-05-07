@@ -1,4 +1,9 @@
 import { prisma } from '../db.js';
+import {
+  emitPointsAwarded,
+  emitTopRankChanged,
+  emitWeeklyGoalReached,
+} from './automationWebhookService.js';
 
 // ---------------------------------------------------------------------------
 // Point table — single source of truth for all event types
@@ -10,6 +15,29 @@ export const POINT_VALUES = {
   'event.indication.confirmed': 20,
   'event.indication.present':   50,
 } as const satisfies Record<string, number>;
+
+export const WEEKLY_INDICATION_GOAL = 5;
+
+// Fire-and-forget wrappers: webhooks must never break the engagement flow.
+const fireAwarded = (
+  userId: string,
+  eventType: string,
+  points: number,
+  metadata?: Record<string, unknown>
+) =>
+  void emitPointsAwarded({ userId, awardedEventType: eventType, points, metadata }).catch(
+    () => undefined
+  );
+
+const fireWeeklyGoal = (userId: string) =>
+  void emitWeeklyGoalReached({ userId, goal: WEEKLY_INDICATION_GOAL }).catch(() => undefined);
+
+const fireRankChanged = (
+  userId: string,
+  previousPosition: number | null,
+  newPosition: number
+) =>
+  void emitTopRankChanged({ userId, previousPosition, newPosition }).catch(() => undefined);
 
 export type EngagementEventType = keyof typeof POINT_VALUES;
 
@@ -114,6 +142,8 @@ export async function awardPoints(
       update: { score: { increment: points }, lastActivityAt: new Date() },
     }),
   ]);
+
+  fireAwarded(userId, eventType, points, metadata);
 }
 
 /**
@@ -133,6 +163,14 @@ export async function incrementLeaderIndication(
 
   const points = POINT_VALUES[eventType];
   const now = new Date();
+
+  // Snapshot weeklyIndications before mutation so we can detect the
+  // cross-the-threshold transition for the weekly_goal_reached webhook.
+  const before = await prisma.leaderStats.findUnique({
+    where: { userId },
+    select: { weeklyIndications: true },
+  });
+  const previousWeekly = before?.weeklyIndications ?? 0;
 
   await prisma.$transaction([
     prisma.leaderPointsLedger.create({
@@ -162,6 +200,13 @@ export async function incrementLeaderIndication(
       },
     }),
   ]);
+
+  fireAwarded(userId, eventType, points, metadata);
+
+  // Fire weekly_goal_reached only on the exact crossing
+  if (previousWeekly < WEEKLY_INDICATION_GOAL && previousWeekly + 1 >= WEEKLY_INDICATION_GOAL) {
+    fireWeeklyGoal(userId);
+  }
 }
 
 /**
@@ -195,6 +240,8 @@ export async function incrementLeaderConfirmed(
       update: { totalConfirmed: { increment: 1 }, score: { increment: points }, lastActivityAt: now },
     }),
   ]);
+
+  fireAwarded(userId, 'event.indication.confirmed', points, metadata);
 }
 
 /**
@@ -228,6 +275,8 @@ export async function incrementLeaderPresent(
       update: { totalPresent: { increment: 1 }, score: { increment: points }, lastActivityAt: now },
     }),
   ]);
+
+  fireAwarded(userId, 'event.indication.present', points, metadata);
 }
 
 /**
@@ -239,6 +288,13 @@ export async function incrementLeaderPresent(
  */
 export async function recalculateRanking(): Promise<number> {
   const users = await prisma.user.findMany({ select: { id: true } });
+
+  // Snapshot previous ranking positions for the top_rank_changed webhook.
+  const previousPositions = new Map<string, number | null>();
+  const beforeRows = await prisma.leaderStats.findMany({
+    select: { userId: true, rankingPosition: true },
+  });
+  for (const row of beforeRows) previousPositions.set(row.userId, row.rankingPosition);
 
   const now = new Date();
   const weekAgo  = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000);
@@ -295,6 +351,21 @@ export async function recalculateRanking(): Promise<number> {
       })
     )
   );
+
+  // Emit leader.top_rank_changed for users who entered top 10 or moved up
+  // within top 10. Avoids spamming webhooks for tail-rank reshuffles.
+  const TOP_THRESHOLD = 10;
+  for (let idx = 0; idx < sorted.length; idx++) {
+    const newPos = idx + 1;
+    if (newPos > TOP_THRESHOLD) break;
+    const userId = sorted[idx].userId;
+    const prevPos = previousPositions.get(userId) ?? null;
+    const movedUp =
+      prevPos === null ||
+      prevPos > TOP_THRESHOLD ||
+      newPos < prevPos;
+    if (movedUp) fireRankChanged(userId, prevPos, newPos);
+  }
 
   return results.length;
 }

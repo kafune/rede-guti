@@ -33,11 +33,57 @@ model User {
   indicatedUsers     User[]       @relation("UserIndications")
   createdIndications Indication[] @relation("CreatedBy")
   indicatedSupporters Indication[] @relation("IndicatedByUser")
-  eventoIndicacoes EventoIndicado[] @relation("LiderEventoIndicados")
+  eventoIndicacoes   EventoIndicado[]   @relation("LiderEventoIndicados")
+  leaderStats        LeaderStats?
+  pointsLedger       LeaderPointsLedger[]
 
   @@index([role])
   @@index([indicatedByUserId])
   @@map("users")
+}
+
+model LeaderStats {
+  id                 String    @id @default(cuid())
+  userId             String    @unique @map("user_id")
+  totalIndications   Int       @default(0) @map("total_indications")
+  weeklyIndications  Int       @default(0) @map("weekly_indications")
+  monthlyIndications Int       @default(0) @map("monthly_indications")
+  totalConfirmed     Int       @default(0) @map("total_confirmed")
+  totalPresent       Int       @default(0) @map("total_present")
+  score              Float     @default(0) @map("score")
+  rankingPosition    Int?      @map("ranking_position")
+  lastActivityAt     DateTime? @map("last_activity_at")
+  currentStreak      Int       @default(0) @map("current_streak")
+  // tenantId reserved for future multi-tenant support — keep nullable
+  tenantId           String?   @map("tenant_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([score])
+  @@index([rankingPosition])
+  @@index([tenantId])
+  @@map("leader_stats")
+}
+
+model LeaderPointsLedger {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  eventType String   @map("event_type")
+  points    Int
+  metadata  Json?
+  // tenantId reserved for future multi-tenant support — keep nullable
+  tenantId  String?  @map("tenant_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([tenantId])
+  @@map("leader_points_ledger")
 }
 
 model AppConfig {

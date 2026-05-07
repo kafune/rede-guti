@@ -103,6 +103,27 @@ export const visibleIndicationsWhere = (actor: AuthenticatedUser): Prisma.Indica
   };
 };
 
+// --- Engajamento de Lideranças ---
+
+/** COORDENADOR vê ranking de todos; demais papéis veem apenas a si mesmos. */
+export const canViewFullRanking = (role: Role | string) =>
+  normalizeRole(role) === 'COORDENADOR';
+
+/** Somente COORDENADOR pode disparar recálculo de stats. */
+export const canRecalculateStats = (role: Role | string) =>
+  normalizeRole(role) === 'COORDENADOR';
+
+/**
+ * Retorna o filtro Prisma de LeaderStats visível para o ator.
+ * COORDENADOR → todos; outros → somente o próprio registro.
+ */
+export const visibleLeaderStatsWhere = (
+  actor: AuthenticatedUser
+): { userId?: string } => {
+  if (normalizeRole(actor.role) === 'COORDENADOR') return {};
+  return { userId: actor.sub };
+};
+
 export const roleAllowsIndicator = (
   role: Role | string,
   indicatorRole: Role | string | null | undefined

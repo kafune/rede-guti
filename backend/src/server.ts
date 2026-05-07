@@ -14,6 +14,7 @@ import { publicRoutes } from './routes/public.js';
 import { settingsRoutes } from './routes/settings.js';
 import { eventoRoutes } from './routes/eventos.js';
 import { engajamentoRoutes } from './routes/engajamento.js';
+import { engagementRoutes } from './routes/engagement.js';
 
 const app = Fastify({
   logger: true
@@ -35,6 +36,7 @@ await app.register(publicRoutes);
 await app.register(settingsRoutes);
 await app.register(eventoRoutes);
 await app.register(engajamentoRoutes);
+await app.register(engagementRoutes);
 
 const start = async () => {
   try {

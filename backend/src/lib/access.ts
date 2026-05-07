@@ -109,6 +109,18 @@ export const visibleIndicationsWhere = (actor: AuthenticatedUser): Prisma.Indica
 export const canViewFullRanking = (role: Role | string) =>
   normalizeRole(role) === 'COORDENADOR';
 
+/** COORDENADOR e VERIFICADORA veem o leaderboard geral. */
+export const canViewLeaderboard = (role: Role | string) => {
+  const r = normalizeRole(role);
+  return r === 'COORDENADOR' || r === 'VERIFICADORA';
+};
+
+/** COORDENADOR e VERIFICADORA podem consultar stats de qualquer usuário. */
+export const canViewUserEngagement = (role: Role | string) => {
+  const r = normalizeRole(role);
+  return r === 'COORDENADOR' || r === 'VERIFICADORA';
+};
+
 /** Somente COORDENADOR pode disparar recálculo de stats. */
 export const canRecalculateStats = (role: Role | string) =>
   normalizeRole(role) === 'COORDENADOR';

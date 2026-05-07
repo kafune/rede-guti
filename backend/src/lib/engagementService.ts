@@ -326,3 +326,42 @@ export async function getLeaderboard(limit = 50) {
     },
   });
 }
+
+/**
+ * Returns the top-N leaders ranked by points earned in the last 7 days,
+ * computed live from LeaderPointsLedger (independent of LeaderStats).
+ * Defaults to top 10.
+ */
+export async function getWeeklyLeaderboard(limit = 10) {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const grouped = await prisma.leaderPointsLedger.groupBy({
+    by: ['userId'],
+    where: { createdAt: { gte: weekAgo } },
+    _sum: { points: true },
+    orderBy: { _sum: { points: 'desc' } },
+    take: limit,
+  });
+
+  if (grouped.length === 0) return [];
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: grouped.map((g) => g.userId) } },
+    select: { id: true, name: true, email: true, role: true },
+  });
+
+  const userById = new Map(users.map((u) => [u.id, u]));
+
+  return grouped
+    .map((g, idx) => {
+      const user = userById.get(g.userId);
+      if (!user) return null;
+      return {
+        userId: g.userId,
+        weeklyPoints: g._sum.points ?? 0,
+        rankingPosition: idx + 1,
+        user,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+}

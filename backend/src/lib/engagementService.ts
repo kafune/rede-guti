@@ -14,6 +14,48 @@ export const POINT_VALUES = {
 export type EngagementEventType = keyof typeof POINT_VALUES;
 
 // ---------------------------------------------------------------------------
+// Idempotency
+// ---------------------------------------------------------------------------
+//
+// Each event type has a "scope field" inside its metadata. If that field is
+// present, we treat (eventType, scopeField, scopeValue) as a unique award:
+// calling the same increment helper twice with the same scope value is a
+// no-op the second time.
+//
+// This protects against double-pointing when, for example, a coordinator
+// toggles an EventoIndicado status CONFIRMADO → INDICADO → CONFIRMADO.
+
+const SCOPE_FIELD_BY_EVENT: Record<EngagementEventType, string> = {
+  'supporter.created':          'indicationId',
+  'event.indication.created':   'eventoIndicadoId',
+  'event.indication.confirmed': 'eventoIndicadoId',
+  'event.indication.present':   'eventoIndicadoId',
+};
+
+async function isDuplicateAward(
+  userId: string,
+  eventType: EngagementEventType,
+  metadata?: Record<string, unknown>
+): Promise<boolean> {
+  if (!metadata) return false;
+
+  const scopeField = SCOPE_FIELD_BY_EVENT[eventType];
+  const scopeValue = metadata[scopeField];
+  if (typeof scopeValue !== 'string' || !scopeValue) return false;
+
+  const existing = await prisma.leaderPointsLedger.findFirst({
+    where: {
+      userId,
+      eventType,
+      metadata: { path: [scopeField], equals: scopeValue },
+    },
+    select: { id: true },
+  });
+
+  return existing !== null;
+}
+
+// ---------------------------------------------------------------------------
 // Internal helper: ensure LeaderStats row exists, then increment score
 // ---------------------------------------------------------------------------
 
@@ -87,6 +129,8 @@ export async function incrementLeaderIndication(
   eventType: EngagementEventType = 'supporter.created',
   metadata?: Record<string, unknown>
 ): Promise<void> {
+  if (await isDuplicateAward(userId, eventType, metadata)) return;
+
   const points = POINT_VALUES[eventType];
   const now = new Date();
 
@@ -131,6 +175,8 @@ export async function incrementLeaderConfirmed(
   userId: string,
   metadata?: Record<string, unknown>
 ): Promise<void> {
+  if (await isDuplicateAward(userId, 'event.indication.confirmed', metadata)) return;
+
   const points = POINT_VALUES['event.indication.confirmed'];
   const now = new Date();
 
@@ -162,6 +208,8 @@ export async function incrementLeaderPresent(
   userId: string,
   metadata?: Record<string, unknown>
 ): Promise<void> {
+  if (await isDuplicateAward(userId, 'event.indication.present', metadata)) return;
+
   const points = POINT_VALUES['event.indication.present'];
   const now = new Date();
 

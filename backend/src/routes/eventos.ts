@@ -329,11 +329,17 @@ export async function eventoRoutes(app: FastifyInstance) {
       const prev = existing.status;
       const next = body.data.status;
       if (next === 'CONFIRMADO' && prev !== 'CONFIRMADO' && prev !== 'PRESENTE') {
-        incrementLeaderConfirmed(existing.liderId, { eventoIndicadoId: existing.id })
-          .catch((err) => console.error('[engagement] event.indication.confirmed failed:', err));
+        incrementLeaderConfirmed(existing.liderId, {
+          eventoId: params.data.id,
+          eventoIndicadoId: existing.id,
+          liderId: existing.liderId,
+        }).catch((err) => console.error('[engagement] event.indication.confirmed failed:', err));
       } else if (next === 'PRESENTE' && prev !== 'PRESENTE') {
-        incrementLeaderPresent(existing.liderId, { eventoIndicadoId: existing.id })
-          .catch((err) => console.error('[engagement] event.indication.present failed:', err));
+        incrementLeaderPresent(existing.liderId, {
+          eventoId: params.data.id,
+          eventoIndicadoId: existing.id,
+          liderId: existing.liderId,
+        }).catch((err) => console.error('[engagement] event.indication.present failed:', err));
       }
 
       return { indicado: serializeIndicado(indicado) };
@@ -429,8 +435,12 @@ export async function eventoRoutes(app: FastifyInstance) {
     });
 
     if (existing.status !== 'PRESENTE') {
-      incrementLeaderPresent(existing.liderId, { eventoIndicadoId: existing.id, via: 'checkin' })
-        .catch((err) => console.error('[engagement] event.indication.present (checkin) failed:', err));
+      incrementLeaderPresent(existing.liderId, {
+        eventoId: params.data.id,
+        eventoIndicadoId: existing.id,
+        liderId: existing.liderId,
+        via: 'checkin',
+      }).catch((err) => console.error('[engagement] event.indication.present (checkin) failed:', err));
     }
 
     return { indicado: serializeIndicado(indicado) };
@@ -565,8 +575,12 @@ export async function eventoRoutes(app: FastifyInstance) {
     });
 
     // Status was APROVADO → CONFIRMADO: first-time confirmation, safe to award
-    incrementLeaderConfirmed(indicado.liderId, { eventoIndicadoId: indicado.id, via: 'public' })
-      .catch((err) => console.error('[engagement] event.indication.confirmed (public) failed:', err));
+    incrementLeaderConfirmed(indicado.liderId, {
+      eventoId: params.data.id,
+      eventoIndicadoId: indicado.id,
+      liderId: indicado.liderId,
+      via: 'public',
+    }).catch((err) => console.error('[engagement] event.indication.confirmed (public) failed:', err));
 
     return { indicado: serializeIndicado(updated) };
   });
@@ -626,8 +640,9 @@ export async function eventoRoutes(app: FastifyInstance) {
     });
 
     incrementLeaderIndication(lider.id, 'event.indication.created', {
-      eventoIndicadoId: indicado.id,
       eventoId: evento.id,
+      eventoIndicadoId: indicado.id,
+      liderId: lider.id,
     }).catch((err) => console.error('[engagement] event.indication.created failed:', err));
 
     return reply.code(201).send({ indicado: serializeIndicado(indicado) });

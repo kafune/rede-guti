@@ -1,0 +1,195 @@
+{
+  "name": "Engajamento - Resumo semanal para coordenador",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [1],
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "name": "Cron segunda 08h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.REDE_GUTI_API_URL}}/engagement/leaderboard/weekly?limit=10",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": false,
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "name": "GET leaderboard semanal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rede-guti-api-auth",
+          "name": "Rede Guti API Header Auth"
+        }
+      },
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json;\nconst rows = Array.isArray(raw) ? raw : (raw.data ?? raw.items ?? []);\n\nif (!Array.isArray(rows) || rows.length === 0) {\n  return [{\n    json: {\n      skip: true,\n      message: 'Resumo semanal da rede:\\nNenhuma indicação registrada nesta semana.',\n      total: 0,\n    }\n  }];\n}\n\nconst top = rows.slice(0, 10);\n\nconst lines = top.map((r, idx) => {\n  const nome = (r.user && r.user.name) || r.userName || 'Líder sem nome';\n  const qtd = r.weeklyIndications ?? r.weeklyPoints ?? 0;\n  return `${idx + 1}. ${nome} - ${qtd} indicações`;\n});\n\nconst total = top.reduce((acc, r) => acc + (r.weeklyIndications ?? r.weeklyPoints ?? 0), 0);\n\nconst message = `Resumo semanal da rede:\\n${lines.join('\\n')}\\nTotal da semana: ${total} indicações.`;\n\nconst phone = ($env.COORDENADOR_PHONE || '').toString().replace(/\\D/g, '');\nif (!phone) {\n  throw new Error('COORDENADOR_PHONE não configurado nas variáveis de ambiente.');\n}\n\nreturn [{\n  json: {\n    skip: false,\n    phone,\n    message,\n    total,\n    leadersCount: top.length,\n  }\n}];"
+      },
+      "id": "3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+      "name": "Montar resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.WHATSAPP_API_URL}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{$json.phone}}\",\n  \"text\": {{JSON.stringify($json.message)}}\n}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f90",
+      "name": "Enviar WhatsApp coordenador",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whatsapp-api-auth",
+          "name": "WhatsApp API Header Auth"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const status = $input.item.json.statusCode ?? 0;\nconst ok = status >= 200 && status < 300;\nconsole.log('[resumo-semanal] dispatch status', status, 'ok=', ok);\nreturn [{ json: { ok, status, total: $('Montar resumo').item.json.total } }];"
+      },
+      "id": "5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9012",
+      "name": "Log sucesso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.item.json;\nconsole.error('[resumo-semanal] falha ao enviar WhatsApp', err.error || err.message || err);\nreturn [{ json: { ok: false, error: 'whatsapp_dispatch_failed' } }];"
+      },
+      "id": "6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f901234",
+      "name": "Log erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 380]
+    }
+  ],
+  "connections": {
+    "Cron segunda 08h": {
+      "main": [
+        [
+          {
+            "node": "GET leaderboard semanal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET leaderboard semanal": {
+      "main": [
+        [
+          {
+            "node": "Montar resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar resumo": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp coordenador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp coordenador": {
+      "main": [
+        [
+          {
+            "node": "Log sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "description": "Toda segunda às 08h, busca GET /engagement/leaderboard/weekly da Rede Guti API e envia resumo dos 10 líderes mais ativos via WhatsApp para o coordenador. Variáveis de ambiente: REDE_GUTI_API_URL, WHATSAPP_API_URL, COORDENADOR_PHONE. Credentials: 'Rede Guti API Header Auth' (token Bearer/apikey) e 'WhatsApp API Header Auth'."
+  },
+  "tags": []
+}

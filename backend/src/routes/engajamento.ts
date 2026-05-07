@@ -6,39 +6,43 @@ import {
   canViewFullRanking,
   visibleLeaderStatsWhere,
 } from '../lib/access.js';
-
-const POINT_VALUES: Record<string, number> = {
-  INDICATION_CREATED: 10,
-  INDICATION_CONFIRMED: 20,
-  EVENTO_PRESENTE: 30,
-};
+import {
+  getLeaderboard,
+  getLeaderStats,
+  recalculateRanking,
+} from '../lib/engagementService.js';
 
 const rankingQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  limit:  z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
 
 const ledgerQuerySchema = z.object({
   userId: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(500).default(100),
+  limit:  z.coerce.number().int().min(1).max(500).default(100),
   offset: z.coerce.number().int().min(0).default(0),
 });
 
 export async function engajamentoRoutes(app: FastifyInstance) {
   /**
    * GET /engajamento/ranking
-   * Lista líderes ordenados por score descendente.
-   * COORDENADOR vê todos; outros papéis veem apenas si mesmos.
+   * COORDENADOR → todos; demais papéis → apenas o próprio registro.
    */
-  app.get('/engajamento/ranking', async (req, reply) => {
-    await req.jwtVerify();
-    const actor = req.user as { sub: string; role: string };
+  app.get('/engajamento/ranking', { preHandler: app.authenticate }, async (req, reply) => {
     const query = rankingQuerySchema.safeParse(req.query);
     if (!query.success) return reply.badRequest(query.error.message);
 
+    const actor = req.user;
     const where = visibleLeaderStatsWhere(actor);
 
-    const [stats, total] = await Promise.all([
+    if (canViewFullRanking(actor.role) && query.data.offset === 0) {
+      // Fast path for coordinator first page: use the service helper
+      const items = await getLeaderboard(query.data.limit);
+      const total = await prisma.leaderStats.count({ where });
+      return { total, items };
+    }
+
+    const [items, total] = await Promise.all([
       prisma.leaderStats.findMany({
         where,
         include: { user: { select: { id: true, name: true, email: true, role: true } } },
@@ -49,45 +53,49 @@ export async function engajamentoRoutes(app: FastifyInstance) {
       prisma.leaderStats.count({ where }),
     ]);
 
-    return { total, items: stats };
+    return { total, items };
   });
 
   /**
    * GET /engajamento/me
-   * Stats do usuário autenticado. Cria registro com zeros se ainda não existir.
+   * Retorna (ou cria com zeros) o LeaderStats do usuário autenticado.
    */
-  app.get('/engajamento/me', async (req, reply) => {
-    await req.jwtVerify();
-    const actor = req.user as { sub: string; role: string };
+  app.get('/engajamento/me', { preHandler: app.authenticate }, async (req) => {
+    return getLeaderStats(req.user.sub);
+  });
 
-    const stats = await prisma.leaderStats.upsert({
-      where: { userId: actor.sub },
-      create: { userId: actor.sub },
-      update: {},
-      include: { user: { select: { id: true, name: true, email: true, role: true } } },
-    });
+  /**
+   * GET /engajamento/stats/:userId
+   * COORDENADOR pode consultar qualquer userId.
+   * Outros papéis só podem consultar o próprio id.
+   */
+  app.get('/engajamento/stats/:userId', { preHandler: app.authenticate }, async (req, reply) => {
+    const { userId } = req.params as { userId: string };
+    const actor = req.user;
 
-    return stats;
+    if (!canViewFullRanking(actor.role) && userId !== actor.sub) {
+      return reply.forbidden('Acesso negado.');
+    }
+
+    return getLeaderStats(userId);
   });
 
   /**
    * GET /engajamento/ledger
-   * Histórico de pontos.
-   * COORDENADOR pode consultar qualquer userId via query param.
-   * Outros papéis sempre recebem apenas o próprio ledger.
+   * Histórico de pontos paginado.
+   * COORDENADOR pode filtrar por ?userId=. Outros recebem só o próprio.
    */
-  app.get('/engajamento/ledger', async (req, reply) => {
-    await req.jwtVerify();
-    const actor = req.user as { sub: string; role: string };
+  app.get('/engajamento/ledger', { preHandler: app.authenticate }, async (req, reply) => {
     const query = ledgerQuerySchema.safeParse(req.query);
     if (!query.success) return reply.badRequest(query.error.message);
 
+    const actor = req.user;
     const targetUserId =
       canViewFullRanking(actor.role) && query.data.userId
         ? query.data.userId
         : actor.sub;
 
-    const [entries, total] = await Promise.all([
+    const [items, total] = await Promise.all([
       prisma.leaderPointsLedger.findMany({
         where: { userId: targetUserId },
         orderBy: { createdAt: 'desc' },
@@ -97,89 +105,20 @@ export async function engajamentoRoutes(app: FastifyInstance) {
       prisma.leaderPointsLedger.count({ where: { userId: targetUserId } }),
     ]);
 
-    return { total, items: entries };
+    return { total, items };
   });
 
   /**
    * POST /engajamento/recalculate
-   * Recalcula LeaderStats de todos os usuários a partir dos dados existentes.
+   * Recomputa LeaderStats de todos os usuários a partir dos dados-fonte.
    * Restrito a COORDENADOR.
-   * Emite um ponto por indicação criada, por confirmação e por presença em evento.
    */
-  app.post('/engajamento/recalculate', async (req, reply) => {
-    await req.jwtVerify();
-    const actor = req.user as { sub: string; role: string };
-
-    if (!canRecalculateStats(actor.role)) {
+  app.post('/engajamento/recalculate', { preHandler: app.authenticate }, async (req, reply) => {
+    if (!canRecalculateStats(req.user.role)) {
       return reply.forbidden('Apenas coordenadores podem recalcular o ranking.');
     }
 
-    const users = await prisma.user.findMany({ select: { id: true } });
-
-    const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    const results = await Promise.all(
-      users.map(async (u) => {
-        const [totalInd, weeklyInd, monthlyInd, totalConfirmed, totalPresent] =
-          await Promise.all([
-            prisma.indication.count({ where: { createdById: u.id } }),
-            prisma.indication.count({
-              where: { createdById: u.id, createdAt: { gte: weekAgo } },
-            }),
-            prisma.indication.count({
-              where: { createdById: u.id, createdAt: { gte: monthAgo } },
-            }),
-            prisma.eventoIndicado.count({
-              where: { liderId: u.id, status: 'CONFIRMADO' },
-            }),
-            prisma.eventoIndicado.count({
-              where: { liderId: u.id, status: 'PRESENTE' },
-            }),
-          ]);
-
-        const score =
-          totalInd * POINT_VALUES.INDICATION_CREATED +
-          totalConfirmed * POINT_VALUES.INDICATION_CONFIRMED +
-          totalPresent * POINT_VALUES.EVENTO_PRESENTE;
-
-        return prisma.leaderStats.upsert({
-          where: { userId: u.id },
-          create: {
-            userId: u.id,
-            totalIndications: totalInd,
-            weeklyIndications: weeklyInd,
-            monthlyIndications: monthlyInd,
-            totalConfirmed,
-            totalPresent,
-            score,
-            lastActivityAt: now,
-          },
-          update: {
-            totalIndications: totalInd,
-            weeklyIndications: weeklyInd,
-            monthlyIndications: monthlyInd,
-            totalConfirmed,
-            totalPresent,
-            score,
-            lastActivityAt: now,
-          },
-        });
-      })
-    );
-
-    // Atualiza ranking_position ordenando por score desc
-    const sorted = [...results].sort((a, b) => b.score - a.score);
-    await Promise.all(
-      sorted.map((s, idx) =>
-        prisma.leaderStats.update({
-          where: { id: s.id },
-          data: { rankingPosition: idx + 1 },
-        })
-      )
-    );
-
-    return { recalculated: results.length };
+    const recalculated = await recalculateRanking();
+    return { recalculated };
   });
 }

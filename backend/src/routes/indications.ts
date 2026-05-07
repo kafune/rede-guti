@@ -18,6 +18,7 @@ import {
   userSummarySelect
 } from '../lib/hierarchy.js';
 import { validateAndNormalizeBrazilWhatsapp } from '../lib/public-registration.js';
+import { incrementLeaderIndication } from '../lib/engagementService.js';
 
 const { IndicationStatus } = prismaClient;
 
@@ -257,6 +258,10 @@ export async function indicationRoutes(app: FastifyInstance) {
       },
       select: indicationQuerySelect
     });
+
+    // Non-critical: engagement points must not block the main response
+    incrementLeaderIndication(actor.id, 'supporter.created', { indicationId: indication.id })
+      .catch((err) => console.error('[engagement] supporter.created failed:', err));
 
     return reply.code(201).send({
       indication: serializeIndicationRecord(indication, {

@@ -194,6 +194,7 @@ export async function emitWeeklyGoalReached(args: {
 export async function emitInactive7Days(args: {
   userId: string;
   lastActivityAt: Date | null;
+  extraMetadata?: Record<string, unknown>;
 }): Promise<void> {
   if (!config.engagementWebhookUrl) return;
 
@@ -204,6 +205,7 @@ export async function emitInactive7Days(args: {
     eventType: 'leader.inactive_7_days',
     ...snap,
     metadata: {
+      ...(args.extraMetadata ?? {}),
       lastActivityAt: args.lastActivityAt ? args.lastActivityAt.toISOString() : null,
     },
   });

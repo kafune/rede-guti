@@ -1,5 +1,6 @@
 import { prisma } from '../db.js';
 import {
+  emitInactive7Days,
   emitPointsAwarded,
   emitTopRankChanged,
   emitWeeklyGoalReached,
@@ -427,6 +428,113 @@ export async function getLeaderboard(limit = 50) {
       user: { select: { id: true, name: true, email: true, role: true } },
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Inactive-leader scan
+// ---------------------------------------------------------------------------
+//
+// Daily job (cron / n8n / protected endpoint) that detects leaders with no
+// activity in the last INACTIVE_THRESHOLD_DAYS days, filters out those with
+// no WhatsApp link cadastrado (devzappLink), dedupes against a 7-day cooldown
+// window using the ledger, fires leader.inactive_7_days, and writes a
+// 0-point ledger marker so the same leader is not alerted again until the
+// cooldown elapses.
+
+const INACTIVE_THRESHOLD_DAYS = 7;
+const INACTIVE_ALERT_COOLDOWN_DAYS = 7;
+const INACTIVE_ALERT_EVENT = 'inactive_alert_sent';
+
+export type InactiveScanResult = {
+  scanned: number;
+  alerted: number;
+  skippedNoPhone: number;
+  skippedDeduped: number;
+  skippedRoles: number;
+};
+
+export async function scanAndAlertInactiveLeaders(): Promise<InactiveScanResult> {
+  const now = new Date();
+  const inactiveBefore = new Date(now.getTime() - INACTIVE_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
+  const cooldownStart  = new Date(now.getTime() - INACTIVE_ALERT_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+
+  const candidates = await prisma.leaderStats.findMany({
+    where: {
+      OR: [
+        { lastActivityAt: null },
+        { lastActivityAt: { lt: inactiveBefore } },
+      ],
+    },
+    select: {
+      userId: true,
+      lastActivityAt: true,
+      user: { select: { id: true, role: true, devzappLink: true } },
+    },
+  });
+
+  let alerted = 0;
+  let skippedNoPhone = 0;
+  let skippedDeduped = 0;
+  let skippedRoles = 0;
+
+  for (const c of candidates) {
+    // Only LIDER_REGIONAL is a target for inactivity alerts.
+    if (c.user.role !== 'LIDER_REGIONAL') {
+      skippedRoles++;
+      continue;
+    }
+
+    const link = c.user.devzappLink?.trim();
+    if (!link) {
+      skippedNoPhone++;
+      continue;
+    }
+
+    const recent = await prisma.leaderPointsLedger.findFirst({
+      where: {
+        userId: c.userId,
+        eventType: INACTIVE_ALERT_EVENT,
+        createdAt: { gte: cooldownStart },
+      },
+      select: { id: true },
+    });
+    if (recent) {
+      skippedDeduped++;
+      continue;
+    }
+
+    // Insert the dedup marker BEFORE firing the webhook so a crash mid-flight
+    // never causes a double alert. Worst case: webhook fails and the leader
+    // misses one cycle — preferable to spamming.
+    await prisma.leaderPointsLedger.create({
+      data: {
+        userId: c.userId,
+        eventType: INACTIVE_ALERT_EVENT,
+        points: 0,
+        metadata: {
+          alertedAt: now.toISOString(),
+          lastActivityAt: c.lastActivityAt ? c.lastActivityAt.toISOString() : null,
+          cooldownDays: INACTIVE_ALERT_COOLDOWN_DAYS,
+        },
+      },
+    });
+
+    await emitInactive7Days({
+      userId: c.userId,
+      lastActivityAt: c.lastActivityAt,
+      extraMetadata: { devzappLink: link },
+    }).catch(() => undefined);
+
+    alerted++;
+  }
+
+  return {
+    scanned: candidates.length,
+    alerted,
+    skippedNoPhone,
+    skippedDeduped,
+    skippedRoles,
+  };
 }
 
 /**

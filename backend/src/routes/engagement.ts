@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import {
+  canRecalculateStats,
   canViewLeaderboard,
   canViewUserEngagement,
 } from '../lib/access.js';
@@ -9,6 +10,7 @@ import {
   getLeaderboard,
   getLeaderStats,
   getWeeklyLeaderboard,
+  scanAndAlertInactiveLeaders,
 } from '../lib/engagementService.js';
 
 // ---------------------------------------------------------------------------
@@ -127,4 +129,20 @@ export async function engagementRoutes(app: FastifyInstance) {
     const stats = await getLeaderStats(params.data.id);
     return { stats: serializeStats(stats, { includeEmail: true }) };
   });
+
+  // ── POST /engagement/scan-inactive ─────────────────────────────────────
+  // Job idempotente para detectar lideranças sem atividade nos últimos 7 dias
+  // e disparar leader.inactive_7_days via webhook. Pode ser chamado por cron
+  // do sistema, n8n ou manualmente. Apenas COORDENADOR.
+  app.post(
+    '/engagement/scan-inactive',
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      if (!canRecalculateStats(request.user.role)) {
+        return reply.code(403).send({ error: 'Acesso negado.' });
+      }
+      const result = await scanAndAlertInactiveLeaders();
+      return reply.send(result);
+    }
+  );
 }

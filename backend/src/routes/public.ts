@@ -15,6 +15,7 @@ import {
   normalizeText,
   validateAndNormalizeBrazilWhatsapp
 } from '../lib/public-registration.js';
+import { incrementLeaderIndication } from '../lib/engagementService.js';
 
 const createPublicSchema = z
   .object({
@@ -226,6 +227,15 @@ export async function publicRoutes(app: FastifyInstance) {
     });
 
     const record = serializeIndicationRecord(indication);
+
+    // Engagement points: non-critical, fire-and-forget after success.
+    // Credit the leader recorded as indicatedByUserId (== createdById in this flow).
+    const leaderId = indication.indicatedByUserId ?? indication.createdById;
+    incrementLeaderIndication(leaderId, 'supporter.created', {
+      indicationId: indication.id,
+      churchId: indication.church.id,
+      municipalityId: indication.municipality.id,
+    }).catch((err) => console.error('[engagement] supporter.created (public) failed:', err));
 
     const sheetsUrl = process.env.SHEETS_WEBHOOK_URL;
     if (sheetsUrl) {

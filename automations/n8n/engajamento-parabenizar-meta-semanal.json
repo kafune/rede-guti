@@ -1,0 +1,210 @@
+{
+  "name": "Engajamento - Parabenizar liderança por meta semanal",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "engagement/leader-achievement",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "9b1d8c4a-1f2c-4f0a-9a1e-1a2b3c4d5e6f",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "engagement-leader-achievement"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "evt-type-check",
+              "leftValue": "={{$json.body.eventType}}",
+              "rightValue": "leader.weekly_goal_reached",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2c5a7b1d-3e4f-5a6b-7c8d-9e0f1a2b3c4d",
+      "name": "IF eventType correto",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body || {};\n\nconst userName = body.userName || 'Líder';\nconst weeklyIndications = body.weeklyIndications ?? 0;\nconst phone = (body.phone || '').toString().replace(/\\D/g, '');\n\nif (!phone) {\n  throw new Error('Campo phone ausente no payload — não há para quem enviar.');\n}\n\nconst message = `\\uD83D\\uDC4F Parabéns, ${userName}! Você alcançou ${weeklyIndications} indicações nesta semana. Seu trabalho está fortalecendo a rede. Continue nesse ritmo!`;\n\nreturn [{\n  json: {\n    phone,\n    message,\n    userId: body.userId,\n    userName,\n    weeklyIndications,\n    score: body.score,\n    rankingPosition: body.rankingPosition,\n  }\n}];"
+      },
+      "id": "3d6b8c2e-4f5a-6b7c-8d9e-0f1a2b3c4d5e",
+      "name": "Montar mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.WHATSAPP_API_URL}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{$json.phone}}\",\n  \"text\": \"{{$json.message}}\"\n}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "4e7c9d3f-5a6b-7c8d-9e0f-1a2b3c4d5e6f",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 220],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whatsapp-api-auth",
+          "name": "WhatsApp API Header Auth"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": true,\n  \"dispatched\": true,\n  \"userId\": \"{{$json.userId}}\",\n  \"weeklyIndications\": {{$json.weeklyIndications}}\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "5f8d0e4a-6b7c-8d9e-0f1a-2b3c4d5e6f7a",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 140]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": \"whatsapp_dispatch_failed\",\n  \"userId\": \"{{$json.userId}}\"\n}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "6a9e1f5b-7c8d-9e0f-1a2b-3c4d5e6f7a8b",
+      "name": "Responder erro WhatsApp",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 320]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": true,\n  \"ignored\": true,\n  \"reason\": \"eventType_not_handled\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "7b0f2a6c-8d9e-0f1a-2b3c-4d5e6f7a8b9c",
+      "name": "Ignorar evento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 420]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "IF eventType correto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF eventType correto": {
+      "main": [
+        [
+          {
+            "node": "Montar mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar mensagem": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder erro WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "description": "Recebe webhook leader.weekly_goal_reached do rede-guti e envia mensagem de parabéns via WhatsApp (Evolution API ou endpoint genérico). URL da API em $env.WHATSAPP_API_URL; token em credential httpHeaderAuth (ex: Authorization: Bearer ... ou apikey: ...)."
+  },
+  "tags": []
+}

@@ -2,6 +2,11 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { normalizeRole } from '../lib/access.js';
+import {
+  incrementLeaderIndication,
+  incrementLeaderConfirmed,
+  incrementLeaderPresent,
+} from '../lib/engagementService.js';
 
 const createEventoSchema = z.object({
   nome: z.string().trim().min(2),
@@ -310,7 +315,7 @@ export async function eventoRoutes(app: FastifyInstance) {
 
       const existing = await prisma.eventoIndicado.findFirst({
         where: { id: params.data.indicadoId, eventoId: params.data.id },
-        select: { id: true }
+        select: { id: true, status: true, liderId: true }
       });
       if (!existing) return reply.code(404).send({ error: 'Indicado não encontrado.' });
 
@@ -319,6 +324,23 @@ export async function eventoRoutes(app: FastifyInstance) {
         data: { status: body.data.status as any },
         select: indicadoSelect
       });
+
+      // Award points only on first transition to each terminal status
+      const prev = existing.status;
+      const next = body.data.status;
+      if (next === 'CONFIRMADO' && prev !== 'CONFIRMADO' && prev !== 'PRESENTE') {
+        incrementLeaderConfirmed(existing.liderId, {
+          eventoId: params.data.id,
+          eventoIndicadoId: existing.id,
+          liderId: existing.liderId,
+        }).catch((err) => console.error('[engagement] event.indication.confirmed failed:', err));
+      } else if (next === 'PRESENTE' && prev !== 'PRESENTE') {
+        incrementLeaderPresent(existing.liderId, {
+          eventoId: params.data.id,
+          eventoIndicadoId: existing.id,
+          liderId: existing.liderId,
+        }).catch((err) => console.error('[engagement] event.indication.present failed:', err));
+      }
 
       return { indicado: serializeIndicado(indicado) };
     }
@@ -401,7 +423,7 @@ export async function eventoRoutes(app: FastifyInstance) {
 
     const existing = await prisma.eventoIndicado.findFirst({
       where,
-      select: { id: true, status: true }
+      select: { id: true, status: true, liderId: true }
     });
 
     if (!existing) return reply.code(404).send({ error: 'Indicado não encontrado neste evento.' });
@@ -411,6 +433,15 @@ export async function eventoRoutes(app: FastifyInstance) {
       data: { status: 'PRESENTE' },
       select: indicadoSelect
     });
+
+    if (existing.status !== 'PRESENTE') {
+      incrementLeaderPresent(existing.liderId, {
+        eventoId: params.data.id,
+        eventoIndicadoId: existing.id,
+        liderId: existing.liderId,
+        via: 'checkin',
+      }).catch((err) => console.error('[engagement] event.indication.present (checkin) failed:', err));
+    }
 
     return { indicado: serializeIndicado(indicado) };
   });
@@ -520,7 +551,7 @@ export async function eventoRoutes(app: FastifyInstance) {
 
     const indicado = await prisma.eventoIndicado.findFirst({
       where: { id: params.data.indicadoId, eventoId: params.data.id },
-      select: { id: true, status: true, evento: { select: { encerrado: true } } }
+      select: { id: true, status: true, liderId: true, evento: { select: { encerrado: true } } }
     });
 
     if (!indicado) return reply.code(404).send({ error: 'Convite não encontrado.' });
@@ -542,6 +573,14 @@ export async function eventoRoutes(app: FastifyInstance) {
       data: { status: 'CONFIRMADO' },
       select: indicadoSelect
     });
+
+    // Status was APROVADO → CONFIRMADO: first-time confirmation, safe to award
+    incrementLeaderConfirmed(indicado.liderId, {
+      eventoId: params.data.id,
+      eventoIndicadoId: indicado.id,
+      liderId: indicado.liderId,
+      via: 'public',
+    }).catch((err) => console.error('[engagement] event.indication.confirmed (public) failed:', err));
 
     return { indicado: serializeIndicado(updated) };
   });
@@ -599,6 +638,12 @@ export async function eventoRoutes(app: FastifyInstance) {
       },
       select: indicadoSelect
     });
+
+    incrementLeaderIndication(lider.id, 'event.indication.created', {
+      eventoId: evento.id,
+      eventoIndicadoId: indicado.id,
+      liderId: lider.id,
+    }).catch((err) => console.error('[engagement] event.indication.created failed:', err));
 
     return reply.code(201).send({ indicado: serializeIndicado(indicado) });
   });

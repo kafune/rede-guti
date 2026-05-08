@@ -119,6 +119,30 @@ export const fetchIndications = async () => {
   return data.indications;
 };
 
+export type ApiEngagementStats = {
+  userId: string;
+  user: {
+    id: string;
+    name: string | null;
+    role: UserRole;
+    email?: string;
+  };
+  score: number;
+  rankingPosition: number | null;
+  totalIndications: number;
+  weeklyIndications: number;
+  monthlyIndications: number;
+  totalConfirmed: number;
+  totalPresent: number;
+  currentStreak: number;
+  lastActivityAt: string | null;
+};
+
+export const fetchEngagementMe = async () => {
+  const data = await request<{ stats: ApiEngagementStats }>('/engagement/me');
+  return data.stats;
+};
+
 export const createIndication = async (payload: {
   name: string;
   phone?: string;

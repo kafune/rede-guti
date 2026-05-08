@@ -31,9 +31,10 @@
     "tsx": "^4.0.0"
   },
   "devDependencies": {
+    "@prisma/config": "^7.1.0",
     "@types/bcryptjs": "^2.4.2",
     "@types/node": "^22.0.0",
-    "@prisma/config": "^7.1.0",
+    "@types/pg": "^8.20.0",
     "prisma": "^7.3.0",
     "typescript": "^5.8.0"
   }

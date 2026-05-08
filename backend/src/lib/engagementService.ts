@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import {
   emitInactive7Days,
@@ -19,12 +20,14 @@ export const POINT_VALUES = {
 
 export const WEEKLY_INDICATION_GOAL = 5;
 
+type EngagementMetadata = Prisma.InputJsonObject;
+
 // Fire-and-forget wrappers: webhooks must never break the engagement flow.
 const fireAwarded = (
   userId: string,
   eventType: string,
   points: number,
-  metadata?: Record<string, unknown>
+  metadata?: EngagementMetadata
 ) =>
   void emitPointsAwarded({ userId, awardedEventType: eventType, points, metadata }).catch(
     () => undefined
@@ -78,7 +81,7 @@ const SCOPE_FIELD_BY_EVENT: Record<EngagementEventType, string> = {
 async function isDuplicateAward(
   userId: string,
   eventType: EngagementEventType,
-  metadata?: Record<string, unknown>
+  metadata?: EngagementMetadata
 ): Promise<boolean> {
   if (!metadata) return false;
 
@@ -140,7 +143,7 @@ export async function awardPoints(
   userId: string,
   eventType: string,
   points: number,
-  metadata?: Record<string, unknown>
+  metadata?: EngagementMetadata
 ): Promise<void> {
   await prisma.$transaction([
     prisma.leaderPointsLedger.create({
@@ -172,7 +175,7 @@ export async function awardPoints(
 export async function incrementLeaderIndication(
   userId: string,
   eventType: EngagementEventType = 'supporter.created',
-  metadata?: Record<string, unknown>
+  metadata?: EngagementMetadata
 ): Promise<void> {
   if (await isDuplicateAward(userId, eventType, metadata)) return;
 
@@ -250,7 +253,7 @@ export async function incrementLeaderIndication(
  */
 export async function incrementLeaderConfirmed(
   userId: string,
-  metadata?: Record<string, unknown>
+  metadata?: EngagementMetadata
 ): Promise<void> {
   if (await isDuplicateAward(userId, 'event.indication.confirmed', metadata)) return;
 
@@ -285,7 +288,7 @@ export async function incrementLeaderConfirmed(
  */
 export async function incrementLeaderPresent(
   userId: string,
-  metadata?: Record<string, unknown>
+  metadata?: EngagementMetadata
 ): Promise<void> {
   if (await isDuplicateAward(userId, 'event.indication.present', metadata)) return;
 

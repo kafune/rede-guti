@@ -90,6 +90,7 @@ const serializeEvento = (
   createdAt: evento.createdAt.toISOString(),
   totalIndicados: evento.indicados.length,
   totalAprovados: evento.indicados.filter((i) => i.status === 'APROVADO').length,
+  totalConfirmados: evento.indicados.filter((i) => i.status === 'CONFIRMADO').length,
   totalPresentes: evento.indicados.filter((i) => i.status === 'PRESENTE').length
 });
 

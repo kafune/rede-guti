@@ -74,6 +74,14 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
   const [selectedLiderId, setSelectedLiderId] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // Rastreamento de convites enviados (persiste por sessão via localStorage)
+  const [sentInvites, setSentInvites] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(`sentInvites_${eventoId}`);
+      return saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+    } catch { return new Set<string>(); }
+  });
+
   // Edição do evento
   const [editMode, setEditMode] = useState(false);
   const [editNome, setEditNome] = useState('');
@@ -265,6 +273,12 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
       `📍 Local: ${evento.local}\n\n` +
       `Para confirmar sua presença, acesse o link abaixo:\n${link}`;
     window.open(`https://wa.me/${phoneWithCode}?text=${encodeURIComponent(msg)}`, '_blank');
+    setSentInvites((prev) => {
+      const next = new Set(prev);
+      next.add(ind.id);
+      try { localStorage.setItem(`sentInvites_${eventoId}`, JSON.stringify([...next])); } catch {}
+      return next;
+    });
   };
 
   // ── Edição do evento ──────────────────────────────────────────────────────
@@ -642,7 +656,7 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
       {tab === 'resumo' && (
         <div className="space-y-4">
           {/* Stats cards */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {[
               {
                 label: 'Indicados',
@@ -661,6 +675,14 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                 valueColor: 'text-green-600'
               },
               {
+                label: 'Confirmados',
+                value: evento.totalConfirmados,
+                icon: 'fa-envelope-open-text',
+                bg: 'bg-purple-50 dark:bg-purple-900/20',
+                iconColor: 'text-purple-500',
+                valueColor: 'text-purple-600'
+              },
+              {
                 label: 'Presentes',
                 value: evento.totalPresentes,
                 icon: 'fa-circle-check',
@@ -676,6 +698,62 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
               </div>
             ))}
           </div>
+
+          {/* Lista convites: confirmados e aguardando */}
+          {(() => {
+            const confirmados = indicados.filter((i) => i.status === 'CONFIRMADO');
+            const aguardando = indicados.filter((i) => i.status === 'APROVADO');
+            if (confirmados.length === 0 && aguardando.length === 0) return null;
+            return (
+              <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-4 space-y-4">
+                <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">
+                  Acompanhamento de convites
+                </p>
+                {confirmados.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[9px] font-black uppercase text-purple-500 tracking-widest">
+                      <i className="fa-solid fa-circle-check mr-1"></i>Confirmados ({confirmados.length})
+                    </p>
+                    {confirmados.map((ind) => (
+                      <div key={ind.id} className="flex items-center gap-2 py-1.5 border-b dark:border-gray-700 last:border-0">
+                        <div className="w-7 h-7 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center font-black text-xs shrink-0">
+                          {ind.nome.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold truncate">{ind.nome}</p>
+                          {isCoord && <p className="text-[10px] opacity-50 font-semibold">{ind.liderNome}</p>}
+                        </div>
+                        <span className="text-[9px] bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400 px-2 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0">
+                          Confirmado
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {aguardando.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[9px] font-black uppercase text-yellow-600 tracking-widest">
+                      <i className="fa-solid fa-clock mr-1"></i>Ag. Confirmação ({aguardando.length})
+                    </p>
+                    {aguardando.map((ind) => (
+                      <div key={ind.id} className="flex items-center gap-2 py-1.5 border-b dark:border-gray-700 last:border-0">
+                        <div className="w-7 h-7 rounded-xl bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 flex items-center justify-center font-black text-xs shrink-0">
+                          {ind.nome.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold truncate">{ind.nome}</p>
+                          {isCoord && <p className="text-[10px] opacity-50 font-semibold">{ind.liderNome}</p>}
+                        </div>
+                        <span className="text-[9px] bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400 px-2 py-0.5 rounded-md font-black uppercase tracking-tighter shrink-0">
+                          Ag. confirmação
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Botão de exportação */}
           <button
@@ -965,18 +1043,33 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                     </p>
                   )}
                 </div>
-                <button
-                  onClick={() => openWhatsApp(ind)}
-                  className={`shrink-0 min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-[9px] font-black uppercase tracking-tight px-3 py-2 rounded-xl active:scale-95 transition-transform ${
-                    ind.status === 'CONFIRMADO'
-                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                      : 'bg-green-600 text-white'
-                  }`}
-                  title={ind.status === 'CONFIRMADO' ? 'Reenviar convite' : 'Enviar convite pelo WhatsApp'}
-                >
-                  <i className="fa-brands fa-whatsapp mr-1"></i>
-                  {ind.status === 'CONFIRMADO' ? 'Reenviar' : 'Convidar'}
-                </button>
+                {ind.status === 'CONFIRMADO' || sentInvites.has(ind.id) ? (
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    <span className={`text-[9px] font-black uppercase tracking-tight px-2 py-1 rounded-lg ${
+                      ind.status === 'CONFIRMADO'
+                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                        : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                    }`}>
+                      <i className={`fa-solid ${ind.status === 'CONFIRMADO' ? 'fa-circle-check' : 'fa-check'} mr-1`}></i>
+                      {ind.status === 'CONFIRMADO' ? 'Confirmado' : 'Enviado'}
+                    </span>
+                    <button
+                      onClick={() => openWhatsApp(ind)}
+                      className="text-[9px] font-black uppercase tracking-tight px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 active:scale-95 transition-transform inline-flex items-center gap-1"
+                      title="Reenviar convite pelo WhatsApp"
+                    >
+                      <i className="fa-brands fa-whatsapp"></i> Reenviar
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => openWhatsApp(ind)}
+                    className="shrink-0 min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-[9px] font-black uppercase tracking-tight px-3 py-2 rounded-xl bg-green-600 text-white active:scale-95 transition-transform"
+                    title="Enviar convite pelo WhatsApp"
+                  >
+                    <i className="fa-brands fa-whatsapp mr-1"></i> Convidar
+                  </button>
+                )}
               </div>
             ))
           )}

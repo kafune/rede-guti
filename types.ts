@@ -147,6 +147,7 @@ export interface Evento {
   createdAt: string;
   totalIndicados: number;
   totalAprovados: number;
+  totalConfirmados: number;
   totalPresentes: number;
 }
 

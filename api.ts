@@ -1,6 +1,8 @@
 import {
   AdminUser,
   AppSettings,
+  Atividade,
+  AtividadePublicLider,
   Church,
   Evento,
   EventoIndicado,
@@ -415,6 +417,71 @@ export const confirmarPublicEventoIndicado = async (eventoId: string, indicadoId
     { method: 'POST' }
   );
   return data.indicado;
+};
+
+// ── ATIVIDADES ──────────────────────────────────────────────────────────────
+
+export const fetchPublicLider = async (liderId: string) => {
+  const data = await request<{ lider: AtividadePublicLider }>(`/public/lideres/${liderId}`);
+  return data.lider;
+};
+
+export const fetchPublicAtividadesByLider = async (liderId: string) => {
+  const data = await request<{ atividades: Atividade[] }>(`/public/lideres/${liderId}/atividades`);
+  return data.atividades;
+};
+
+export const createPublicAtividade = async (payload: {
+  liderId: string;
+  titulo: string;
+  descricao?: string;
+  dataHora: string;
+  local?: string;
+  qtdEnvolvidos: number;
+}) => {
+  const data = await request<{ atividade: Atividade }>('/public/atividades', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return data.atividade;
+};
+
+export const fetchAtividades = async (params?: {
+  liderId?: string;
+  dataInicio?: string;
+  dataFim?: string;
+  q?: string;
+}) => {
+  const qs = new URLSearchParams();
+  if (params?.liderId) qs.set('liderId', params.liderId);
+  if (params?.dataInicio) qs.set('dataInicio', params.dataInicio);
+  if (params?.dataFim) qs.set('dataFim', params.dataFim);
+  if (params?.q) qs.set('q', params.q);
+  const query = qs.toString();
+  const data = await request<{ atividades: Atividade[] }>(
+    `/atividades${query ? `?${query}` : ''}`
+  );
+  return data.atividades;
+};
+
+export const fetchAtividade = async (id: string) => {
+  const data = await request<{ atividade: Atividade }>(`/atividades/${id}`);
+  return data.atividade;
+};
+
+export const updateAtividade = async (
+  id: string,
+  payload: { titulo?: string; descricao?: string | null; dataHora?: string; local?: string | null; qtdEnvolvidos?: number }
+) => {
+  const data = await request<{ atividade: Atividade }>(`/atividades/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+  return data.atividade;
+};
+
+export const deleteAtividade = async (id: string) => {
+  await request<void>(`/atividades/${id}`, { method: 'DELETE' });
 };
 
 export { getApiBase };

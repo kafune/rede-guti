@@ -9,6 +9,7 @@ import {
 } from '../../types';
 import {
   checkinEventoIndicado,
+  deleteEventoIndicado,
   fetchEvento,
   fetchEventoIndicados,
   fetchUsers,
@@ -221,6 +222,21 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
       setEditIndError(getApiErrorMessage(err));
     } finally {
       setEditIndSaving(false);
+    }
+  };
+
+  const removeIndicado = async (id: string) => {
+    if (!confirm('Remover este indicado do evento? Esta ação não pode ser desfeita.')) return;
+    setActionLoading(id);
+    try {
+      await deleteEventoIndicado(eventoId, id);
+      setIndicados((prev) => prev.filter((i) => i.id !== id));
+      setSelectedIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    } catch (err) {
+      if (isUnauthorized(err)) { onLogout(); return; }
+      alert(getApiErrorMessage(err, 'Erro ao remover indicado.'));
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -992,6 +1008,17 @@ const EventoDetail: React.FC<Props> = ({ eventoId, currentUser, onBack, onLogout
                         className="flex-1 min-h-[44px] text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-2 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
                       >
                         <i className="fa-solid fa-xmark mr-1"></i> Recusar
+                      </button>
+                    </div>
+                  )}
+                  {isCoord && (
+                    <div className="flex justify-end mt-2">
+                      <button
+                        onClick={() => removeIndicado(ind.id)}
+                        disabled={actionLoading === ind.id}
+                        className="min-h-[36px] text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 px-3 py-1.5 rounded-xl active:scale-95 transition-transform disabled:opacity-50"
+                      >
+                        <i className="fa-solid fa-trash mr-1"></i> Excluir
                       </button>
                     </div>
                   )}

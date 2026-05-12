@@ -396,6 +396,30 @@ export async function eventoRoutes(app: FastifyInstance) {
     }
   );
 
+  // ── DELETE INDICADO ───────────────────────────────────────────────────────
+  app.delete(
+    '/eventos/:id/indicados/:indicadoId',
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const role = normalizeRole(request.user.role);
+      if (role !== 'COORDENADOR') {
+        return reply.code(403).send({ error: 'Apenas coordenadores podem remover indicados.' });
+      }
+
+      const params = indicadoParamsSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: 'Parâmetros inválidos.' });
+
+      const existing = await prisma.eventoIndicado.findFirst({
+        where: { id: params.data.indicadoId, eventoId: params.data.id },
+        select: { id: true }
+      });
+      if (!existing) return reply.code(404).send({ error: 'Indicado não encontrado.' });
+
+      await prisma.eventoIndicado.delete({ where: { id: params.data.indicadoId } });
+      return reply.code(204).send();
+    }
+  );
+
   // ── CHECK-IN ──────────────────────────────────────────────────────────────
   app.post('/eventos/:id/checkin', { preHandler: app.authenticate }, async (request, reply) => {
     const role = normalizeRole(request.user.role);

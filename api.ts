@@ -320,6 +320,10 @@ export const deleteEvento = async (id: string) => {
   await request<void>(`/eventos/${id}`, { method: 'DELETE' });
 };
 
+export const deleteEventoIndicado = async (eventoId: string, indicadoId: string) => {
+  await request<void>(`/eventos/${eventoId}/indicados/${indicadoId}`, { method: 'DELETE' });
+};
+
 export const encerrarEvento = async (id: string) => {
   const data = await request<{ evento: Evento }>(`/eventos/${id}/encerrar`, { method: 'PATCH' });
   return data.evento;

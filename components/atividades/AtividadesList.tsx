@@ -49,6 +49,10 @@ const AtividadesList: React.FC<Props> = ({ currentUser, onLogout }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  // Relatório por liderança
+  const [relatorioLiderId, setRelatorioLiderId] = useState('');
+  const [relatorioSemana, setRelatorioSemana] = useState<'atual' | 'anterior'>('atual');
+
   const isCoord = currentUser.role === 'COORDENADOR';
   const isVerif = currentUser.role === 'VERIFICADORA';
   const isLider = currentUser.role === 'LIDER_REGIONAL';
@@ -211,6 +215,199 @@ const AtividadesList: React.FC<Props> = ({ currentUser, onLogout }) => {
     XLSX.writeFile(wb, `atividades_${periodo}_${dateStr}.xlsx`, { cellStyles: true });
   };
 
+  // ── Relatório por liderança ───────────────────────────────────────────────
+  const gerarRelatorioLider = () => {
+    if (!relatorioLiderId) return;
+    const lider = lideres.find((l) => l.id === relatorioLiderId);
+    if (!lider) return;
+
+    const now = new Date();
+    const inicio = startOfWeek(now);
+    if (relatorioSemana === 'anterior') inicio.setDate(inicio.getDate() - 7);
+    const fim = new Date(inicio);
+    fim.setDate(fim.getDate() + 7);
+
+    const periodoLabel = `${inicio.toLocaleDateString('pt-BR')} a ${new Date(fim.getTime() - 1).toLocaleDateString('pt-BR')}`;
+
+    const ats = atividades
+      .filter((a) => a.liderId === relatorioLiderId)
+      .filter((a) => {
+        const t = new Date(a.dataHora).getTime();
+        return t >= inicio.getTime() && t < fim.getTime();
+      })
+      .sort((a, b) => new Date(a.dataHora).getTime() - new Date(b.dataHora).getTime());
+
+    if (ats.length === 0) {
+      alert(`Nenhuma atividade encontrada para ${lider.name ?? lider.email} no período de ${periodoLabel}.`);
+      return;
+    }
+
+    const totalAtiv = ats.length;
+    const totalEnv = ats.reduce((s, a) => s + a.qtdEnvolvidos, 0);
+    const media = totalAtiv > 0 ? (totalEnv / totalAtiv).toFixed(1) : '0';
+    const maior = ats.reduce<Atividade | null>((max, a) => (!max || a.qtdEnvolvidos > max.qtdEnvolvidos ? a : max), null);
+
+    // Distribuição por dia da semana
+    const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const porDia: Record<string, { qtd: number; env: number }> = {};
+    for (const d of diasSemana) porDia[d] = { qtd: 0, env: 0 };
+    for (const a of ats) {
+      const dia = diasSemana[new Date(a.dataHora).getDay()];
+      porDia[dia].qtd++;
+      porDia[dia].env += a.qtdEnvolvidos;
+    }
+
+    const wb = XLSX.utils.book_new();
+    const enc = (r: number, c: number) => XLSX.utils.encode_cell({ r, c });
+
+    const S = {
+      title: {
+        font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' } },
+        fill: { patternType: 'solid' as const, fgColor: { rgb: '065F46' } },
+        alignment: { horizontal: 'center' as const, vertical: 'center' as const }
+      },
+      subtitle: {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { patternType: 'solid' as const, fgColor: { rgb: '10B981' } },
+        alignment: { horizontal: 'center' as const }
+      },
+      section: {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { patternType: 'solid' as const, fgColor: { rgb: '047857' } },
+        alignment: { horizontal: 'center' as const }
+      },
+      kpiLabel: {
+        font: { bold: true, sz: 10 },
+        fill: { patternType: 'solid' as const, fgColor: { rgb: 'D1FAE5' } },
+        alignment: { horizontal: 'center' as const }
+      },
+      kpiValue: {
+        font: { bold: true, sz: 20, color: { rgb: '065F46' } },
+        alignment: { horizontal: 'center' as const, vertical: 'center' as const }
+      },
+      colHeader: {
+        font: { bold: true },
+        fill: { patternType: 'solid' as const, fgColor: { rgb: 'EFF6FF' } },
+        alignment: { horizontal: 'center' as const }
+      },
+      cellCenter: { alignment: { horizontal: 'center' as const } }
+    };
+
+    const rowAlt = (i: number) => ({
+      fill: { patternType: 'solid' as const, fgColor: { rgb: i % 2 === 0 ? 'FFFFFF' : 'F8FAFC' } }
+    });
+
+    // ── Sheet 1: Relatório ────────────────────────────────────────────────
+    const data: (string | number)[][] = [
+      [`Relatório de Atividades — ${lider.name ?? lider.email}`, '', '', ''],
+      [`Período: ${periodoLabel}`, '', '', ''],
+      [''],
+      ['RESUMO DA SEMANA', '', '', ''],
+      ['Atividades', 'Pessoas alcançadas', 'Média por atividade', 'Maior alcance'],
+      [totalAtiv, totalEnv, media, maior ? maior.qtdEnvolvidos : 0],
+      [''],
+      ['DISTRIBUIÇÃO POR DIA DA SEMANA', '', '', ''],
+      ['Dia', 'Atividades', 'Pessoas', ''],
+      ...diasSemana.map((d) => [d, porDia[d].qtd, porDia[d].env, '']),
+      [''],
+      ['ATIVIDADES DETALHADAS', '', '', ''],
+      ['Data/Hora', 'Atividade', 'Local', 'Envolvidos']
+    ];
+
+    // Linhas das atividades
+    const startActRow = data.length;
+    for (const a of ats) {
+      data.push([
+        new Date(a.dataHora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        a.titulo,
+        a.local ?? '',
+        a.qtdEnvolvidos
+      ]);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{ wch: 20 }, { wch: 36 }, { wch: 24 }, { wch: 18 }];
+    ws['!rows'] = [{ hpt: 32 }, { hpt: 22 }];
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } },
+      { s: { r: 7, c: 0 }, e: { r: 7, c: 3 } },
+      { s: { r: 18, c: 0 }, e: { r: 18, c: 3 } } // "ATIVIDADES DETALHADAS"
+    ];
+
+    // Estilos
+    ['A1', 'B1', 'C1', 'D1'].forEach((a) => { if (ws[a]) ws[a].s = S.title; });
+    ['A2', 'B2', 'C2', 'D2'].forEach((a) => { if (ws[a]) ws[a].s = S.subtitle; });
+    ['A4', 'B4', 'C4', 'D4'].forEach((a) => { if (ws[a]) ws[a].s = S.section; });
+    ['A5', 'B5', 'C5', 'D5'].forEach((a) => { if (ws[a]) ws[a].s = S.kpiLabel; });
+    ['A6', 'B6', 'C6', 'D6'].forEach((a) => { if (ws[a]) ws[a].s = S.kpiValue; });
+    ['A8', 'B8', 'C8', 'D8'].forEach((a) => { if (ws[a]) ws[a].s = S.section; });
+    ['A9', 'B9', 'C9'].forEach((a) => { if (ws[a]) ws[a].s = S.colHeader; });
+
+    diasSemana.forEach((_, i) => {
+      const r = 9 + i;
+      const rs = rowAlt(i);
+      const a0 = ws[enc(r, 0)]; if (a0) a0.s = { ...rs, font: { bold: true } };
+      const a1 = ws[enc(r, 1)]; if (a1) a1.s = { ...rs, ...S.cellCenter };
+      const a2 = ws[enc(r, 2)]; if (a2) a2.s = { ...rs, ...S.cellCenter, font: { color: { rgb: '2563EB' }, bold: true } };
+    });
+
+    ['A19', 'B19', 'C19', 'D19'].forEach((a) => { if (ws[a]) ws[a].s = S.section; });
+    ['A20', 'B20', 'C20', 'D20'].forEach((a) => { if (ws[a]) ws[a].s = S.colHeader; });
+
+    ats.forEach((_, i) => {
+      const r = startActRow + i;
+      const rs = rowAlt(i);
+      const c0 = ws[enc(r, 0)]; if (c0) c0.s = { ...rs, ...S.cellCenter };
+      const c1 = ws[enc(r, 1)]; if (c1) c1.s = rs;
+      const c2 = ws[enc(r, 2)]; if (c2) c2.s = rs;
+      const c3 = ws[enc(r, 3)]; if (c3) c3.s = { ...rs, ...S.cellCenter, font: { bold: true, color: { rgb: '10B981' } } };
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+
+    // ── Sheet 2: Detalhes com descrição ─────────────────────────────────
+    const detData: (string | number)[][] = [
+      [`Detalhes — ${lider.name ?? lider.email}`, '', '', '', ''],
+      [`Período: ${periodoLabel}`, '', '', '', ''],
+      [''],
+      ['Data/Hora', 'Atividade', 'Local', 'Envolvidos', 'Descrição'],
+      ...ats.map((a) => [
+        new Date(a.dataHora).toLocaleString('pt-BR'),
+        a.titulo,
+        a.local ?? '',
+        a.qtdEnvolvidos,
+        a.descricao ?? ''
+      ])
+    ];
+    const ws2 = XLSX.utils.aoa_to_sheet(detData);
+    ws2['!cols'] = [{ wch: 20 }, { wch: 32 }, { wch: 22 }, { wch: 12 }, { wch: 50 }];
+    ws2['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }
+    ];
+    ['A1', 'B1', 'C1', 'D1', 'E1'].forEach((a) => { if (ws2[a]) ws2[a].s = S.title; });
+    ['A2', 'B2', 'C2', 'D2', 'E2'].forEach((a) => { if (ws2[a]) ws2[a].s = S.subtitle; });
+    ['A4', 'B4', 'C4', 'D4', 'E4'].forEach((a) => { if (ws2[a]) ws2[a].s = S.colHeader; });
+
+    ats.forEach((_, i) => {
+      const r = 4 + i;
+      const rs = rowAlt(i);
+      const c0 = ws2[enc(r, 0)]; if (c0) c0.s = { ...rs, ...S.cellCenter };
+      const c1 = ws2[enc(r, 1)]; if (c1) c1.s = { ...rs, font: { bold: true } };
+      const c2 = ws2[enc(r, 2)]; if (c2) c2.s = rs;
+      const c3 = ws2[enc(r, 3)]; if (c3) c3.s = { ...rs, ...S.cellCenter, font: { bold: true, color: { rgb: '10B981' } } };
+      const c4 = ws2[enc(r, 4)]; if (c4) c4.s = rs;
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws2, 'Detalhes');
+
+    const nomeArquivo = (lider.name ?? lider.email).replace(/[^\w\sÀ-ú-]/g, '').replace(/\s+/g, '_').slice(0, 30);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `relatorio_${nomeArquivo}_${dateStr}.xlsx`, { cellStyles: true });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 opacity-40">
@@ -335,6 +532,60 @@ const AtividadesList: React.FC<Props> = ({ currentUser, onLogout }) => {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Relatório por liderança (coord/verif) */}
+      {canSeeAll && (
+        <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <i className="fa-solid fa-file-lines text-emerald-500"></i>
+            <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">
+              Relatório por liderança
+            </p>
+          </div>
+          <p className="text-[10px] opacity-50 font-semibold -mt-1">
+            Selecione a liderança e o período para gerar um relatório detalhado em Excel.
+          </p>
+
+          <select
+            value={relatorioLiderId}
+            onChange={(e) => setRelatorioLiderId(e.target.value)}
+            className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+          >
+            <option value="">Selecionar liderança...</option>
+            {lideres.map((l) => (
+              <option key={l.id} value={l.id}>{l.name ?? l.email}</option>
+            ))}
+          </select>
+
+          <div className="flex gap-1 bg-gray-100 dark:bg-gray-900 rounded-2xl p-1">
+            {([
+              { id: 'atual', label: 'Esta semana' },
+              { id: 'anterior', label: 'Semana passada' }
+            ] as { id: 'atual' | 'anterior'; label: string }[]).map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setRelatorioSemana(opt.id)}
+                className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all ${
+                  relatorioSemana === opt.id
+                    ? 'bg-white dark:bg-gray-700 shadow text-emerald-600'
+                    : 'opacity-40'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={gerarRelatorioLider}
+            disabled={!relatorioLiderId}
+            className="w-full flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest bg-emerald-700 text-white py-3 rounded-2xl shadow-lg active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <i className="fa-solid fa-file-arrow-down text-sm"></i>
+            Emitir relatório
+          </button>
         </div>
       )}
 

@@ -51,7 +51,9 @@ jobs:
           script: |
             set -euo pipefail
             cd ${{ env.VPS_APP_DIR }}
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
             docker compose build api
             docker compose up -d
             docker compose exec -T api npm run prisma:deploy

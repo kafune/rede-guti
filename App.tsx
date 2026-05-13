@@ -369,6 +369,49 @@ const App: React.FC = () => {
     }
   };
 
+  const handleBulkImport = async (supporters: Supporter[]) => {
+    const uniqueChurchNames = [...new Set(supporters.map((s) => s.church).filter(Boolean))];
+    const uniqueMunicipalityNames = [...new Set(supporters.map((s) => s.region).filter(Boolean))];
+
+    const churchMap: Record<string, { id: string; name: string }> = {};
+    const municipalityMap: Record<string, { id: string; name: string }> = {};
+
+    for (const name of uniqueChurchNames) {
+      try { churchMap[name] = await ensureChurch(name); } catch { /* skip */ }
+    }
+    for (const name of uniqueMunicipalityNames) {
+      try { municipalityMap[name] = await ensureMunicipality(name); } catch { /* skip */ }
+    }
+
+    const results = await Promise.allSettled(
+      supporters.map(async (supporter) => {
+        const church = churchMap[supporter.church];
+        const municipality = municipalityMap[supporter.region];
+        if (!church || !municipality) throw new Error('Igreja ou município não encontrado');
+        const indication = await createIndication({
+          name: supporter.name.trim(),
+          phone: normalizePhone(supporter.whatsapp),
+          churchId: church.id,
+          municipalityId: municipality.id
+        });
+        return mapIndicationToSupporter(indication);
+      })
+    );
+
+    const created = results
+      .filter((r): r is PromiseFulfilledResult<Supporter> => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    if (created.length > 0) {
+      setApiSupporters((prev) => [...created, ...prev]);
+    }
+
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) {
+      alert(`${created.length} importados. ${failed} não puderam ser salvos (duplicados ou erro de conexão).`);
+    }
+  };
+
   const updateSupporter = (updated: Supporter) => {
     setApiSupporters((prev) =>
       prev.map((supporter) => (supporter.id === updated.id ? updated : supporter))
@@ -534,7 +577,7 @@ const App: React.FC = () => {
         {view === 'admin' && canOpenManagementPanel && (
           <AdminPanel
             supporters={allSupporters}
-            onImport={(data) => setApiSupporters((prev) => [...data, ...prev])}
+            onImport={handleBulkImport}
             currentUser={currentUser}
             churches={churches}
             municipalities={municipalities}

@@ -21,7 +21,7 @@ import SupporterForm from './SupporterForm';
 
 interface Props {
   supporters: Supporter[];
-  onImport: (data: Supporter[]) => void;
+  onImport: (data: Supporter[]) => Promise<void>;
   currentUser: User;
   churches: Church[];
   municipalities: Municipality[];
@@ -123,7 +123,7 @@ const AdminPanel: React.FC<Props> = ({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (readerEvent) => {
+    reader.onload = async (readerEvent) => {
       try {
         const text = readerEvent.target?.result as string;
         const lines = text.split('\n').filter((line) => line.trim());
@@ -146,7 +146,7 @@ const AdminPanel: React.FC<Props> = ({
           };
         });
 
-        onImport(importedSupporters);
+        await onImport(importedSupporters);
         alert(`${importedSupporters.length} apoiadores importados com sucesso!`);
       } catch {
         alert('Erro ao processar CSV. Verifique o formato.');

@@ -135,6 +135,23 @@ export interface Supporter {
 
 export type EventoIndicadoStatus = 'INDICADO' | 'APROVADO' | 'RECUSADO' | 'CONFIRMADO' | 'PRESENTE';
 
+export interface Atividade {
+  id: string;
+  liderId: string;
+  liderNome: string;
+  titulo: string;
+  descricao?: string | null;
+  dataHora: string;
+  local?: string | null;
+  qtdEnvolvidos: number;
+  createdAt: string;
+}
+
+export interface AtividadePublicLider {
+  id: string;
+  nome: string;
+}
+
 export interface Evento {
   id: string;
   nome: string;

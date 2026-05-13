@@ -13,6 +13,7 @@ import { healthRoutes } from './routes/health.js';
 import { publicRoutes } from './routes/public.js';
 import { settingsRoutes } from './routes/settings.js';
 import { eventoRoutes } from './routes/eventos.js';
+import { atividadeRoutes } from './routes/atividades.js';
 import { engajamentoRoutes } from './routes/engajamento.js';
 import { engagementRoutes } from './routes/engagement.js';
 
@@ -35,6 +36,7 @@ await app.register(indicationRoutes);
 await app.register(publicRoutes);
 await app.register(settingsRoutes);
 await app.register(eventoRoutes);
+await app.register(atividadeRoutes);
 await app.register(engajamentoRoutes);
 await app.register(engagementRoutes);
 

@@ -34,6 +34,7 @@ model User {
   createdIndications Indication[] @relation("CreatedBy")
   indicatedSupporters Indication[] @relation("IndicatedByUser")
   eventoIndicacoes   EventoIndicado[]   @relation("LiderEventoIndicados")
+  atividades         Atividade[]        @relation("LiderAtividades")
   leaderStats        LeaderStats?
   pointsLedger       LeaderPointsLedger[]
 
@@ -153,6 +154,22 @@ model EventoIndicado {
   @@index([eventoId])
   @@index([liderId])
   @@map("evento_indicados")
+}
+
+model Atividade {
+  id            String   @id @default(cuid())
+  liderId       String   @map("lider_id")
+  titulo        String
+  descricao     String?
+  dataHora      DateTime @map("data_hora")
+  local         String?
+  qtdEnvolvidos Int      @default(0) @map("qtd_envolvidos")
+  createdAt     DateTime @default(now()) @map("created_at")
+  lider         User     @relation("LiderAtividades", fields: [liderId], references: [id])
+
+  @@index([liderId])
+  @@index([dataHora])
+  @@map("atividades")
 }
 
 model Indication {

@@ -39,6 +39,8 @@ import EventoForm from './components/eventos/EventoForm';
 import EventoDetail from './components/eventos/EventoDetail';
 import PublicEventoIndicacao from './components/PublicEventoIndicacao';
 import PublicEventoConfirmacao from './components/PublicEventoConfirmacao';
+import PublicAtividadeCadastro from './components/PublicAtividadeCadastro';
+import AtividadesList from './components/atividades/AtividadesList';
 import {
   canAccessManagementPanel,
   canCreateRegistrations,
@@ -79,7 +81,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState<
     'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' |
-    'eventos' | 'evento-novo' | 'evento-detalhe'
+    'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades'
   >('dashboard');
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
   const [selectedEventoId, setSelectedEventoId] = useState<string | null>(null);
@@ -89,6 +91,9 @@ const App: React.FC = () => {
 
   const isPublicEventoConfirmacao = (hash: string) =>
     hash.startsWith('#/eventos/') && hash.includes('/confirmacao');
+
+  const isPublicAtividadeCadastro = (hash: string) =>
+    hash.startsWith('#/atividades/cadastro');
 
   const [isPublicRoute, setIsPublicRoute] = useState(() =>
     window.location.hash.startsWith('#/cadastro')
@@ -102,6 +107,9 @@ const App: React.FC = () => {
   const [isPublicConfirmacaoRoute, setIsPublicConfirmacaoRoute] = useState(() =>
     isPublicEventoConfirmacao(window.location.hash)
   );
+  const [isPublicAtividadeRoute, setIsPublicAtividadeRoute] = useState(() =>
+    isPublicAtividadeCadastro(window.location.hash)
+  );
   const refreshInFlight = useRef(false);
   const POLL_INTERVAL_MS = 15000;
 
@@ -114,6 +122,7 @@ const App: React.FC = () => {
       setIsPublicThanks(hash.startsWith('#/obrigado'));
       setIsPublicEventoRoute(isPublicEventoIndicacao(hash));
       setIsPublicConfirmacaoRoute(isPublicEventoConfirmacao(hash));
+      setIsPublicAtividadeRoute(isPublicAtividadeCadastro(hash));
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -400,6 +409,10 @@ const App: React.FC = () => {
     return <PublicEventoConfirmacao />;
   }
 
+  if (isPublicAtividadeRoute) {
+    return <PublicAtividadeCadastro />;
+  }
+
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
@@ -561,6 +574,10 @@ const App: React.FC = () => {
             onLogout={handleLogout}
           />
         )}
+
+        {view === 'atividades' && (
+          <AtividadesList currentUser={currentUser} onLogout={handleLogout} />
+        )}
       </main>
 
       <nav
@@ -632,6 +649,13 @@ const App: React.FC = () => {
           >
             <i className="fa-solid fa-calendar-days text-lg leading-none"></i>
             <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Eventos</span>
+          </button>
+          <button
+            onClick={() => setView('atividades')}
+            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'atividades' ? 'text-emerald-600' : 'opacity-40'}`}
+          >
+            <i className="fa-solid fa-clipboard-list text-lg leading-none"></i>
+            <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Atividades</span>
           </button>
         </div>
       </nav>
@@ -711,6 +735,15 @@ const App: React.FC = () => {
           title="Eventos"
         >
           <i className="fa-solid fa-calendar-days text-xl"></i>
+        </button>
+        <button
+          onClick={() => setView('atividades')}
+          className={`p-4 rounded-2xl transition-all ${
+            view === 'atividades' ? 'bg-emerald-600 text-white shadow-lg' : 'opacity-30'
+          }`}
+          title="Atividades"
+        >
+          <i className="fa-solid fa-clipboard-list text-xl"></i>
         </button>
       </nav>
     </div>

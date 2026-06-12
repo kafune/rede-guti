@@ -78,7 +78,14 @@ export async function atividadeRoutes(app: FastifyInstance) {
   });
 
   // ── PUBLIC: CREATE ATIVIDADE ──────────────────────────────────────────────
-  app.post('/public/atividades', async (request, reply) => {
+  app.post('/public/atividades', {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute'
+      }
+    }
+  }, async (request, reply) => {
     const body = createAtividadeSchema.safeParse(request.body);
     if (!body.success) {
       return reply.code(400).send({ error: body.error.issues[0]?.message ?? 'Dados inválidos.' });

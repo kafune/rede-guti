@@ -115,7 +115,14 @@ export async function publicRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/public/indications', async (request, reply) => {
+  app.post('/public/indications', {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute'
+      }
+    }
+  }, async (request, reply) => {
     const body = createPublicSchema.safeParse(request.body);
     if (!body.success) {
       return reply.code(400).send({ error: body.error.issues[0]?.message ?? 'Dados invalidos.' });
@@ -168,11 +175,9 @@ export async function publicRoutes(app: FastifyInstance) {
       return reply.code(409).send({ error: 'Indicador nao encontrado.' });
     }
 
-    const [nameDup, phoneDup, emailDup] = await Promise.all([
-      prisma.indication.findFirst({
-        where: { name: { equals: name, mode: 'insensitive' } },
-        select: { id: true }
-      }),
+    // Duplicidade apenas por contato (telefone/e-mail). Nome completo pode se
+    // repetir legitimamente entre pessoas diferentes.
+    const [phoneDup, emailDup] = await Promise.all([
       prisma.indication.findFirst({
         where: { phone: phoneResult.normalized },
         select: { id: true }
@@ -183,9 +188,6 @@ export async function publicRoutes(app: FastifyInstance) {
       })
     ]);
 
-    if (nameDup) {
-      return reply.code(409).send({ error: 'Esse nome ja esta cadastrado. Em caso de erro, contate o responsavel pelo seu link.' });
-    }
     if (phoneDup) {
       return reply.code(409).send({ error: 'Esse numero de WhatsApp ja esta cadastrado.' });
     }
@@ -233,6 +235,7 @@ export async function publicRoutes(app: FastifyInstance) {
     const leaderId = indication.indicatedByUserId ?? indication.createdById;
     incrementLeaderIndication(leaderId, 'supporter.created', {
       indicationId: indication.id,
+      supporterName: indication.name,
       churchId: indication.church.id,
       municipalityId: indication.municipality.id,
     }).catch((err) => console.error('[engagement] supporter.created (public) failed:', err));

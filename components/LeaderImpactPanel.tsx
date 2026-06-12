@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ApiEngagementStats, fetchEngagementMe } from '../api';
+import {
+  ApiEngagementStats,
+  ApiWeeklyLeaderboardItem,
+  fetchEngagementMe,
+  fetchWeeklyLeaderboard
+} from '../api';
 
 const WEEKLY_GOAL = 5;
 
@@ -49,8 +54,20 @@ const Skeleton: React.FC = () => (
   </div>
 );
 
-const LeaderImpactPanel: React.FC = () => {
+interface Props {
+  currentUserId?: string;
+}
+
+const medalForPosition = (position: number) => {
+  if (position === 1) return '🥇';
+  if (position === 2) return '🥈';
+  if (position === 3) return '🥉';
+  return `${position}º`;
+};
+
+const LeaderImpactPanel: React.FC<Props> = ({ currentUserId }) => {
   const [stats, setStats] = useState<ApiEngagementStats | null>(null);
+  const [weeklyTop, setWeeklyTop] = useState<ApiWeeklyLeaderboardItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -60,6 +77,9 @@ const LeaderImpactPanel: React.FC = () => {
       .then((data) => active && setStats(data))
       .catch(() => active && setFailed(true))
       .finally(() => active && setLoading(false));
+    fetchWeeklyLeaderboard()
+      .then((items) => active && setWeeklyTop(items))
+      .catch(() => undefined); // placar é não-crítico, falha silenciosa
     return () => {
       active = false;
     };
@@ -161,6 +181,50 @@ const LeaderImpactPanel: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Placar da semana — top 10 visível para todas as lideranças */}
+      {weeklyTop.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-[2rem] border dark:border-gray-700 shadow-sm">
+          <h3 className="text-sm font-black mb-1 flex items-center gap-2">
+            <i className="fa-solid fa-trophy text-amber-500"></i>
+            Placar da semana
+          </h3>
+          <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-4">
+            Pontos dos últimos 7 dias
+          </p>
+          <div className="space-y-2">
+            {weeklyTop.map((item) => {
+              const isMe = currentUserId && item.userId === currentUserId;
+              return (
+                <div
+                  key={item.userId}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-colors ${
+                    isMe
+                      ? 'bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800'
+                      : 'bg-gray-50 dark:bg-gray-900/50'
+                  }`}
+                >
+                  <span className="w-8 text-center font-black text-sm shrink-0">
+                    {medalForPosition(item.rankingPosition ?? 0)}
+                  </span>
+                  <span className="flex-1 min-w-0 font-bold text-sm truncate">
+                    {item.user.name || 'Liderança'}
+                    {isMe && (
+                      <span className="ml-2 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-violet-600 text-white">
+                        Você
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-black text-sm text-violet-600 dark:text-violet-400 shrink-0">
+                    {item.weeklyPoints}
+                    <span className="text-[10px] opacity-50 font-normal ml-1">pts</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -19,7 +19,8 @@ const createSchema = z.object({
   email: z.string().email(),
   name: z.string().min(2),
   password: z.string().min(6),
-  role: z.nativeEnum(Role)
+  role: z.nativeEnum(Role),
+  whatsapp: z.string().trim().optional()
 });
 
 const updateSchema = z
@@ -27,11 +28,20 @@ const updateSchema = z
     email: z.string().email().optional(),
     name: z.string().min(2).optional(),
     password: z.string().min(6).optional(),
-    role: z.nativeEnum(Role).optional()
+    role: z.nativeEnum(Role).optional(),
+    whatsapp: z.string().trim().nullable().optional()
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Invalid payload'
   });
+
+// WhatsApp da liderança (devzapp_link): só dígitos, com DDI 55. Usado pelas
+// automações de WhatsApp (parabéns, resumo semanal, alerta de inatividade).
+const normalizeLeaderWhatsapp = (value: string | null | undefined): string | null => {
+  const digits = (value ?? '').replace(/\D/g, '');
+  if (!digits) return null;
+  return digits.startsWith('55') ? digits : `55${digits}`;
+};
 
 const paramsSchema = z.object({
   id: z.string()
@@ -42,6 +52,7 @@ const userListSelect = {
   email: true,
   name: true,
   role: true,
+  devzappLink: true,
   createdAt: true,
   indicatedByUserId: true,
   indicatedByUser: {
@@ -60,6 +71,7 @@ const serializeUserRecord = (user: {
   email: string;
   name: string | null;
   role: RoleType;
+  devzappLink: string | null;
   createdAt: Date;
   indicatedByUserId: string | null;
   indicatedByUser?: {
@@ -78,6 +90,7 @@ const serializeUserRecord = (user: {
   email: user.email,
   name: user.name,
   role: user.role,
+  whatsapp: user.devzappLink,
   createdAt: user.createdAt,
   indicatedByUserId: user.indicatedByUserId,
   indicatedByUser: serializeUserSummary(user.indicatedByUser),
@@ -125,6 +138,7 @@ export async function userRoutes(app: FastifyInstance) {
           name: body.data.name.trim(),
           passwordHash,
           role: body.data.role,
+          devzappLink: normalizeLeaderWhatsapp(body.data.whatsapp),
           indicatedByUserId: request.user.sub
         },
         select: userListSelect
@@ -196,10 +210,15 @@ export async function userRoutes(app: FastifyInstance) {
       name?: string;
       role?: RoleType;
       passwordHash?: string;
+      devzappLink?: string | null;
     } = {};
 
     if (body.data.email) {
       updateData.email = body.data.email.toLowerCase();
+    }
+
+    if (body.data.whatsapp !== undefined) {
+      updateData.devzappLink = normalizeLeaderWhatsapp(body.data.whatsapp);
     }
 
     if (body.data.name) {

@@ -5,5 +5,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireCoordinator: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireAutomation: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }

@@ -1,0 +1,150 @@
+{
+  "name": "Manutenção diária - Recalcular ranking e varrer líderes inativos",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "b2c3d4e5-0001-4000-9000-000000000001",
+      "name": "Cron diário 03h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.REDE_GUTI_API_URL}}/automation/recalculate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": false,
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "b2c3d4e5-0002-4000-9000-000000000002",
+      "name": "POST recalculate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rede-guti-automation-token",
+          "name": "Rede Guti Automation Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.REDE_GUTI_API_URL}}/automation/scan-inactive",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": false,
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "b2c3d4e5-0003-4000-9000-000000000003",
+      "name": "POST scan-inactive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rede-guti-automation-token",
+          "name": "Rede Guti Automation Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const recalc = $('POST recalculate').item.json;\nconst scan = $input.item.json;\nconsole.log('[manutencao-diaria]', JSON.stringify({ recalculated: recalc.recalculated, scan }));\nreturn [{ json: { ok: true, recalculated: recalc.recalculated, scan } }];"
+      },
+      "id": "b2c3d4e5-0004-4000-9000-000000000004",
+      "name": "Log resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300]
+    }
+  ],
+  "connections": {
+    "Cron diário 03h": {
+      "main": [
+        [
+          {
+            "node": "POST recalculate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST recalculate": {
+      "main": [
+        [
+          {
+            "node": "POST scan-inactive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST scan-inactive": {
+      "main": [
+        [
+          {
+            "node": "Log resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "description": "Todo dia às 03h chama POST /automation/recalculate (zera/recalcula contadores semanais e mensais, score e ranking) e POST /automation/scan-inactive (dispara leader.inactive_7_days para líderes parados). Variáveis: REDE_GUTI_API_URL. Credential 'Rede Guti Automation Token' = header Authorization: Bearer <AUTOMATION_API_TOKEN do backend>."
+  },
+  "tags": []
+}

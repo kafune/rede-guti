@@ -611,7 +611,14 @@ export async function eventoRoutes(app: FastifyInstance) {
   });
 
   // ── PUBLIC: SUBMIT INDICATION ─────────────────────────────────────────────
-  app.post('/public/eventos/:id/indicacao', async (request, reply) => {
+  app.post('/public/eventos/:id/indicacao', {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute'
+      }
+    }
+  }, async (request, reply) => {
     const params = paramsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: 'ID inválido.' });
 

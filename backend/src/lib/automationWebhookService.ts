@@ -15,6 +15,9 @@ export type WebhookPayload = {
   eventType: WebhookEventType;
   userId: string;
   userName: string;
+  // Leader's WhatsApp (devzappLink), digits only with 55 prefix, or null.
+  // The n8n workflows need it to address the message.
+  phone: string | null;
   score: number;
   totalIndications: number;
   weeklyIndications: number;
@@ -66,6 +69,7 @@ async function dispatchWebhook(payload: WebhookPayload): Promise<void> {
     eventType: payload.eventType,
     userId: payload.userId,
     userName: payload.userName,
+    phone: payload.phone,
     score: payload.score,
     totalIndications: payload.totalIndications,
     weeklyIndications: payload.weeklyIndications,
@@ -110,10 +114,16 @@ async function dispatchWebhook(payload: WebhookPayload): Promise<void> {
 // payload. Selects only safe fields — passwordHash is never read.
 // ---------------------------------------------------------------------------
 
+const normalizeWebhookPhone = (value: string | null | undefined): string | null => {
+  const digits = (value ?? '').replace(/\D/g, '');
+  if (!digits) return null;
+  return digits.startsWith('55') ? digits : `55${digits}`;
+};
+
 async function buildUserSnapshot(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, devzappLink: true },
   });
   if (!user) return null;
 
@@ -130,6 +140,7 @@ async function buildUserSnapshot(userId: string) {
   return {
     userId: user.id,
     userName: user.name ?? '(sem nome)',
+    phone: normalizeWebhookPhone(user.devzappLink),
     score: stats?.score ?? 0,
     totalIndications: stats?.totalIndications ?? 0,
     weeklyIndications: stats?.weeklyIndications ?? 0,

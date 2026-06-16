@@ -7,7 +7,9 @@
           "interval": [
             {
               "field": "weeks",
-              "triggerAtDay": [1],
+              "triggerAtDay": [
+                1
+              ],
               "triggerAtHour": 8,
               "triggerAtMinute": 0
             }
@@ -18,12 +20,15 @@
       "name": "Cron segunda 08h",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{$env.REDE_GUTI_API_URL}}/engagement/leaderboard/weekly?limit=10",
+        "url": "={{$env.REDE_GUTI_API_URL}}/automation/weekly-leaderboard",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -49,11 +54,14 @@
       "name": "GET leaderboard semanal",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 300],
+      "position": [
+        480,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "rede-guti-api-auth",
-          "name": "Rede Guti API Header Auth"
+          "id": "rede-guti-automation-token",
+          "name": "Rede Guti Automation Token"
         }
       },
       "onError": "stopWorkflow"
@@ -66,7 +74,10 @@
       "name": "Montar resumo",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [720, 300]
+      "position": [
+        720,
+        300
+      ]
     },
     {
       "parameters": {
@@ -100,7 +111,10 @@
       "name": "Enviar WhatsApp coordenador",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [960, 300],
+      "position": [
+        960,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "whatsapp-api-auth",
@@ -117,7 +131,10 @@
       "name": "Log sucesso",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1200, 220]
+      "position": [
+        1200,
+        220
+      ]
     },
     {
       "parameters": {
@@ -127,7 +144,10 @@
       "name": "Log erro",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1200, 380]
+      "position": [
+        1200,
+        380
+      ]
     }
   ],
   "connections": {
@@ -189,7 +209,7 @@
   "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": false,
-    "description": "Toda segunda às 08h, busca GET /engagement/leaderboard/weekly da Rede Guti API e envia resumo dos 10 líderes mais ativos via WhatsApp para o coordenador. Variáveis de ambiente: REDE_GUTI_API_URL, WHATSAPP_API_URL, COORDENADOR_PHONE. Credentials: 'Rede Guti API Header Auth' (token Bearer/apikey) e 'WhatsApp API Header Auth'."
+    "description": "Toda segunda às 08h, busca GET /automation/weekly-leaderboard da Rede Guti API e envia resumo dos 10 líderes mais ativos via WhatsApp para o coordenador. Variáveis de ambiente: REDE_GUTI_API_URL, WHATSAPP_API_URL, COORDENADOR_PHONE. Credentials: 'Rede Guti Automation Token' (Bearer = AUTOMATION_API_TOKEN do backend) e 'WhatsApp API Header Auth'."
   },
   "tags": []
 }

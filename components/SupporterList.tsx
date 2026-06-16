@@ -171,6 +171,19 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
                   </span>
                 </div>
               </div>
+              {s.whatsapp && (
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    window.open(`https://wa.me/${s.whatsapp}`, '_blank');
+                  }}
+                  className="shrink-0 w-11 h-11 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl active:scale-90 transition-transform"
+                  aria-label={`Falar com ${s.name} no WhatsApp`}
+                  title="Falar no WhatsApp"
+                >
+                  <i className="fa-brands fa-whatsapp"></i>
+                </button>
+              )}
               <div className="shrink-0 text-blue-600 opacity-20">
                 <i className="fa-solid fa-chevron-right"></i>
               </div>

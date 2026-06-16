@@ -79,10 +79,12 @@ const AdminPanel: React.FC<Props> = ({
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSuccess, setSettingsSuccess] = useState('');
   const [whatsappGroupLinkInput, setWhatsappGroupLinkInput] = useState('');
+  const [announcementInput, setAnnouncementInput] = useState('');
   const [editUser, setEditUser] = useState({
     name: '',
     email: '',
     password: '',
+    whatsapp: '',
     role: getDefaultCreatableUserRole(currentUser.role)
   });
 
@@ -106,6 +108,7 @@ const AdminPanel: React.FC<Props> = ({
       const data = await fetchSettings();
       setSettings(data);
       setWhatsappGroupLinkInput(data.whatsappGroupLink?.trim() || '');
+      setAnnouncementInput(data.announcement?.trim() || '');
     } catch (error) {
       setSettingsError(getApiErrorMessage(error, 'Erro ao carregar configuracao do grupo.'));
     } finally {
@@ -164,6 +167,7 @@ const AdminPanel: React.FC<Props> = ({
       name: user.name ?? '',
       email: user.email,
       password: '',
+      whatsapp: user.whatsapp ?? '',
       role: user.role
     });
   };
@@ -174,6 +178,7 @@ const AdminPanel: React.FC<Props> = ({
       name: '',
       email: '',
       password: '',
+      whatsapp: '',
       role: getDefaultCreatableUserRole(currentUser.role)
     });
   };
@@ -186,10 +191,12 @@ const AdminPanel: React.FC<Props> = ({
       name?: string;
       password?: string;
       role?: UserRole;
+      whatsapp?: string | null;
     } = {};
 
     const trimmedEmail = editUser.email.trim().toLowerCase();
     const trimmedName = editUser.name.trim();
+    const trimmedWhatsapp = editUser.whatsapp.trim();
 
     if (trimmedEmail && trimmedEmail !== user.email.toLowerCase()) {
       payload.email = trimmedEmail;
@@ -197,6 +204,10 @@ const AdminPanel: React.FC<Props> = ({
 
     if (trimmedName && trimmedName !== (user.name ?? '')) {
       payload.name = trimmedName;
+    }
+
+    if (trimmedWhatsapp !== (user.whatsapp ?? '')) {
+      payload.whatsapp = trimmedWhatsapp || null;
     }
 
     if (editUser.password.trim()) {
@@ -249,11 +260,13 @@ const AdminPanel: React.FC<Props> = ({
     setSettingsSuccess('');
     try {
       const updated = await updateSettings({
-        whatsappGroupLink: whatsappGroupLinkInput.trim() || null
+        whatsappGroupLink: whatsappGroupLinkInput.trim() || null,
+        announcement: announcementInput.trim() || null
       });
       setSettings(updated);
       setWhatsappGroupLinkInput(updated.whatsappGroupLink?.trim() || '');
-      setSettingsSuccess('Link do grupo atualizado com sucesso.');
+      setAnnouncementInput(updated.announcement?.trim() || '');
+      setSettingsSuccess('Configuracoes atualizadas com sucesso.');
     } catch (error) {
       setSettingsError(getApiErrorMessage(error, 'Erro ao salvar link do grupo.'));
     } finally {
@@ -460,6 +473,21 @@ const AdminPanel: React.FC<Props> = ({
                   className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-70"
                 />
 
+                <div>
+                  <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-2">
+                    Aviso da coordenação (mural)
+                  </label>
+                  <textarea
+                    value={announcementInput}
+                    onChange={(event) => setAnnouncementInput(event.target.value)}
+                    placeholder="Recado exibido no topo do painel de todas as lideranças. Deixe vazio para ocultar."
+                    rows={3}
+                    maxLength={1000}
+                    disabled={!allowUserEditing}
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:opacity-70 resize-y"
+                  />
+                </div>
+
                 <div className="flex flex-wrap items-center gap-3">
                   {allowUserEditing ? (
                     <button
@@ -467,7 +495,7 @@ const AdminPanel: React.FC<Props> = ({
                       disabled={settingsSaving}
                       className="theme-accent-button px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50"
                     >
-                      {settingsSaving ? 'Salvando...' : 'Salvar link'}
+                      {settingsSaving ? 'Salvando...' : 'Salvar configuracoes'}
                     </button>
                   ) : (
                     settings?.whatsappGroupLink && (
@@ -605,6 +633,13 @@ const AdminPanel: React.FC<Props> = ({
                         placeholder="Nova senha (opcional)"
                         className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       />
+                      <input
+                        type="tel"
+                        value={editUser.whatsapp}
+                        onChange={(event) => setEditUser((prev) => ({ ...prev, whatsapp: event.target.value }))}
+                        placeholder="WhatsApp (ex: 11999998888)"
+                        className="lg:col-span-2 w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      />
                     </div>
                   ) : (
                     <>
@@ -621,6 +656,17 @@ const AdminPanel: React.FC<Props> = ({
                       </div>
                       <div className="text-xs opacity-60 space-y-1">
                         <div>{user.email}</div>
+                        {user.whatsapp && (
+                          <div>
+                            <i className="fa-brands fa-whatsapp mr-1 text-emerald-600"></i>
+                            {user.whatsapp}
+                          </div>
+                        )}
+                        {!user.whatsapp && user.role === UserRole.LIDER_REGIONAL && (
+                          <div className="text-amber-600 font-semibold">
+                            Sem WhatsApp cadastrado — esta lideranca nao recebe as automacoes
+                          </div>
+                        )}
                         {user.indicatedByUser && <div>Indicado por: {user.indicatedByUser.name}</div>}
                         {hierarchyLabel && <div>Rede: {hierarchyLabel}</div>}
                         <div>

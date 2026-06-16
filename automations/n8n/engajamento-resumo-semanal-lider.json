@@ -1,0 +1,160 @@
+{
+  "name": "Engajamento - Resumo semanal para cada liderança",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "d4e5f6a7-0001-4000-9000-000000000001",
+      "name": "Cron segunda 08h30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.REDE_GUTI_API_URL}}/automation/weekly-leader-summaries",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": false,
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "d4e5f6a7-0002-4000-9000-000000000002",
+      "name": "GET resumos semanais",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rede-guti-automation-token",
+          "name": "Rede Guti Automation Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Uma mensagem personalizada por liderança com WhatsApp cadastrado.\nconst data = $input.item.json;\nconst out = [];\n\nfor (const s of data.summaries || []) {\n  const rank = s.rankingPosition\n    ? `${s.rankingPosition}º no ranking geral`\n    : 'ainda sem posição no ranking';\n  const message =\n    `Bom dia, ${s.userName}! ☀️ Resumo da sua semana na Rede Guti:\\n\\n` +\n    `⭐ ${s.weeklyPoints} pontos conquistados\\n` +\n    `👥 ${s.weeklyIndications} indicações na semana (total: ${s.totalIndications})\\n` +\n    `🏆 Você está em ${rank}, com ${s.score} pts\\n\\n` +\n    `Nova semana, novas oportunidades — compartilhe seu link e bora pra cima! 💪`;\n  out.push({ json: { phone: s.phone, message, userId: s.userId } });\n}\n\nreturn out;"
+      },
+      "id": "d4e5f6a7-0003-4000-9000-000000000003",
+      "name": "Montar mensagens",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.WHATSAPP_API_URL}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{$json.phone}}\",\n  \"text\": {{JSON.stringify($json.message)}}\n}",
+        "options": {
+          "timeout": 10000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "d4e5f6a7-0004-4000-9000-000000000004",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whatsapp-api-auth",
+          "name": "WhatsApp API Header Auth"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Cron segunda 08h30": {
+      "main": [
+        [
+          {
+            "node": "GET resumos semanais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET resumos semanais": {
+      "main": [
+        [
+          {
+            "node": "Montar mensagens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar mensagens": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "description": "Toda segunda às 08h30 busca GET /automation/weekly-leader-summaries e envia o resumo individual (pontos, indicações, ranking) no WhatsApp de cada Líder Regional com número cadastrado. Variáveis: REDE_GUTI_API_URL, WHATSAPP_API_URL. Credentials: 'Rede Guti Automation Token' e 'WhatsApp API Header Auth'. Complementa o resumo do coordenador (workflow separado)."
+  },
+  "tags": []
+}

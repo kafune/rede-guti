@@ -37,3 +37,6 @@ backend/bun.lockb
 # Local media
 video_guti.mp4
 /lv_*.mp4
+
+# npm (projeto usa bun; locks do npm sao artefatos locais)
+package-lock.json

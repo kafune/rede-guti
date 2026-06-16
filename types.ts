@@ -16,6 +16,7 @@ export interface RegistrationUserPayload {
   name: string;
   email: string;
   password: string;
+  whatsapp?: string;
 }
 
 export interface RegistrationSupporterPayload {
@@ -77,6 +78,7 @@ export interface AdminUser {
   email: string;
   name?: string | null;
   role: UserRole;
+  whatsapp?: string | null;
   createdAt: string;
   indicatedByUserId?: string | null;
   indicatedByUser?: UserSummary | null;
@@ -87,6 +89,7 @@ export interface AdminUser {
 
 export interface AppSettings {
   whatsappGroupLink?: string | null;
+  announcement?: string | null;
   updatedAt?: string | null;
 }
 

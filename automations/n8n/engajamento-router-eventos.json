@@ -1,0 +1,210 @@
+{
+  "name": "Engajamento - Router de eventos (nova indicação, meta, inatividade)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "engagement/eventos",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-9000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "engagement-eventos-router"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Roteia os eventos do backend (ENGAGEMENT_WEBHOOK_URL) e monta a mensagem.\n// Eventos tratados:\n//   leader.points_awarded (awardedEventType=supporter.created) → avisa o líder na hora\n//   leader.weekly_goal_reached → parabéns por meta semanal\n//   leader.inactive_7_days → resgate de liderança inativa\nconst body = $input.item.json.body || {};\nconst type = body.eventType;\nconst meta = body.metadata || {};\nconst phone = (body.phone || '').toString().replace(/\\D/g, '');\nconst name = body.userName || 'Líder';\n\nlet message = null;\n\nif (type === 'leader.points_awarded' && meta.awardedEventType === 'supporter.created') {\n  const who = meta.supporterName ? `*${meta.supporterName}*` : 'Um novo apoiador';\n  const rank = body.rankingPosition ? ` (${body.rankingPosition}º no ranking)` : '';\n  message =\n    `🎉 ${name}, boa notícia! ${who} acabou de entrar na sua rede pelo seu link.\\n\\n` +\n    `+${meta.points ?? 10} pontos para você — total: ${body.score} pts${rank}.\\n\\n` +\n    `Continue compartilhando seu link! 💪`;\n} else if (type === 'leader.weekly_goal_reached') {\n  message =\n    `👏 Parabéns, ${name}! Você bateu a meta semanal com ${body.weeklyIndications ?? ''} indicações. ` +\n    `Seu trabalho está fortalecendo a rede — continue nesse ritmo!`;\n} else if (type === 'leader.inactive_7_days') {\n  message =\n    `Olá, ${name}! 🙏 Sentimos sua falta na Rede Guti — já faz uma semana sem novas indicações.\\n\\n` +\n    `Que tal compartilhar seu link de cadastro hoje? Qualquer dificuldade, fale com a coordenação. 💙`;\n}\n\nreturn [{\n  json: {\n    phone,\n    message,\n    skip: !message || !phone,\n    eventType: type,\n    userId: body.userId || null\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0002-4000-9000-000000000002",
+      "name": "Montar mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{$json.skip}}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-4000-9000-000000000003",
+      "name": "IF deve enviar",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.WHATSAPP_API_URL}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{$json.phone}}\",\n  \"text\": {{JSON.stringify($json.message)}}\n}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-0004-4000-9000-000000000004",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 220],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "whatsapp-api-auth",
+          "name": "WhatsApp API Header Auth"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": true,\n  \"dispatched\": true,\n  \"eventType\": \"{{$json.eventType}}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a1b2c3d4-0005-4000-9000-000000000005",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 140]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"error\": \"whatsapp_dispatch_failed\"\n}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "a1b2c3d4-0006-4000-9000-000000000006",
+      "name": "Responder erro WhatsApp",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 320]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": true,\n  \"ignored\": true,\n  \"reason\": \"evento_sem_mensagem_ou_sem_telefone\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a1b2c3d4-0007-4000-9000-000000000007",
+      "name": "Ignorar evento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 440]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Montar mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar mensagem": {
+      "main": [
+        [
+          {
+            "node": "IF deve enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF deve enviar": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder erro WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "description": "Ponto único de entrada para o ENGAGEMENT_WEBHOOK_URL do backend. Trata leader.points_awarded (nova indicação → avisa o líder na hora), leader.weekly_goal_reached (parabéns) e leader.inactive_7_days (resgate). Aponte ENGAGEMENT_WEBHOOK_URL para o webhook deste workflow. Variáveis: WHATSAPP_API_URL; credential 'WhatsApp API Header Auth'. Substitui o workflow 'parabenizar-meta-semanal' quando ativo (não rode os dois ao mesmo tempo)."
+  },
+  "tags": []
+}

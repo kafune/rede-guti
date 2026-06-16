@@ -111,7 +111,9 @@ const App: React.FC = () => {
     isPublicAtividadeCadastro(window.location.hash)
   );
   const refreshInFlight = useRef(false);
-  const POLL_INTERVAL_MS = 15000;
+  // Mapa pede dados quase em tempo real; demais telas se contentam com 60s.
+  const MAP_POLL_INTERVAL_MS = 15000;
+  const DEFAULT_POLL_INTERVAL_MS = 60000;
 
   const allSupporters = apiSupporters;
 
@@ -235,7 +237,7 @@ const App: React.FC = () => {
   }, [currentUser, view]);
 
   useEffect(() => {
-    if (!currentUser || view !== 'map') return;
+    if (!currentUser) return;
 
     let cancelled = false;
 
@@ -259,7 +261,10 @@ const App: React.FC = () => {
     };
 
     pollData();
-    const interval = setInterval(pollData, POLL_INTERVAL_MS);
+    const interval = setInterval(
+      pollData,
+      view === 'map' ? MAP_POLL_INTERVAL_MS : DEFAULT_POLL_INTERVAL_MS
+    );
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -339,7 +344,8 @@ const App: React.FC = () => {
         name: payload.name.trim(),
         email: payload.email.trim(),
         password: payload.password,
-        role: payload.target
+        role: payload.target,
+        whatsapp: payload.whatsapp
       });
       return true;
     } catch (error) {

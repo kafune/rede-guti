@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { SupportStatus, Supporter, User, UserRole } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AppSettings, SupportStatus, Supporter, User, UserRole } from '../types';
+import { fetchSettings } from '../api';
 import { canCreateRegistrations } from '../roleUtils';
 import LeaderImpactPanel from './LeaderImpactPanel';
 
@@ -12,6 +13,8 @@ interface Props {
 
 const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onViewSupporter }) => {
   const [copyLabel, setCopyLabel] = useState('Copiar link');
+  const [copyMessageLabel, setCopyMessageLabel] = useState('Copiar mensagem pronta');
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [topSort, setTopSort] = useState<'total' | 'lastMonth' | 'lastFifteenDays' | 'lastWeek'>('total');
   const [showAllIndicators, setShowAllIndicators] = useState(false);
   const baseUrl = `${window.location.origin}${window.location.pathname}#/cadastro`;
@@ -46,6 +49,38 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
       window.setTimeout(() => setCopyLabel('Copiar link'), 1800);
     }
   };
+
+  // Texto padrão de convite — pronto para colar no WhatsApp com o link embutido.
+  const shareMessage =
+    `Olá! 🙏\n\n` +
+    `Estou participando da *Rede Guti 2026* e quero te convidar para somar com a gente.\n\n` +
+    `Leva menos de 1 minuto para se cadastrar como apoiador(a) — é só acessar o link abaixo:\n${shareUrl}\n\n` +
+    `Conto com você! 💙${indicatorName ? `\n— ${indicatorName}` : ''}`;
+
+  const handleCopyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(shareMessage);
+      setCopyMessageLabel('Mensagem copiada!');
+      window.setTimeout(() => setCopyMessageLabel('Copiar mensagem pronta'), 1500);
+    } catch {
+      setCopyMessageLabel('Nao foi possivel copiar');
+      window.setTimeout(() => setCopyMessageLabel('Copiar mensagem pronta'), 1800);
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareMessage)}`, '_blank');
+  };
+
+  useEffect(() => {
+    let active = true;
+    fetchSettings()
+      .then((data) => active && setSettings(data))
+      .catch(() => undefined); // mural é não-crítico, falha silenciosa
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -145,6 +180,22 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
 
   return (
     <div className="space-y-6 animate-fade-up">
+      {settings?.announcement && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 sm:p-5 rounded-[2rem] flex items-start gap-3 animate-soft-pop">
+          <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-600 shrink-0">
+            <i className="fa-solid fa-bullhorn"></i>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400 mb-1">
+              Aviso da coordenação
+            </p>
+            <p className="text-sm font-semibold whitespace-pre-wrap break-words">
+              {settings.announcement}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-4 sm:p-6 rounded-[2rem] text-white shadow-xl shadow-blue-500/20 animate-soft-pop transition-all duration-500 ease-out">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
           <div>
@@ -170,7 +221,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
         </div>
       </div>
 
-      {showImpactPanel && <LeaderImpactPanel />}
+      {showImpactPanel && <LeaderImpactPanel currentUserId={currentUser.id} />}
 
       {isRegionalViewer && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -229,6 +280,22 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
             >
               Abrir
             </a>
+          </div>
+          <div className="flex flex-col md:flex-row gap-3 mt-3">
+            <button
+              onClick={handleCopyMessage}
+              className="flex-1 px-5 py-3 rounded-2xl font-bold text-sm bg-gray-100 dark:bg-gray-900 active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5"
+            >
+              <i className="fa-regular fa-clipboard mr-2"></i>
+              {copyMessageLabel}
+            </button>
+            <button
+              onClick={handleShareWhatsApp}
+              className="flex-1 px-5 py-3 rounded-2xl font-bold text-sm bg-emerald-500 text-white active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5"
+            >
+              <i className="fa-brands fa-whatsapp mr-2"></i>
+              Enviar pelo WhatsApp
+            </button>
           </div>
           {indicatorName && (
             <p className="text-[10px] uppercase tracking-widest opacity-40 font-black mt-3">

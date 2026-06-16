@@ -10,6 +10,7 @@ import {
   getLeaderboard,
   getLeaderStats,
   getWeeklyLeaderboard,
+  recalculateRanking,
   scanAndAlertInactiveLeaders,
 } from '../lib/engagementService.js';
 
@@ -41,6 +42,12 @@ const serializeStats = (s: RawStats, opts?: { includeEmail?: boolean }) => ({
 
 const paramsSchema = z.object({ id: z.string().min(1) });
 
+const ledgerQuerySchema = z.object({
+  userId: z.string().optional(),
+  limit:  z.coerce.number().int().min(1).max(500).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 export async function engagementRoutes(app: FastifyInstance) {
   // ── GET /engagement/me ──────────────────────────────────────────────────
   // Estatísticas do usuário logado. Cria registro com zeros se ainda não existir.
@@ -65,50 +72,60 @@ export async function engagementRoutes(app: FastifyInstance) {
 
   // ── GET /engagement/leaderboard/weekly ─────────────────────────────────
   // Ranking semanal (top 10) — soma de pontos dos últimos 7 dias do ledger.
-  // Mesma regra de visibilidade do ranking geral.
+  // Visível para TODOS os papéis autenticados: o placar compartilhado é o
+  // que move a competição saudável entre as lideranças.
   app.get(
     '/engagement/leaderboard/weekly',
     { preHandler: app.authenticate },
-    async (request) => {
-      if (canViewLeaderboard(request.user.role)) {
-        const items = await getWeeklyLeaderboard(10);
-        return {
-          items: items.map((it) => ({
-            userId: it.userId,
-            user: { id: it.user.id, name: it.user.name, role: it.user.role },
-            weeklyPoints: it.weeklyPoints,
-            rankingPosition: it.rankingPosition,
-          })),
-        };
-      }
-
-      // LIDER_REGIONAL: calcula apenas o próprio total semanal
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const [agg, user] = await Promise.all([
-        prisma.leaderPointsLedger.aggregate({
-          where: { userId: request.user.sub, createdAt: { gte: weekAgo } },
-          _sum: { points: true },
-        }),
-        prisma.user.findUnique({
-          where: { id: request.user.sub },
-          select: { id: true, name: true, role: true },
-        }),
-      ]);
-
-      if (!user) return { items: [] };
-
+    async () => {
+      const items = await getWeeklyLeaderboard(10);
       return {
-        items: [
-          {
-            userId: user.id,
-            user,
-            weeklyPoints: agg._sum.points ?? 0,
-            rankingPosition: null,
-          },
-        ],
+        items: items.map((it) => ({
+          userId: it.userId,
+          user: { id: it.user.id, name: it.user.name, role: it.user.role },
+          weeklyPoints: it.weeklyPoints,
+          rankingPosition: it.rankingPosition,
+        })),
       };
     }
   );
+
+  // ── GET /engagement/ledger ──────────────────────────────────────────────
+  // Histórico de pontos paginado. COORDENADOR pode filtrar por ?userId=;
+  // demais papéis recebem apenas o próprio histórico.
+  app.get('/engagement/ledger', { preHandler: app.authenticate }, async (request, reply) => {
+    const query = ledgerQuerySchema.safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: 'Parâmetros inválidos.' });
+
+    const targetUserId =
+      canViewUserEngagement(request.user.role) && query.data.userId
+        ? query.data.userId
+        : request.user.sub;
+
+    const [items, total] = await Promise.all([
+      prisma.leaderPointsLedger.findMany({
+        where: { userId: targetUserId },
+        orderBy: { createdAt: 'desc' },
+        take: query.data.limit,
+        skip: query.data.offset,
+      }),
+      prisma.leaderPointsLedger.count({ where: { userId: targetUserId } }),
+    ]);
+
+    return { total, items };
+  });
+
+  // ── POST /engagement/recalculate ────────────────────────────────────────
+  // Recomputa LeaderStats de todos os usuários a partir dos dados-fonte.
+  // Restrito a COORDENADOR (crons usam /automation/recalculate).
+  app.post('/engagement/recalculate', { preHandler: app.authenticate }, async (request, reply) => {
+    if (!canRecalculateStats(request.user.role)) {
+      return reply.code(403).send({ error: 'Apenas coordenadores podem recalcular o ranking.' });
+    }
+
+    const recalculated = await recalculateRanking();
+    return { recalculated };
+  });
 
   // ── GET /engagement/users/:id ──────────────────────────────────────────
   // Permitido apenas para COORDENADOR ou VERIFICADORA.

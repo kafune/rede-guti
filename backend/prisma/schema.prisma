@@ -90,6 +90,7 @@ model LeaderPointsLedger {
 model AppConfig {
   id                String   @id @default("default")
   whatsappGroupLink String?  @map("whatsapp_group_link")
+  announcement      String?  @map("announcement")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

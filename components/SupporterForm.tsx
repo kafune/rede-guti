@@ -48,7 +48,8 @@ const SupporterForm: React.FC<Props> = ({
   const [userForm, setUserForm] = useState({
     name: '',
     email: '',
-    password: ''
+    password: '',
+    whatsapp: ''
   });
   const [supporterForm, setSupporterForm] = useState({
     name: '',
@@ -69,7 +70,8 @@ const SupporterForm: React.FC<Props> = ({
     setUserForm({
       name: '',
       email: '',
-      password: ''
+      password: '',
+      whatsapp: ''
     });
   };
 
@@ -98,7 +100,8 @@ const SupporterForm: React.FC<Props> = ({
         target,
         name: userForm.name.trim(),
         email: userForm.email.trim(),
-        password: userForm.password
+        password: userForm.password,
+        whatsapp: userForm.whatsapp.trim() || undefined
       };
     } else {
       if (
@@ -252,6 +255,24 @@ const SupporterForm: React.FC<Props> = ({
                     }
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-2">
+                  WhatsApp da lideranca
+                </label>
+                <input
+                  type="tel"
+                  placeholder="119..."
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={userForm.whatsapp}
+                  onChange={(event) =>
+                    setUserForm((previous) => ({ ...previous, whatsapp: event.target.value }))
+                  }
+                />
+                <p className="text-[10px] mt-2 opacity-50 font-bold">
+                  Usado pelas automacoes (parabens por meta, resumo semanal e lembretes).
+                </p>
               </div>
 
             </>

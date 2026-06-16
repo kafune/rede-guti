@@ -265,6 +265,7 @@ export async function indicationRoutes(app: FastifyInstance) {
     const leaderId = indication.indicatedByUserId ?? indication.createdById;
     incrementLeaderIndication(leaderId, 'supporter.created', {
       indicationId: indication.id,
+      supporterName: indication.name,
       churchId: indication.church.id,
       municipalityId: indication.municipality.id,
     }).catch((err) => console.error('[engagement] supporter.created failed:', err));

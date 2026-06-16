@@ -145,6 +145,20 @@ export const fetchEngagementMe = async () => {
   return data.stats;
 };
 
+export type ApiWeeklyLeaderboardItem = {
+  userId: string;
+  user: { id: string; name: string | null; role: UserRole };
+  weeklyPoints: number;
+  rankingPosition: number | null;
+};
+
+export const fetchWeeklyLeaderboard = async () => {
+  const data = await request<{ items: ApiWeeklyLeaderboardItem[] }>(
+    '/engagement/leaderboard/weekly'
+  );
+  return data.items;
+};
+
 export const createIndication = async (payload: {
   name: string;
   phone?: string;
@@ -239,6 +253,7 @@ export const createUser = async (payload: {
   name: string;
   password: string;
   role: UserRole;
+  whatsapp?: string;
 }) => {
   const data = await request<{ user: AdminUser }>('/users', {
     method: 'POST',
@@ -249,7 +264,13 @@ export const createUser = async (payload: {
 
 export const updateUser = async (
   id: string,
-  payload: { email?: string; name?: string; password?: string; role?: UserRole }
+  payload: {
+    email?: string;
+    name?: string;
+    password?: string;
+    role?: UserRole;
+    whatsapp?: string | null;
+  }
 ) => {
   const data = await request<{ user: AdminUser }>(`/users/${id}`, {
     method: 'PATCH',
@@ -267,7 +288,10 @@ export const fetchSettings = async () => {
   return data.settings;
 };
 
-export const updateSettings = async (payload: { whatsappGroupLink: string | null }) => {
+export const updateSettings = async (payload: {
+  whatsappGroupLink?: string | null;
+  announcement?: string | null;
+}) => {
   const data = await request<{ settings: AppSettings }>('/settings', {
     method: 'PATCH',
     body: JSON.stringify(payload)

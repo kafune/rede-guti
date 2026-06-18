@@ -358,3 +358,32 @@ header.fixed .opacity-40 {
   opacity: 1 !important;
   color: var(--guti-muted) !important;
 }
+
+/* Impressão: esconde navegação/cabeçalho e limpa o layout para gerar a folha */
+@media print {
+  nav.fixed,
+  header.fixed {
+    display: none !important;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  #leader-report table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #leader-report th,
+  #leader-report td {
+    border-bottom: 1px solid #ccc;
+  }
+}

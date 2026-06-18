@@ -596,7 +596,9 @@ const App: React.FC = () => {
           <ExportPanel supporters={allSupporters} />
         )}
 
-        {view === 'relatorio' && canExportData && <LeaderReportPanel />}
+        {view === 'relatorio' && canExportData && (
+          <LeaderReportPanel supporters={allSupporters} />
+        )}
 
         {view === 'eventos' && (
           <EventoList

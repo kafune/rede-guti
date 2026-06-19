@@ -3,11 +3,12 @@ import * as XLSX from 'xlsx';
 import { Supporter } from '../types';
 import { formatPct, getSupporterCity, tallyBy, todayLabel } from '../reportUtils';
 import {
-  buildIncentiveMessage,
   buildLeaderReportFileName,
   buildLeaderReportPdf,
+  buildMessageTemplates,
   shareLeaderReport,
-  LeaderReportData
+  LeaderReportData,
+  MessageToneKey
 } from '../reportPdf';
 
 interface Props {
@@ -73,6 +74,9 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
 
   const [sending, setSending] = useState(false);
   const [sendFeedback, setSendFeedback] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [activeTone, setActiveTone] = useState<MessageToneKey>('incentivo');
 
   const reportData: LeaderReportData = {
     leaderName,
@@ -86,8 +90,26 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
     byCity
   };
 
-  const handleWhatsApp = async () => {
-    if (total === 0 || sending) return;
+  const templates = buildMessageTemplates(reportData);
+
+  const openEditor = () => {
+    if (total === 0) return;
+    const incentivo = templates.find((t) => t.key === 'incentivo') ?? templates[0];
+    setActiveTone(incentivo.key);
+    setMessageText(incentivo.text);
+    setSendFeedback(null);
+    setEditorOpen(true);
+  };
+
+  const applyTemplate = (key: MessageToneKey) => {
+    const template = templates.find((t) => t.key === key);
+    if (!template) return;
+    setActiveTone(key);
+    setMessageText(template.text);
+  };
+
+  const handleSend = async () => {
+    if (total === 0 || sending || !messageText.trim()) return;
     setSending(true);
     setSendFeedback(null);
     try {
@@ -95,12 +117,14 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
       const result = await shareLeaderReport(
         doc,
         buildLeaderReportFileName(leaderName),
-        buildIncentiveMessage(reportData)
+        messageText.trim()
       );
       if (result === 'fallback') {
         setSendFeedback('PDF baixado. Anexe-o na conversa do WhatsApp que foi aberta.');
+        setEditorOpen(false);
       } else if (result === 'shared') {
         setSendFeedback('Relatório pronto para envio no WhatsApp.');
+        setEditorOpen(false);
       }
     } catch {
       setSendFeedback('Não foi possível gerar o envio. Tente novamente.');
@@ -141,12 +165,12 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
         </button>
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={handleWhatsApp}
-            disabled={total === 0 || sending}
+            onClick={openEditor}
+            disabled={total === 0}
             className="min-h-[44px] py-3 px-6 bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center"
           >
-            <i className={`fa-brands fa-whatsapp mr-2 ${sending ? 'animate-pulse' : ''}`}></i>
-            {sending ? 'Gerando...' : 'Enviar (WhatsApp)'}
+            <i className="fa-brands fa-whatsapp mr-2"></i>
+            Enviar (WhatsApp)
           </button>
           <button
             onClick={handleExport}
@@ -172,6 +196,75 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
           <i className="fa-solid fa-circle-info mr-1.5"></i>
           {sendFeedback}
         </p>
+      )}
+
+      {editorOpen && (
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-3xl border dark:border-gray-700 shadow-sm space-y-4 print:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-bold">
+              <i className="fa-brands fa-whatsapp mr-2 text-emerald-600"></i>
+              Mensagem para a liderança
+            </h3>
+            <button
+              onClick={() => setEditorOpen(false)}
+              className="text-sm opacity-60 hover:opacity-100"
+              aria-label="Fechar editor"
+            >
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest opacity-40 mb-2">
+              Modelos
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {templates.map((template) => (
+                <button
+                  key={template.key}
+                  onClick={() => applyTemplate(template.key)}
+                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                    activeTone === template.key
+                      ? 'bg-emerald-600 text-white shadow'
+                      : 'bg-gray-100 dark:bg-gray-700 opacity-80 hover:opacity-100'
+                  }`}
+                >
+                  {template.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest opacity-40 mb-2">
+              Texto (edite à vontade)
+            </p>
+            <textarea
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              rows={8}
+              className="w-full p-3 rounded-2xl border dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Escreva a mensagem que será enviada com o relatório..."
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
+            <button
+              onClick={() => setEditorOpen(false)}
+              className="min-h-[44px] py-3 px-5 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl font-bold active:scale-95 transition-all inline-flex items-center justify-center"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={sending || !messageText.trim()}
+              className="min-h-[44px] py-3 px-6 bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 active:scale-95 transition-all hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center"
+            >
+              <i className={`fa-brands fa-whatsapp mr-2 ${sending ? 'animate-pulse' : ''}`}></i>
+              {sending ? 'Gerando...' : 'Gerar PDF e enviar'}
+            </button>
+          </div>
+        </div>
       )}
 
       <div

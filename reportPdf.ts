@@ -33,6 +33,48 @@ export const buildIncentiveMessage = (data: LeaderReportData): string => {
   );
 };
 
+export type MessageToneKey = 'parabens' | 'incentivo' | 'atencao';
+
+export interface MessageTemplate {
+  key: MessageToneKey;
+  label: string;
+  text: string;
+}
+
+// Modelos de mensagem (editáveis) para a liderança, conforme o desempenho.
+export const buildMessageTemplates = (data: LeaderReportData): MessageTemplate[] => {
+  const apoiadores = `${data.total} ${data.total === 1 ? 'apoiador' : 'apoiadores'}`;
+  const cityPart = data.mainCityLabel ? `, com forte presença em ${data.mainCityLabel}` : '';
+
+  return [
+    {
+      key: 'parabens',
+      label: 'Parabéns',
+      text:
+        `🙌 Olá, ${data.leaderName}! Parabéns pelo excelente trabalho na Rede Guti!\n\n` +
+        `Você já cadastrou *${apoiadores}*${cityPart} — um resultado que faz toda a diferença! 🎉\n\n` +
+        `Segue o relatório atualizado da sua liderança. Continue assim, você é referência para a nossa rede! 🚀\n\n` +
+        `Equipe Rede Guti`
+    },
+    {
+      key: 'incentivo',
+      label: 'Incentivo',
+      text: buildIncentiveMessage(data)
+    },
+    {
+      key: 'atencao',
+      label: 'Atenção',
+      text:
+        `Olá, ${data.leaderName}! Tudo bem? 🙏\n\n` +
+        `Passando para reforçar a importância do seu trabalho na Rede Guti. ` +
+        `Sua liderança está com *${apoiadores}* cadastrados e precisamos aumentar esse número. ` +
+        `Cada novo cadastro é fundamental para fortalecer a nossa rede! 💪\n\n` +
+        `Segue o relatório atualizado. Conto com você para correr atrás e cadastrar mais apoiadores nos próximos dias! 🚀\n\n` +
+        `Equipe Rede Guti`
+    }
+  ];
+};
+
 export const buildLeaderReportPdf = (data: LeaderReportData): jsPDF => {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();

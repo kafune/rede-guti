@@ -1,7 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Supporter } from '../types';
 import { formatPct, getSupporterCity, tallyBy, todayLabel } from '../reportUtils';
+import {
+  buildIncentiveMessage,
+  buildLeaderReportFileName,
+  buildLeaderReportPdf,
+  shareLeaderReport,
+  LeaderReportData
+} from '../reportPdf';
 
 interface Props {
   leaderName: string;
@@ -64,6 +71,44 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
   const distinctCities = byCity.length;
   const activeCount = supporters.filter((s) => s.status === 'Ativo').length;
 
+  const [sending, setSending] = useState(false);
+  const [sendFeedback, setSendFeedback] = useState<string | null>(null);
+
+  const reportData: LeaderReportData = {
+    leaderName,
+    total,
+    activeCount,
+    mainCityLabel: mainCity?.label,
+    mainCityPct: mainCity ? formatPct(mainCity.count, total) : undefined,
+    distinctChurches,
+    distinctCities,
+    byChurch,
+    byCity
+  };
+
+  const handleWhatsApp = async () => {
+    if (total === 0 || sending) return;
+    setSending(true);
+    setSendFeedback(null);
+    try {
+      const doc = buildLeaderReportPdf(reportData);
+      const result = await shareLeaderReport(
+        doc,
+        buildLeaderReportFileName(leaderName),
+        buildIncentiveMessage(reportData)
+      );
+      if (result === 'fallback') {
+        setSendFeedback('PDF baixado. Anexe-o na conversa do WhatsApp que foi aberta.');
+      } else if (result === 'shared') {
+        setSendFeedback('Relatório pronto para envio no WhatsApp.');
+      }
+    } catch {
+      setSendFeedback('Não foi possível gerar o envio. Tente novamente.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handlePrint = () => window.print();
 
   const handleExport = () => {
@@ -94,7 +139,15 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
           <i className="fa-solid fa-arrow-left"></i>
           Voltar ao ranking
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleWhatsApp}
+            disabled={total === 0 || sending}
+            className="min-h-[44px] py-3 px-6 bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center"
+          >
+            <i className={`fa-brands fa-whatsapp mr-2 ${sending ? 'animate-pulse' : ''}`}></i>
+            {sending ? 'Gerando...' : 'Enviar (WhatsApp)'}
+          </button>
           <button
             onClick={handleExport}
             disabled={total === 0}
@@ -113,6 +166,13 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
           </button>
         </div>
       </div>
+
+      {sendFeedback && (
+        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 print:hidden">
+          <i className="fa-solid fa-circle-info mr-1.5"></i>
+          {sendFeedback}
+        </p>
+      )}
 
       <div
         id="leader-report"

@@ -31,6 +31,7 @@ import SupporterDetail from './components/SupporterDetail';
 import AdminPanel from './components/AdminPanel';
 import ExportPanel from './components/ExportPanel';
 import LeaderReportPanel from './components/LeaderReportPanel';
+import MetasPanel from './components/metas/MetasPanel';
 import Login from './components/Login';
 import MapView from './components/MapView';
 import PublicSignup from './components/PublicSignup';
@@ -82,7 +83,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState<
     'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' | 'relatorio' |
-    'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades'
+    'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades'
   >('dashboard');
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
   const [selectedEventoId, setSelectedEventoId] = useState<string | null>(null);
@@ -616,6 +617,10 @@ const App: React.FC = () => {
           <LeaderReportPanel supporters={allSupporters} />
         )}
 
+        {view === 'metas' && canExportData && (
+          <MetasPanel municipalities={municipalities} />
+        )}
+
         {view === 'eventos' && (
           <EventoList
             currentUser={currentUser}
@@ -722,6 +727,15 @@ const App: React.FC = () => {
               <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Relatório</span>
             </button>
           )}
+          {canExportData && (
+            <button
+              onClick={() => setView('metas')}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'metas' ? 'text-blue-600' : 'opacity-40'}`}
+            >
+              <i className="fa-solid fa-bullseye text-lg leading-none"></i>
+              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Metas</span>
+            </button>
+          )}
           <button
             onClick={() => setView('eventos')}
             className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${['eventos', 'evento-novo', 'evento-detalhe'].includes(view) ? 'text-blue-600' : 'opacity-40'}`}
@@ -813,6 +827,17 @@ const App: React.FC = () => {
             title="Relatório de Lideranças"
           >
             <i className="fa-solid fa-ranking-star text-xl"></i>
+          </button>
+        )}
+        {canExportData && (
+          <button
+            onClick={() => setView('metas')}
+            className={`p-4 rounded-2xl transition-all ${
+              view === 'metas' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
+            }`}
+            title="Metas por Cidade"
+          >
+            <i className="fa-solid fa-bullseye text-xl"></i>
           </button>
         )}
         <button

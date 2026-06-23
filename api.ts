@@ -9,6 +9,7 @@ import {
   EventoIndicadoStatus,
   EventoPublicInfo,
   HierarchyPathItem,
+  MetaCidade,
   Municipality,
   SupportStatus,
   UserRole,
@@ -506,6 +507,49 @@ export const updateAtividade = async (
 
 export const deleteAtividade = async (id: string) => {
   await request<void>(`/atividades/${id}`, { method: 'DELETE' });
+};
+
+// ── METAS POR CIDADE (PLANEJAMENTO ELEITORAL) ────────────────────────────────
+
+export const fetchMetas = async () => {
+  const data = await request<{ metas: MetaCidade[] }>('/metas');
+  return data.metas;
+};
+
+export const createMeta = async (payload: {
+  municipalityId: string;
+  regiao?: string;
+  eleitores?: number;
+  votosValidos?: number;
+  meta?: number;
+  observacao?: string;
+}) => {
+  const data = await request<{ meta: MetaCidade }>('/metas', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return data.meta;
+};
+
+export const updateMeta = async (
+  id: string,
+  payload: {
+    regiao?: string | null;
+    eleitores?: number;
+    votosValidos?: number;
+    meta?: number;
+    observacao?: string | null;
+  }
+) => {
+  const data = await request<{ meta: MetaCidade }>(`/metas/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+  return data.meta;
+};
+
+export const deleteMeta = async (id: string) => {
+  await request<void>(`/metas/${id}`, { method: 'DELETE' });
 };
 
 export { getApiBase };

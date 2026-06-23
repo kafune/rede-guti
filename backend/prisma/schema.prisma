@@ -112,6 +112,7 @@ model Municipality {
   stateCode String       @default("SP") @map("state_code")
   createdAt DateTime     @default(now()) @map("created_at")
   indications Indication[]
+  metas       MetaCidade[]
 
   @@unique([name, stateCode])
   @@map("municipalities")
@@ -197,4 +198,23 @@ model Indication {
   @@index([municipalityId])
   @@index([indicatedByUserId])
   @@map("indications")
+}
+
+// Planejamento eleitoral por cidade (metas de votos da coordenação).
+// Uma linha por município: dados de referência (eleitores, votos válidos) e a
+// meta digitável. O percentual buscado é calculado no app (meta / votos válidos)
+// e o acompanhamento real cruza com os apoiadores cadastrados no município.
+model MetaCidade {
+  id             String       @id @default(cuid())
+  municipalityId String       @unique @map("municipality_id")
+  regiao         String?
+  eleitores      Int          @default(0)
+  votosValidos   Int          @default(0) @map("votos_validos")
+  meta           Int          @default(0)
+  observacao     String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  municipality   Municipality @relation(fields: [municipalityId], references: [id], onDelete: Cascade)
+
+  @@map("metas_cidade")
 }

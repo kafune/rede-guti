@@ -307,11 +307,22 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
 
       {isRegionalViewer && (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
-          <h3 className="text-lg font-black mb-2">Visibilidade da sua rede</h3>
-          <p className="text-sm opacity-60">
-            Seu perfil exibe apenas totais agregados dos apoiadores vinculados ao seu
-            link de indicacao.
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h3 className="text-lg font-black">Meus cadastros</h3>
+            <i className="fa-solid fa-eye text-blue-500 mt-1"></i>
+          </div>
+          <p className="text-sm opacity-60 mb-4">
+            Aqui voce acompanha, em modo somente leitura, os apoiadores que se
+            cadastraram pelo seu link de indicacao: nome, igreja, cidade, status e
+            data. Voce nao pode editar nem excluir cadastros.
           </p>
+          <button
+            onClick={onViewList}
+            className="w-full sm:w-auto px-5 py-3 rounded-2xl font-bold text-sm bg-blue-600 text-white active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 inline-flex items-center justify-center gap-2"
+          >
+            <i className="fa-solid fa-users"></i>
+            Ver meus cadastros
+          </button>
         </div>
       )}
 

@@ -80,6 +80,17 @@ export const visibleUsersWhere = (actor: AuthenticatedUser): Prisma.UserWhereInp
   return null;
 };
 
+/**
+ * Verdadeiro quando a indicação foi cadastrada pelo próprio ator — seja porque
+ * ele a criou (createdById) ou porque foi vinculada ao link dele
+ * (indicatedByUserId). Usado para liberar a visualização do nome dos apoiadores
+ * que a liderança cadastrou pelo próprio link.
+ */
+export const isOwnIndication = (
+  actor: AuthenticatedUser,
+  indication: { createdById?: string | null; indicatedByUserId?: string | null }
+) => indication.createdById === actor.sub || indication.indicatedByUserId === actor.sub;
+
 export const visibleIndicationsWhere = (actor: AuthenticatedUser): Prisma.IndicationWhereInput => {
   const actorRole = normalizeRole(actor.role);
 

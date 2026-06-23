@@ -217,11 +217,22 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!currentUser || canViewSupporterIdentity(currentUser.role)) {
+    if (!currentUser) {
       return;
     }
 
-    if (view === 'list' || view === 'detail' || view === 'map') {
+    const canDirectory = canViewSupporterIdentity(currentUser.role);
+    const leader = currentUser.role === 'LIDER_REGIONAL';
+
+    // O mapa continua restrito a quem enxerga a base completa.
+    if (view === 'map' && !canDirectory) {
+      setView('dashboard');
+      return;
+    }
+
+    // Lista e detalhe ficam liberados para quem vê a base OU para a liderança
+    // (que enxerga apenas os apoiadores do próprio link, em modo leitura).
+    if ((view === 'list' || view === 'detail') && !canDirectory && !leader) {
       setSelectedSupporter(null);
       setView('dashboard');
     }
@@ -469,6 +480,11 @@ const App: React.FC = () => {
 
   const canOpenManagementPanel = canAccessManagementPanel(currentUser.role);
   const canAccessSupporterDirectory = canViewSupporterIdentity(currentUser.role);
+  // Liderança regional: pode visualizar (somente leitura) os apoiadores que
+  // cadastrou pelo próprio link, mesmo sem acesso à base completa.
+  const isLeader = currentUser.role === 'LIDER_REGIONAL';
+  const canBrowseSupporters = canAccessSupporterDirectory || isLeader;
+  const supporterDirectoryLabel = isLeader ? 'Meus Cadastros' : 'Apoiadores';
   const canCreateNewEntries = canCreateRegistrations(currentUser.role);
   const canExportData = currentUser.role === 'COORDENADOR';
   const isMapView = view === 'map';
@@ -548,7 +564,7 @@ const App: React.FC = () => {
           />
         )}
 
-        {view === 'list' && canAccessSupporterDirectory && (
+        {view === 'list' && canBrowseSupporters && (
           <SupporterList
             supporters={allSupporters}
             user={currentUser}
@@ -570,7 +586,7 @@ const App: React.FC = () => {
           />
         )}
 
-        {view === 'detail' && canAccessSupporterDirectory && selectedSupporter && (
+        {view === 'detail' && canBrowseSupporters && selectedSupporter && (
           <SupporterDetail
             supporter={selectedSupporter}
             allSupporters={allSupporters}
@@ -650,13 +666,13 @@ const App: React.FC = () => {
             <i className="fa-solid fa-chart-line text-lg leading-none"></i>
             <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Dashboard</span>
           </button>
-          {canAccessSupporterDirectory && (
+          {canBrowseSupporters && (
             <button
               onClick={() => setView('list')}
               className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'list' ? 'text-blue-600' : 'opacity-40'}`}
             >
               <i className="fa-solid fa-users text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Apoiadores</span>
+              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">{supporterDirectoryLabel}</span>
             </button>
           )}
           {canCreateNewEntries && (
@@ -733,13 +749,13 @@ const App: React.FC = () => {
         >
           <i className="fa-solid fa-chart-line text-xl"></i>
         </button>
-        {canAccessSupporterDirectory && (
+        {canBrowseSupporters && (
           <button
             onClick={() => setView('list')}
             className={`p-4 rounded-2xl transition-all ${
               view === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
             }`}
-            title="Apoiadores"
+            title={supporterDirectoryLabel}
           >
             <i className="fa-solid fa-users text-xl"></i>
           </button>

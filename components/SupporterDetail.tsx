@@ -262,12 +262,14 @@ const SupporterDetail: React.FC<Props> = ({
 
           {/* Actions */}
           <div className="space-y-3 pt-6 border-t dark:border-gray-700">
-            <button 
-              onClick={() => window.open(`https://wa.me/${supporter.whatsapp}`, '_blank')}
-              className="theme-accent-button w-full py-5 rounded-[1.75rem] font-black flex items-center justify-center gap-3 active:scale-95 transition-all"
-            >
-              <i className="fa-brands fa-whatsapp text-2xl"></i> FALAR NO WHATSAPP
-            </button>
+            {supporter.whatsapp && (
+              <button
+                onClick={() => window.open(`https://wa.me/${supporter.whatsapp}`, '_blank')}
+                className="theme-accent-button w-full py-5 rounded-[1.75rem] font-black flex items-center justify-center gap-3 active:scale-95 transition-all"
+              >
+                <i className="fa-brands fa-whatsapp text-2xl"></i> FALAR NO WHATSAPP
+              </button>
+            )}
 
             {canDelete && (
               <button 

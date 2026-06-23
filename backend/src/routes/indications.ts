@@ -4,10 +4,13 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import {
+  AuthenticatedUser,
   canCreateSupporters,
   canDeleteSupporters,
   canUpdateSupporterStatus,
   canViewSupporterIdentities,
+  isOwnIndication,
+  normalizeRole,
   visibleIndicationsWhere
 } from '../lib/access.js';
 import {
@@ -99,15 +102,18 @@ const serializeIndicationRecord = (indication: {
     role: RoleType;
     indicatedByUser?: any;
   } | null;
-}, options?: { redactSupporterIdentity?: boolean }) => {
+}, options?: { redactSupporterIdentity?: boolean; redactContact?: boolean }) => {
   const redactSupporterIdentity = options?.redactSupporterIdentity ?? false;
+  // Quando a identidade é totalmente ocultada, o contato também é. Líderes veem
+  // o nome dos próprios cadastros, mas nunca o telefone/e-mail (redactContact).
+  const redactContact = redactSupporterIdentity || (options?.redactContact ?? false);
 
   return {
     id: indication.id,
     name: redactSupporterIdentity ? 'Apoiador oculto' : indication.name,
     identityHidden: redactSupporterIdentity,
-    phone: redactSupporterIdentity ? null : indication.phone,
-    email: redactSupporterIdentity ? null : indication.email,
+    phone: redactContact ? null : indication.phone,
+    email: redactContact ? null : indication.email,
     status: indication.status,
     indicatedBy:
       indication.indicatedBy ??
@@ -121,6 +127,27 @@ const serializeIndicationRecord = (indication: {
     municipality: indication.municipality,
     hierarchyPath: redactSupporterIdentity ? null : buildSupporterHierarchyPath(indication)
   };
+};
+
+/**
+ * Define como cada registro deve ser serializado para o ator:
+ * - COORDENADOR / VERIFICADORA: identidade e contato completos.
+ * - LIDER_REGIONAL nos próprios cadastros (link dele): nome visível, sem contato.
+ * - Demais casos (ex.: cadastros da sub-rede): identidade totalmente oculta.
+ */
+const indicationRedactionFor = (
+  actor: AuthenticatedUser,
+  indication: { createdById?: string | null; indicatedByUserId?: string | null }
+): { redactSupporterIdentity?: boolean; redactContact?: boolean } => {
+  if (canViewSupporterIdentities(actor.role)) {
+    return {};
+  }
+
+  if (normalizeRole(actor.role) === 'LIDER_REGIONAL' && isOwnIndication(actor, indication)) {
+    return { redactContact: true };
+  }
+
+  return { redactSupporterIdentity: true };
 };
 
 export async function indicationRoutes(app: FastifyInstance) {
@@ -188,10 +215,9 @@ export async function indicationRoutes(app: FastifyInstance) {
       orderBy: { createdAt: 'desc' }
     });
 
-    const redactSupporterIdentity = !canViewSupporterIdentities(request.user.role);
     return {
       indications: indications.map((indication) =>
-        serializeIndicationRecord(indication, { redactSupporterIdentity })
+        serializeIndicationRecord(indication, indicationRedactionFor(request.user, indication))
       )
     };
   });
@@ -271,9 +297,7 @@ export async function indicationRoutes(app: FastifyInstance) {
     }).catch((err) => console.error('[engagement] supporter.created failed:', err));
 
     return reply.code(201).send({
-      indication: serializeIndicationRecord(indication, {
-        redactSupporterIdentity: !canViewSupporterIdentities(request.user.role)
-      })
+      indication: serializeIndicationRecord(indication, indicationRedactionFor(request.user, indication))
     });
   });
 
@@ -322,9 +346,7 @@ export async function indicationRoutes(app: FastifyInstance) {
     });
 
     return {
-      indication: serializeIndicationRecord(indication, {
-        redactSupporterIdentity: !canViewSupporterIdentities(request.user.role)
-      })
+      indication: serializeIndicationRecord(indication, indicationRedactionFor(request.user, indication))
     };
   });
 }

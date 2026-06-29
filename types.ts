@@ -193,6 +193,20 @@ export interface EventoPublicInfo {
   limiteAtingido: boolean;
 }
 
+export interface MetaCidade {
+  id: string;
+  municipalityId: string;
+  cidade: string;
+  regiao?: string | null;
+  eleitores: number;
+  votosValidos: number;
+  meta: number;
+  observacao?: string | null;
+  apoiadoresCadastrados: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DashboardStats {
   total: number;
   last7Days: number;

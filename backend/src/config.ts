@@ -10,4 +10,13 @@ export const config = {
   // Public URL of the frontend (e.g. https://rede.guti.com.br/) used to build
   // absolute links (event confirmation) inside automation payloads.
   appPublicUrl: process.env.APP_PUBLIC_URL?.trim().replace(/\/+$/, '') || null,
+  // Instance geography: which municipalities dataset validates the public
+  // signup ('sp' → data/municipios_sp_645.csv) and the state code stamped on
+  // municipalities created by it.
+  geoDataset: (process.env.GEO_DATASET ?? 'sp').trim().toLowerCase(),
+  geoStateCode: (process.env.GEO_STATE_CODE ?? 'SP').trim().toUpperCase(),
+  // "Igreja" field on supporter registration. The region-based instance turns
+  // this off; supporters are then linked to a sentinel church record so the
+  // NOT NULL churchId column stays untouched.
+  churchFieldEnabled: (process.env.CHURCH_FIELD_ENABLED ?? 'true').trim().toLowerCase() !== 'false',
 };

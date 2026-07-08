@@ -1,6 +1,7 @@
 ﻿
 import React, { useState, useMemo } from 'react';
 import { SupportStatus, Supporter, User } from '../types';
+import { BRAND } from '../branding';
 import { canDeleteSupporters, canUpdateSupporterStatus } from '../roleUtils';
 
 interface Props {
@@ -231,7 +232,7 @@ const SupporterDetail: React.FC<Props> = ({
                 ) : (
                   <div className="space-y-2">
                     <p className="text-xs font-bold text-gray-400 italic">
-                      {supporter.indicatedBy || supporter.indicatedByUser?.name || 'Lideranca Direta (Rede Guti)'}
+                      {supporter.indicatedBy || supporter.indicatedByUser?.name || BRAND.directLeadershipLabel}
                     </p>
                     {hierarchyTrail && (
                       <p className="text-[10px] font-black uppercase tracking-wide text-blue-600 break-words">

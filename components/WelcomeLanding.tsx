@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { BRAND } from '../branding';
 
 interface Props {
   name: string;
@@ -22,7 +23,7 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
 
         <div className="relative z-10 max-w-lg mx-auto">
           <img src="/logo.jpeg" alt="Logo" className="w-16 h-16 rounded-2xl mx-auto mb-6 object-cover" />
-          <h1 className="text-3xl font-black mb-2 tracking-tight">Bem-vindo à Família Guti 2026!</h1>
+          <h1 className="text-3xl font-black mb-2 tracking-tight">{BRAND.welcomeTitle}</h1>
           <p className="text-blue-100 font-medium opacity-80">
             Olá, <span className="text-white font-bold">{name.split(' ')[0]}</span>! Seu cadastro foi realizado com sucesso.
           </p>
@@ -85,7 +86,7 @@ const WelcomeLanding: React.FC<Props> = ({ name, groupLink }) => {
 
       {/* Footer Info */}
       <div className="p-8 text-center opacity-30">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em]">Guti 2026 • Rede de Apoiadores SP</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em]">{BRAND.footer}</p>
       </div>
     </div>
   );

@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { BRAND } from '../branding';
+import { FEATURES } from '../features';
 import { createPublicIndication, fetchPublicOptions, getApiErrorMessage } from '../api';
 
 const getIndicatorFromHash = () => {
@@ -188,7 +190,7 @@ const PublicSignup: React.FC = () => {
         name: name.trim(),
         phone: normalizedPhone,
         email: email.trim(),
-        churchName: churchName.trim(),
+        churchName: FEATURES.churchFieldEnabled ? churchName.trim() : undefined,
         municipalityName: normalizedMunicipality,
         indicatedBy: refIndicator.trim(),
         indicatedByUserId: refIndicatorId.trim() || undefined
@@ -230,9 +232,9 @@ const PublicSignup: React.FC = () => {
       <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-6">
         <div className="theme-panel bg-white dark:bg-gray-800 rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl animate-soft-pop transition-all duration-700 ease-out">
           <div className="text-center mb-8">
-            <div className="theme-brand-mark w-20 h-20 rounded-3xl flex items-center justify-center text-white text-4xl font-black mx-auto mb-5">G</div>
+            <div className="theme-brand-mark w-20 h-20 rounded-3xl flex items-center justify-center text-white text-4xl font-black mx-auto mb-5">{BRAND.initial}</div>
             <h1 className="text-3xl font-black tracking-tight mb-2">Cadastro de Apoiador</h1>
-            <p className="text-gray-500 dark:text-gray-400 font-medium">Rede de Apoiadores do Estado de SP</p>
+            <p className="text-gray-500 dark:text-gray-400 font-medium">{BRAND.tagline}</p>
           </div>
 
           {optionsError && (
@@ -317,23 +319,25 @@ const PublicSignup: React.FC = () => {
                   ))}
                 </datalist>
               </div>
-              <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-1">Igreja</label>
-                <input
-                  type="text"
-                  list="public-churches"
-                  value={churchName}
-                  onChange={(e) => setChurchName(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  placeholder="Nome da igreja"
-                  required
-                />
-                <datalist id="public-churches">
-                  {churches.map((item) => (
-                    <option key={item} value={item} />
-                  ))}
-                </datalist>
-              </div>
+              {FEATURES.churchFieldEnabled && (
+                <div>
+                  <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-1">Igreja</label>
+                  <input
+                    type="text"
+                    list="public-churches"
+                    value={churchName}
+                    onChange={(e) => setChurchName(e.target.value)}
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    placeholder="Nome da igreja"
+                    required
+                  />
+                  <datalist id="public-churches">
+                    {churches.map((item) => (
+                      <option key={item} value={item} />
+                    ))}
+                  </datalist>
+                </div>
+              )}
             </div>
 
             <div>
@@ -376,8 +380,9 @@ const PublicSignup: React.FC = () => {
           <div className="theme-panel bg-white/90 dark:bg-gray-800/90 rounded-[2rem] p-6 shadow-xl border border-white/20 transition-all duration-700 ease-out">
             <h2 className="text-lg font-black mb-2">Como funciona</h2>
             <p className="text-sm opacity-70">
-              Preencha seus dados e confirme a igreja e o municipio. Sua indicacao ajuda a
-              fortalecer a rede de apoio em todo o estado.
+              {FEATURES.churchFieldEnabled
+                ? 'Preencha seus dados e confirme a igreja e o municipio. Sua indicacao ajuda a fortalecer a rede de apoio em todo o estado.'
+                : 'Preencha seus dados e confirme o municipio. Sua indicacao ajuda a fortalecer a rede de apoio em toda a regiao.'}
             </p>
           </div>
           <div className="theme-hero rounded-[2rem] p-6 shadow-2xl shadow-blue-500/30 transition-all duration-700 ease-out">

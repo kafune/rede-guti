@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AppSettings, SupportStatus, Supporter, User, UserRole } from '../types';
+import { BRAND } from '../branding';
 import { fetchSettings } from '../api';
 import { canCreateRegistrations } from '../roleUtils';
 import LeaderImpactPanel from './LeaderImpactPanel';
@@ -29,7 +30,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
   const canShareRegistrationLink = canCreateRegistrations(currentUser.role);
   const networkLabel =
     currentUser.role === UserRole.COORDENADOR
-      ? 'Total da Rede SP'
+      ? BRAND.networkTotalLabel
       : isVerifier
         ? 'Base completa de apoiadores'
         : 'Total da Sua Rede Regional';
@@ -53,7 +54,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
   // Texto padrão de convite — pronto para colar no WhatsApp com o link embutido.
   const shareMessage =
     `Olá! 🙏\n\n` +
-    `Estou participando da *Rede Guti 2026* e quero te convidar para somar com a gente.\n\n` +
+    `Estou participando da *${BRAND.shareName}* e quero te convidar para somar com a gente.\n\n` +
     `Leva menos de 1 minuto para se cadastrar como apoiador(a) — é só acessar o link abaixo:\n${shareUrl}\n\n` +
     `Conto com você! 💙${indicatorName ? `\n— ${indicatorName}` : ''}`;
 

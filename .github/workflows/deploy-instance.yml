@@ -1,0 +1,85 @@
+# Workflow reutilizável: build do frontend + rsync + rebuild do backend no VPS.
+# Cada instância (deploy.yml, deploy-regional.yml) chama este workflow com seus
+# próprios inputs; a lógica de deploy vive só aqui.
+name: Deploy instance (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      vps_host:
+        description: Host/IP do VPS
+        required: true
+        type: string
+      vps_user:
+        description: Usuário SSH
+        required: true
+        type: string
+      app_dir:
+        description: Diretório do checkout no VPS
+        required: true
+        type: string
+      remote_dist_path:
+        description: Diretório do build do frontend no VPS
+        required: true
+        type: string
+      compose:
+        description: Comando docker compose da stack (com -p/-f quando aplicável)
+        required: false
+        type: string
+        default: docker compose
+      frontend_env:
+        description: Conteúdo do .env.local usado no build do frontend (VITE_*)
+        required: false
+        type: string
+        default: VITE_API_URL=/api
+    secrets:
+      ssh_key:
+        description: Chave SSH privada com acesso ao VPS
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Build frontend
+        run: |
+          cat > .env.local <<'FRONTEND_ENV'
+          ${{ inputs.frontend_env }}
+          FRONTEND_ENV
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Sync frontend to VPS
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -az --delete
+          path: dist/
+          remote_path: ${{ inputs.remote_dist_path }}
+          remote_host: ${{ inputs.vps_host }}
+          remote_user: ${{ inputs.vps_user }}
+          remote_key: ${{ secrets.ssh_key }}
+
+      - name: Rebuild backend + migrate
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ inputs.vps_host }}
+          username: ${{ inputs.vps_user }}
+          key: ${{ secrets.ssh_key }}
+          request_pty: true
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            cd ${{ inputs.app_dir }}
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
+            ${{ inputs.compose }} build api
+            ${{ inputs.compose }} up -d
+            ${{ inputs.compose }} exec -T api npm run prisma:deploy
+            ${{ inputs.compose }} exec -T api npm run seed

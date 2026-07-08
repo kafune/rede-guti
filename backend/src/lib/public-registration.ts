@@ -1,6 +1,19 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { config } from '../config.js';
+
+// Datasets registrados: nome lógico (GEO_DATASET) → CSV em src/data/.
+// Datasets fora do registro seguem a convenção municipios_<dataset>.csv.
+const DATASET_FILES: Record<string, string> = {
+  sp: 'municipios_sp_645.csv',
+};
+
+const resolveDatasetFileName = (dataset: string) => {
+  const sanitized = dataset.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  if (!sanitized) return DATASET_FILES.sp;
+  return DATASET_FILES[sanitized] ?? `municipios_${sanitized}.csv`;
+};
 
 const collapseWhitespace = (value: string) => value.trim().replace(/\s+/g, ' ');
 
@@ -16,17 +29,18 @@ const normalizeLookupKey = (value: string) => {
   return sanitized.replace(/\bsp\b$/u, '').trim();
 };
 
-const loadOfficialSpMunicipalities = () => {
+const loadOfficialMunicipalities = () => {
   const currentFile = fileURLToPath(import.meta.url);
   const currentDir = dirname(currentFile);
+  const fileName = resolveDatasetFileName(config.geoDataset);
   const csvPath =
     [
-      join(currentDir, '../data/municipios_sp_645.csv'),
-      join(currentDir, '../../src/data/municipios_sp_645.csv')
+      join(currentDir, `../data/${fileName}`),
+      join(currentDir, `../../src/data/${fileName}`)
     ].find((candidatePath) => existsSync(candidatePath)) ?? '';
 
   if (!csvPath) {
-    throw new Error('Official SP municipalities file not found.');
+    throw new Error(`Municipalities dataset file not found: ${fileName}`);
   }
 
   const municipalityNames = readFileSync(csvPath, 'utf8')
@@ -40,9 +54,9 @@ const loadOfficialSpMunicipalities = () => {
   return Array.from(new Set(municipalityNames)).sort((left, right) => left.localeCompare(right));
 };
 
-const officialSpMunicipalities = loadOfficialSpMunicipalities();
+const officialMunicipalities = loadOfficialMunicipalities();
 const municipalityLookup = new Map(
-  officialSpMunicipalities.map((name) => [normalizeLookupKey(name), name])
+  officialMunicipalities.map((name) => [normalizeLookupKey(name), name])
 );
 
 export const normalizeText = (value: string) => collapseWhitespace(value);
@@ -53,7 +67,7 @@ export const normalizeMunicipalityName = (value: string) => {
   return municipalityLookup.get(lookupKey) ?? null;
 };
 
-export const getPublicMunicipalityOptions = () => [...officialSpMunicipalities];
+export const getPublicMunicipalityOptions = () => [...officialMunicipalities];
 
 type PhoneValidationResult =
   | { normalized: string }

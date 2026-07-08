@@ -1,0 +1,90 @@
+# Segunda instância (vertical regional) — mesmo código, banco e domínio próprios.
+#
+# Uso (a partir de um checkout dedicado no VPS, ex. /home/paiva/rede-guti-regional):
+#   docker compose -p rede-regional -f docker-compose.regional.yml up -d
+#
+# Variáveis (definir em um arquivo .env ao lado deste compose):
+#   REGIONAL_DOMAIN        domínio público da vertical (ex.: regional.redeguti.ddnsfree.com)
+#   REGIONAL_DIST_DIR      diretório do build do frontend no host (ex.: /var/www/rede-regional/dist)
+#   REGIONAL_NGINX_CONF    caminho do nginx-spa.conf no host (o mesmo arquivo do repo serve)
+#   REGIONAL_DB_NAME       nome do banco próprio (default: rede_regional)
+#   REGIONAL_DB_USER       usuário do Postgres (default: postgres)
+#   REGIONAL_DB_PASSWORD   senha do Postgres (obrigatória)
+#   REGIONAL_API_PORT      porta local da API no host (default: 4001; a 4000 é da instância 1)
+#
+# O backend/.env deste checkout precisa de DATABASE_URL apontando para db-regional,
+# JWT_SECRET PRÓPRIO (distinto da instância 1 — tokens não podem valer nas duas),
+# credenciais de seed próprias e as flags da instância (GEO_DATASET, GEO_STATE_CODE,
+# CHURCH_FIELD_ENABLED). Ver backend/.env.example e DEPLOY-REGIONAL.md.
+#
+# Os serviços têm nomes únicos (db-regional, api/frontend com routers rede-regional-*)
+# porque a dokploy-network é compartilhada com a instância 1: um segundo serviço
+# chamado "db" na mesma rede colidiria no DNS interno do Docker com o banco dela.
+# O banco fica só na rede interna, sem porta exposta no host.
+
+services:
+  db-regional:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${REGIONAL_DB_NAME:-rede_regional}
+      POSTGRES_USER: ${REGIONAL_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${REGIONAL_DB_PASSWORD:?defina REGIONAL_DB_PASSWORD no .env}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  api:
+    build:
+      context: ./backend
+      args:
+        DATABASE_URL: postgres://${REGIONAL_DB_USER:-postgres}:${REGIONAL_DB_PASSWORD}@db-regional:5432/${REGIONAL_DB_NAME:-rede_regional}?schema=public
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgres://${REGIONAL_DB_USER:-postgres}:${REGIONAL_DB_PASSWORD}@db-regional:5432/${REGIONAL_DB_NAME:-rede_regional}?schema=public
+    depends_on:
+      - db-regional
+    ports:
+      - "127.0.0.1:${REGIONAL_API_PORT:-4001}:4000"
+    networks:
+      - internal
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rede-regional-api.rule=Host(`${REGIONAL_DOMAIN}`) && PathPrefix(`/api`)
+      - traefik.http.routers.rede-regional-api.entrypoints=websecure
+      - traefik.http.routers.rede-regional-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.rede-regional-api.middlewares=rede-regional-strip
+      - traefik.http.middlewares.rede-regional-strip.stripprefix.prefixes=/api
+      - traefik.http.services.rede-regional-api.loadbalancer.server.port=4000
+      - traefik.http.routers.rede-regional-api.priority=10
+
+  frontend:
+    image: nginx:alpine
+    volumes:
+      - ${REGIONAL_DIST_DIR:?defina REGIONAL_DIST_DIR no .env}:/usr/share/nginx/html:ro
+      - ${REGIONAL_NGINX_CONF:?defina REGIONAL_NGINX_CONF no .env}:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - dokploy-network
+    labels:
+      - traefik.enable=true
+      # HTTPS
+      - traefik.http.routers.rede-regional-frontend.rule=Host(`${REGIONAL_DOMAIN}`)
+      - traefik.http.routers.rede-regional-frontend.entrypoints=websecure
+      - traefik.http.routers.rede-regional-frontend.tls.certresolver=letsencrypt
+      - traefik.http.services.rede-regional-frontend.loadbalancer.server.port=80
+      - traefik.http.routers.rede-regional-frontend.priority=1
+      # HTTP → HTTPS redirect
+      - traefik.http.routers.rede-regional-frontend-http.rule=Host(`${REGIONAL_DOMAIN}`)
+      - traefik.http.routers.rede-regional-frontend-http.entrypoints=web
+      - traefik.http.routers.rede-regional-frontend-http.middlewares=redirect-to-https@file
+      - traefik.http.routers.rede-regional-frontend-http.priority=1
+
+volumes:
+  db_data:
+
+networks:
+  internal:
+  dokploy-network:
+    external: true

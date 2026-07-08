@@ -14,6 +14,7 @@ import {
   getRoleLabel,
   isUserRoleRegistrationTarget
 } from '../roleUtils';
+import { FEATURES } from '../features';
 
 interface Props {
   currentUser: User;
@@ -107,10 +108,14 @@ const SupporterForm: React.FC<Props> = ({
       if (
         !supporterForm.name.trim() ||
         !supporterForm.whatsapp.trim() ||
-        !supporterForm.churchName.trim() ||
+        (FEATURES.churchFieldEnabled && !supporterForm.churchName.trim()) ||
         !supporterForm.municipalityName.trim()
       ) {
-        alert('Preencha nome, WhatsApp, igreja e municipio.');
+        alert(
+          FEATURES.churchFieldEnabled
+            ? 'Preencha nome, WhatsApp, igreja e municipio.'
+            : 'Preencha nome, WhatsApp e municipio.'
+        );
         return;
       }
 
@@ -118,7 +123,7 @@ const SupporterForm: React.FC<Props> = ({
         target: SUPPORTER_REGISTRATION_TARGET,
         name: supporterForm.name.trim(),
         whatsapp: supporterForm.whatsapp.trim(),
-        churchName: supporterForm.churchName.trim(),
+        churchName: FEATURES.churchFieldEnabled ? supporterForm.churchName.trim() : undefined,
         municipalityName: supporterForm.municipalityName.trim()
       };
     }
@@ -336,29 +341,31 @@ const SupporterForm: React.FC<Props> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-2">
-                  Igreja / Denominacao
-                </label>
-                <input
-                  type="text"
-                  list="registration-churches"
-                  placeholder="Ex: Igreja Batista Viva"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={supporterForm.churchName}
-                  onChange={(event) =>
-                    setSupporterForm((previous) => ({
-                      ...previous,
-                      churchName: event.target.value
-                    }))
-                  }
-                />
-                <datalist id="registration-churches">
-                  {churches.map((church) => (
-                    <option key={church.id} value={church.name} />
-                  ))}
-                </datalist>
-              </div>
+              {FEATURES.churchFieldEnabled && (
+                <div>
+                  <label className="text-[10px] font-black uppercase opacity-40 ml-2 tracking-widest block mb-2">
+                    Igreja / Denominacao
+                  </label>
+                  <input
+                    type="text"
+                    list="registration-churches"
+                    placeholder="Ex: Igreja Batista Viva"
+                    className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-4 sm:px-6 py-3 sm:py-4 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={supporterForm.churchName}
+                    onChange={(event) =>
+                      setSupporterForm((previous) => ({
+                        ...previous,
+                        churchName: event.target.value
+                      }))
+                    }
+                  />
+                  <datalist id="registration-churches">
+                    {churches.map((church) => (
+                      <option key={church.id} value={church.name} />
+                    ))}
+                  </datalist>
+                </div>
+              )}
             </>
           )}
 

@@ -22,14 +22,18 @@ import {
 } from '../lib/hierarchy.js';
 import { validateAndNormalizeBrazilWhatsapp } from '../lib/public-registration.js';
 import { incrementLeaderIndication } from '../lib/engagementService.js';
+import { config } from '../config.js';
+import { resolveSentinelChurchId } from '../lib/church.js';
 
 const { IndicationStatus } = prismaClient;
+
+const churchIdSchema = z.string().min(1);
 
 const createSchema = z.object({
   name: z.string().min(2),
   phone: z.string().min(6).optional(),
   email: z.string().email().optional(),
-  churchId: z.string().min(1),
+  churchId: config.churchFieldEnabled ? churchIdSchema : churchIdSchema.optional(),
   municipalityId: z.string().min(1),
   indicatedBy: z.string().min(2).optional()
 });
@@ -271,6 +275,8 @@ export async function indicationRoutes(app: FastifyInstance) {
     if (phoneDup) return reply.code(409).send({ error: 'Esse WhatsApp ja esta cadastrado.' });
     if (emailDup) return reply.code(409).send({ error: 'Esse e-mail ja esta cadastrado.' });
 
+    const churchId = body.data.churchId ?? (await resolveSentinelChurchId());
+
     const indication = await prisma.indication.create({
       data: {
         name: body.data.name.trim(),
@@ -278,7 +284,7 @@ export async function indicationRoutes(app: FastifyInstance) {
         email: body.data.email?.toLowerCase().trim(),
         indicatedBy: getUserDisplayName(actor),
         indicatedByUserId: actor.id,
-        churchId: body.data.churchId,
+        churchId,
         municipalityId: body.data.municipalityId,
         createdById: actor.id
       },

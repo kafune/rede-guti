@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { BRAND } from '../branding';
 import { Atividade, AtividadePublicLider } from '../types';
 import {
   createPublicAtividade,
@@ -120,7 +121,7 @@ const PublicAtividadeCadastro: React.FC = () => {
         {/* Cabeçalho */}
         <div className="text-center mb-6">
           <img src="/logo.jpeg" alt="Logo" className="w-14 h-14 rounded-3xl mx-auto mb-3 object-cover shadow-lg" />
-          <h1 className="font-black text-xl">Rede SP · Guti 2026</h1>
+          <h1 className="font-black text-xl">{BRAND.publicHeader}</h1>
           <p className="text-xs opacity-40 font-bold uppercase tracking-widest">Registro de atividade</p>
         </div>
 
@@ -294,7 +295,7 @@ const PublicAtividadeCadastro: React.FC = () => {
         )}
 
         <p className="text-center text-[10px] opacity-20 font-bold pb-4">
-          Rede SP · Guti 2026
+          {BRAND.publicHeader}
         </p>
       </div>
     </div>

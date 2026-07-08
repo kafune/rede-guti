@@ -23,7 +23,8 @@ export interface RegistrationSupporterPayload {
   target: typeof SUPPORTER_REGISTRATION_TARGET;
   name: string;
   whatsapp: string;
-  churchName: string;
+  // Ausente quando a instância não coleta igreja (VITE_CHURCH_FIELD_ENABLED=false).
+  churchName?: string;
   municipalityName: string;
 }
 

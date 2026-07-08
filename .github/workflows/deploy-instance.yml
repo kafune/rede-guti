@@ -80,6 +80,10 @@ jobs:
             git reset --hard origin/main
             git clean -fd
             ${{ inputs.compose }} build api
+            # Migra ANTES de subir o backend novo: o boot (Fase B) resolve o
+            # tenant no banco e falharia se a migração ainda não tivesse
+            # rodado. O `run --rm` usa um container one-off (sobe o db por
+            # depends_on) enquanto o backend antigo continua no ar.
+            ${{ inputs.compose }} run --rm api npm run prisma:deploy
             ${{ inputs.compose }} up -d
-            ${{ inputs.compose }} exec -T api npm run prisma:deploy
             ${{ inputs.compose }} exec -T api npm run seed

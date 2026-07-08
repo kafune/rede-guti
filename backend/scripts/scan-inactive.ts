@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { scanAndAlertInactiveLeaders } from '../src/lib/engagementService.js';
 import { prisma } from '../src/db.js';
+import { resolveTenantFromEnv } from '../src/lib/tenant.js';
 
 // Standalone runner for the daily inactive-leader scan.
 // Usage:
@@ -13,6 +14,7 @@ import { prisma } from '../src/db.js';
 
 async function main() {
   const startedAt = Date.now();
+  await resolveTenantFromEnv();
   const result = await scanAndAlertInactiveLeaders();
   const ms = Date.now() - startedAt;
 

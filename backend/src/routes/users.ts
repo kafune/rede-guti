@@ -139,7 +139,8 @@ export async function userRoutes(app: FastifyInstance) {
           passwordHash,
           role: body.data.role,
           devzappLink: normalizeLeaderWhatsapp(body.data.whatsapp),
-          indicatedByUserId: request.user.sub
+          indicatedByUserId: request.user.sub,
+          tenantId: request.user.tenantId
         },
         select: userListSelect
       });

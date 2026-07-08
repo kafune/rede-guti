@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
+import { getTenantId } from '../lib/tenantContext.js';
 
 const churchSchema = z.object({
   name: z.string().min(2)
@@ -19,7 +20,9 @@ export async function churchRoutes(app: FastifyInstance) {
     }
 
     try {
-      const church = await prisma.church.create({ data: { name: body.data.name.trim() } });
+      const church = await prisma.church.create({
+        data: { name: body.data.name.trim(), tenantId: getTenantId() }
+      });
       return reply.code(201).send({ church });
     } catch (error: any) {
       if (error?.code === 'P2002') {

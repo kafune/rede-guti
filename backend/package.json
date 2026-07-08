@@ -14,6 +14,7 @@
     "seed": "tsx prisma/seed.ts",
     "precreate:coordinator": "bun run prisma:generate",
     "create:coordinator": "tsx scripts/create-coordinator.ts",
+    "create:tenant": "tsx scripts/create-tenant.ts",
     "scan:inactive": "tsx scripts/scan-inactive.ts"
   },
   "dependencies": {

@@ -4,6 +4,7 @@ import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import { config } from './config.js';
+import { resolveTenantFromEnv } from './lib/tenant.js';
 import { registerAuth } from './plugins/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { churchRoutes } from './routes/churches.js';
@@ -47,6 +48,10 @@ await app.register(automationRoutes);
 
 const start = async () => {
   try {
+    // Multi-tenant: o tenant do processo precisa estar resolvido antes de
+    // qualquer query — a extensão do Prisma recusa operar sem ele.
+    const tenant = await resolveTenantFromEnv();
+    app.log.info({ tenant: tenant.slug }, 'tenant resolved');
     await app.listen({ port: config.port, host: config.host });
   } catch (err) {
     app.log.error(err);

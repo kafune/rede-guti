@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
+import { getTenantId } from '../lib/tenantContext.js';
 
 const createSchema = z.object({
   municipalityId: z.string().min(1),
@@ -104,7 +105,8 @@ export async function metaRoutes(app: FastifyInstance) {
         eleitores: body.data.eleitores,
         votosValidos: body.data.votosValidos,
         meta: body.data.meta,
-        observacao: body.data.observacao || null
+        observacao: body.data.observacao || null,
+        tenantId: getTenantId()
       },
       include: { municipality: { select: { name: true } } }
     });

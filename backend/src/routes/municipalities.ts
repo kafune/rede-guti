@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { config } from '../config.js';
+import { getTenantId } from '../lib/tenantContext.js';
 
 const municipalitySchema = z.object({
   name: z.string().min(2),
@@ -25,7 +26,7 @@ export async function municipalityRoutes(app: FastifyInstance) {
 
     try {
       const municipality = await prisma.municipality.create({
-        data: { name, stateCode }
+        data: { name, stateCode, tenantId: getTenantId() }
       });
       return reply.code(201).send({ municipality });
     } catch (error: any) {

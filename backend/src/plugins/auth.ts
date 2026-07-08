@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { config } from '../config.js';
 import { normalizeRole } from '../lib/access.js';
+import { getTenantId } from '../lib/tenantContext.js';
 
 const matchesAutomationToken = (header: string | undefined) => {
   if (!config.automationToken || !header?.startsWith('Bearer ')) {
@@ -13,10 +14,19 @@ const matchesAutomationToken = (header: string | undefined) => {
   return provided.length === expected.length && timingSafeEqual(provided, expected);
 };
 
+// Um JWT só vale no tenant que o emitiu: mesmo que duas instâncias compartilhem
+// o segredo (não deveriam), o claim tenantId impede o replay entre elas.
+// Tokens antigos (pré-Fase B, sem o claim) caem aqui e forçam novo login.
+const belongsToCurrentTenant = (user: { tenantId?: string }) =>
+  user.tenantId === getTenantId();
+
 export const registerAuth = (app: FastifyInstance) => {
   app.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
+      if (!belongsToCurrentTenant(request.user)) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
     } catch {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
@@ -25,6 +35,9 @@ export const registerAuth = (app: FastifyInstance) => {
   app.decorate('requireCoordinator', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
+      if (!belongsToCurrentTenant(request.user)) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
       if (normalizeRole(request.user.role) !== 'COORDENADOR') {
         return reply.code(403).send({ error: 'Forbidden' });
       }
@@ -43,6 +56,9 @@ export const registerAuth = (app: FastifyInstance) => {
 
     try {
       await request.jwtVerify();
+      if (!belongsToCurrentTenant(request.user)) {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
       if (normalizeRole(request.user.role) !== 'COORDENADOR') {
         return reply.code(403).send({ error: 'Forbidden' });
       }

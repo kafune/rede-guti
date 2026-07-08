@@ -3,6 +3,11 @@
 Roteiro para colocar no ar uma instância **independente** do Redgut (dados, usuários e
 hierarquia próprios), a partir do mesmo código-fonte. A instância original não é tocada.
 
+> **Fase B (multi-tenant):** o schema agora suporta várias instâncias no
+> **mesmo banco**, isoladas por `tenant_id` + `TENANT_SLUG` no `backend/.env`.
+> Este roteiro (banco próprio por instância) continua válido; para compartilhar
+> o Postgres entre instâncias ou consolidar bancos, ver `MULTITENANCY.md`.
+
 ## Visão geral
 
 | | Instância 1 (igrejas/SP) | Instância regional |

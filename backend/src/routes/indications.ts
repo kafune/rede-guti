@@ -286,7 +286,8 @@ export async function indicationRoutes(app: FastifyInstance) {
         indicatedByUserId: actor.id,
         churchId,
         municipalityId: body.data.municipalityId,
-        createdById: actor.id
+        createdById: actor.id,
+        tenantId: request.user.tenantId
       },
       select: indicationQuerySelect
     });
@@ -315,6 +316,14 @@ export async function indicationRoutes(app: FastifyInstance) {
     const params = paramsSchema.safeParse(request.params);
     if (!params.success) {
       return reply.code(400).send({ error: 'Invalid id' });
+    }
+
+    const existing = await prisma.indication.findUnique({
+      where: { id: params.data.id },
+      select: { id: true }
+    });
+    if (!existing) {
+      return reply.code(404).send({ error: 'Indication not found' });
     }
 
     await prisma.indication.delete({ where: { id: params.data.id } });

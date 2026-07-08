@@ -18,6 +18,7 @@ import {
 import { incrementLeaderIndication } from '../lib/engagementService.js';
 import { config } from '../config.js';
 import { SENTINEL_CHURCH_NAME } from '../lib/church.js';
+import { getTenantId } from '../lib/tenantContext.js';
 
 const churchNameSchema = z.string().trim().min(2, 'Informe sua igreja.');
 
@@ -107,7 +108,7 @@ export async function publicRoutes(app: FastifyInstance) {
         orderBy: { name: 'asc' }
       }),
       prisma.appConfig.findUnique({
-        where: { id: 'default' },
+        where: { tenantId: getTenantId() },
         select: { whatsappGroupLink: true }
       })
     ]);
@@ -204,7 +205,7 @@ export async function publicRoutes(app: FastifyInstance) {
       where: { name: { equals: churchName, mode: 'insensitive' } }
     });
     if (!church) {
-      church = await prisma.church.create({ data: { name: churchName } });
+      church = await prisma.church.create({ data: { name: churchName, tenantId: getTenantId() } });
     }
 
     let municipality = await prisma.municipality.findFirst({
@@ -215,7 +216,7 @@ export async function publicRoutes(app: FastifyInstance) {
     });
     if (!municipality) {
       municipality = await prisma.municipality.create({
-        data: { name: municipalityName, stateCode: config.geoStateCode }
+        data: { name: municipalityName, stateCode: config.geoStateCode, tenantId: getTenantId() }
       });
     }
 
@@ -228,7 +229,8 @@ export async function publicRoutes(app: FastifyInstance) {
         indicatedByUserId: indicator.id,
         churchId: church.id,
         municipalityId: municipality.id,
-        createdById: indicator.id
+        createdById: indicator.id,
+        tenantId: getTenantId()
       },
       select: indicationQuerySelect
     });

@@ -1,8 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-
-const SETTINGS_ID = 'default';
+import { getTenantId } from '../lib/tenantContext.js';
 
 const updateSchema = z
   .object({
@@ -31,8 +30,9 @@ const serializeSettings = (settings?: {
 
 export async function settingsRoutes(app: FastifyInstance) {
   app.get('/settings', { preHandler: app.authenticate }, async () => {
+    // AppConfig deixou de ser singleton: uma linha por tenant (tenant_id UNIQUE).
     const settings = await prisma.appConfig.findUnique({
-      where: { id: SETTINGS_ID },
+      where: { tenantId: getTenantId() },
       select: settingsSelect
     });
 
@@ -55,11 +55,12 @@ export async function settingsRoutes(app: FastifyInstance) {
       data.announcement = body.data.announcement?.trim() || null;
     }
 
+    const tenantId = getTenantId();
     const settings = await prisma.appConfig.upsert({
-      where: { id: SETTINGS_ID },
+      where: { tenantId },
       update: data,
       create: {
-        id: SETTINGS_ID,
+        tenantId,
         ...data
       },
       select: settingsSelect

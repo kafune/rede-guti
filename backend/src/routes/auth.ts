@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { creatableUserRolesByActor } from '../lib/access.js';
+import { getTenantId } from '../lib/tenantContext.js';
 import { buildUserHierarchyPath, serializeUserSummary, userHierarchySelect } from '../lib/hierarchy.js';
 
 const loginSchema = z.object({
@@ -54,8 +55,10 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const email = body.data.email.toLowerCase();
-    const user = await prisma.user.findUnique({
-      where: { email },
+    // Escopo por tenant explícito (o e-mail agora é único por tenant; a
+    // extensão do Prisma reforça o mesmo filtro).
+    const user = await prisma.user.findFirst({
+      where: { email, tenantId: getTenantId() },
       select: {
         ...authUserSelect,
         passwordHash: true
@@ -71,7 +74,12 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: 'Invalid credentials' });
     }
 
-    const token = app.jwt.sign({ sub: user.id, role: user.role, email: user.email });
+    const token = app.jwt.sign({
+      sub: user.id,
+      role: user.role,
+      email: user.email,
+      tenantId: getTenantId()
+    });
     return reply.send({
       token,
       user: serializeAuthUser(user)

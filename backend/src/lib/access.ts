@@ -4,6 +4,7 @@ export type AuthenticatedUser = {
   sub: string;
   role: Role | 'ADMIN' | 'OPERATOR' | 'VIEWER';
   email: string;
+  tenantId: string;
 };
 
 export const normalizeRole = (
@@ -64,15 +65,19 @@ export const canCreateUserRole = (actorRole: Role | string, targetRole: Role) =>
   return creatableUserRolesByActor[normalizedActorRole].includes(targetRole);
 };
 
+// Os builders abaixo incluem o tenantId do ator explicitamente. A extensão do
+// Prisma (src/db.ts) já injeta o mesmo filtro em toda query — aqui é defesa em
+// profundidade e documentação do contrato de visibilidade.
 export const visibleUsersWhere = (actor: AuthenticatedUser): Prisma.UserWhereInput | null => {
   const actorRole = normalizeRole(actor.role);
 
   if (actorRole === 'COORDENADOR') {
-    return {};
+    return { tenantId: actor.tenantId };
   }
 
   if (actorRole === 'LIDER_REGIONAL') {
     return {
+      tenantId: actor.tenantId,
       OR: [{ id: actor.sub }, { indicatedByUserId: actor.sub }]
     };
   }
@@ -95,11 +100,12 @@ export const visibleIndicationsWhere = (actor: AuthenticatedUser): Prisma.Indica
   const actorRole = normalizeRole(actor.role);
 
   if (actorRole === 'COORDENADOR' || actorRole === 'VERIFICADORA') {
-    return {};
+    return { tenantId: actor.tenantId };
   }
 
   if (actorRole === 'LIDER_REGIONAL') {
     return {
+      tenantId: actor.tenantId,
       OR: [
         { createdById: actor.sub },
         { indicatedByUserId: actor.sub },
@@ -110,6 +116,7 @@ export const visibleIndicationsWhere = (actor: AuthenticatedUser): Prisma.Indica
   }
 
   return {
+    tenantId: actor.tenantId,
     OR: [{ createdById: actor.sub }, { indicatedByUserId: actor.sub }]
   };
 };

@@ -19,4 +19,9 @@ export const config = {
   // this off; supporters are then linked to a sentinel church record so the
   // NOT NULL churchId column stays untouched.
   churchFieldEnabled: (process.env.CHURCH_FIELD_ENABLED ?? 'true').trim().toLowerCase() !== 'false',
+  // Multi-tenant (Fase B): slug do tenant desta instância. O processo resolve
+  // o tenant no boot e TODAS as queries ficam escopadas a ele. O default
+  // 'default' é o tenant que a migração cria para adotar os dados existentes,
+  // então instâncias sem a env nova continuam funcionando como antes.
+  tenantSlug: (process.env.TENANT_SLUG ?? 'default').trim().toLowerCase(),
 };

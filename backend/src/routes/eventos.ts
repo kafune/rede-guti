@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { normalizeRole } from '../lib/access.js';
+import { getTenantId } from '../lib/tenantContext.js';
 import {
   incrementLeaderIndication,
   incrementLeaderConfirmed,
@@ -166,7 +167,8 @@ export async function eventoRoutes(app: FastifyInstance) {
         hora: body.data.hora,
         local: body.data.local,
         limitePorLider: body.data.limitePorLider,
-        observacao: body.data.observacao
+        observacao: body.data.observacao,
+        tenantId: request.user.tenantId
       },
       include: eventoIndicadosSelect
     });
@@ -249,6 +251,9 @@ export async function eventoRoutes(app: FastifyInstance) {
 
     const params = paramsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: 'ID inválido.' });
+
+    const existing = await prisma.evento.findUnique({ where: { id: params.data.id }, select: { id: true } });
+    if (!existing) return reply.code(404).send({ error: 'Evento não encontrado.' });
 
     const evento = await prisma.evento.update({
       where: { id: params.data.id },
@@ -666,7 +671,8 @@ export async function eventoRoutes(app: FastifyInstance) {
         nome: body.data.nome.trim(),
         telefone,
         liderId: lider.id,
-        status: 'INDICADO'
+        status: 'INDICADO',
+        tenantId: getTenantId()
       },
       select: indicadoSelect
     });

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import prismaClient from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../src/db.ts';
+import { resolveTenantFromEnv } from '../src/lib/tenant.ts';
 
 const { Role } = prismaClient;
 
@@ -100,7 +101,10 @@ async function main() {
   const { email, password, name } = parsed.data;
   const passwordHash = await bcrypt.hash(password, 10);
 
-  const existing = await prisma.user.findUnique({
+  // O coordenador é criado no tenant da instância (TENANT_SLUG).
+  const tenant = await resolveTenantFromEnv();
+
+  const existing = await prisma.user.findFirst({
     where: { email },
     select: {
       id: true,
@@ -138,7 +142,8 @@ async function main() {
       passwordHash,
       role: Role.COORDENADOR,
       name,
-      indicatedByUserId: null
+      indicatedByUserId: null,
+      tenantId: tenant.id
     },
     select: {
       id: true,

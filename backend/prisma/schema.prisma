@@ -20,15 +20,43 @@ enum IndicationStatus {
   INATIVO
 }
 
+// Fase B multi-tenant: cada instância (vertical) é um tenant. Todas as tabelas
+// de dados carregam tenant_id NOT NULL; o processo do backend resolve o tenant
+// pelo TENANT_SLUG no boot e a extensão do Prisma Client (src/db.ts) injeta o
+// escopo em todas as queries. O tenant 'default' (id fixo) adota os dados
+// pré-existentes na migração.
+model Tenant {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  users           User[]
+  churches        Church[]
+  municipalities  Municipality[]
+  indications     Indication[]
+  eventos         Evento[]
+  eventoIndicados EventoIndicado[]
+  atividades      Atividade[]
+  leaderStats     LeaderStats[]
+  pointsLedger    LeaderPointsLedger[]
+  metasCidade     MetaCidade[]
+  appConfig       AppConfig?
+
+  @@map("tenants")
+}
+
 model User {
   id                 String       @id @default(cuid())
-  email              String       @unique
+  tenantId           String       @map("tenant_id")
+  email              String
   name               String?      @map("name")
   devzappLink        String?      @map("devzapp_link")
   passwordHash       String       @map("password_hash")
   role               Role         @default(LIDER_REGIONAL)
   indicatedByUserId  String?      @map("indicated_by_user_id")
   createdAt          DateTime     @default(now()) @map("created_at")
+  tenant             Tenant       @relation(fields: [tenantId], references: [id])
   indicatedByUser    User?        @relation("UserIndications", fields: [indicatedByUserId], references: [id], onDelete: SetNull)
   indicatedUsers     User[]       @relation("UserIndications")
   createdIndications Indication[] @relation("CreatedBy")
@@ -38,8 +66,10 @@ model User {
   leaderStats        LeaderStats?
   pointsLedger       LeaderPointsLedger[]
 
+  @@unique([tenantId, email])
   @@index([role])
   @@index([indicatedByUserId])
+  @@index([tenantId])
   @@map("users")
 }
 
@@ -55,12 +85,12 @@ model LeaderStats {
   rankingPosition    Int?      @map("ranking_position")
   lastActivityAt     DateTime? @map("last_activity_at")
   currentStreak      Int       @default(0) @map("current_streak")
-  // tenantId reserved for future multi-tenant support — keep nullable
-  tenantId           String?   @map("tenant_id")
+  tenantId           String    @map("tenant_id")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([score])
   @@index([rankingPosition])
@@ -74,11 +104,11 @@ model LeaderPointsLedger {
   eventType String   @map("event_type")
   points    Int
   metadata  Json?
-  // tenantId reserved for future multi-tenant support — keep nullable
-  tenantId  String?  @map("tenant_id")
+  tenantId  String   @map("tenant_id")
   createdAt DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([eventType])
@@ -87,34 +117,45 @@ model LeaderPointsLedger {
   @@map("leader_points_ledger")
 }
 
+// Uma linha por tenant (deixou de ser singleton na Fase B).
 model AppConfig {
-  id                String   @id @default("default")
+  id                String   @id @default(cuid())
+  tenantId          String   @unique @map("tenant_id")
   whatsappGroupLink String?  @map("whatsapp_group_link")
   announcement      String?  @map("announcement")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@map("app_config")
 }
 
 model Church {
   id          String       @id @default(cuid())
-  name        String       @unique
+  tenantId    String       @map("tenant_id")
+  name        String
   createdAt   DateTime     @default(now()) @map("created_at")
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
   indications Indication[]
 
+  @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("churches")
 }
 
 model Municipality {
   id        String       @id @default(cuid())
+  tenantId  String       @map("tenant_id")
   name      String
   stateCode String       @default("SP") @map("state_code")
   createdAt DateTime     @default(now()) @map("created_at")
+  tenant    Tenant       @relation(fields: [tenantId], references: [id])
   indications Indication[]
   metas       MetaCidade[]
 
-  @@unique([name, stateCode])
+  @@unique([tenantId, name, stateCode])
+  @@index([tenantId])
   @@map("municipalities")
 }
 
@@ -128,6 +169,7 @@ enum EventoIndicadoStatus {
 
 model Evento {
   id             String           @id @default(cuid())
+  tenantId       String           @map("tenant_id")
   nome           String
   data           DateTime
   hora           String
@@ -136,30 +178,36 @@ model Evento {
   observacao     String?
   encerrado      Boolean          @default(false)
   createdAt      DateTime         @default(now()) @map("created_at")
+  tenant         Tenant           @relation(fields: [tenantId], references: [id])
   indicados      EventoIndicado[]
 
+  @@index([tenantId])
   @@map("eventos")
 }
 
 model EventoIndicado {
   id        String               @id @default(cuid())
+  tenantId  String               @map("tenant_id")
   eventoId  String               @map("evento_id")
   nome      String
   telefone  String
   liderId   String               @map("lider_id")
   status    EventoIndicadoStatus @default(INDICADO)
   createdAt DateTime             @default(now()) @map("created_at")
+  tenant    Tenant               @relation(fields: [tenantId], references: [id])
   evento    Evento               @relation(fields: [eventoId], references: [id], onDelete: Cascade)
   lider     User                 @relation("LiderEventoIndicados", fields: [liderId], references: [id])
 
   @@unique([eventoId, telefone])
   @@index([eventoId])
   @@index([liderId])
+  @@index([tenantId])
   @@map("evento_indicados")
 }
 
 model Atividade {
   id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
   liderId       String   @map("lider_id")
   titulo        String
   descricao     String?
@@ -167,15 +215,18 @@ model Atividade {
   local         String?
   qtdEnvolvidos Int      @default(0) @map("qtd_envolvidos")
   createdAt     DateTime @default(now()) @map("created_at")
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
   lider         User     @relation("LiderAtividades", fields: [liderId], references: [id])
 
   @@index([liderId])
   @@index([dataHora])
+  @@index([tenantId])
   @@map("atividades")
 }
 
 model Indication {
   id                String       @id @default(cuid())
+  tenantId          String       @map("tenant_id")
   name              String
   phone             String?
   email             String?
@@ -187,6 +238,7 @@ model Indication {
   churchId          String       @map("church_id")
   municipalityId    String       @map("municipality_id")
 
+  tenant          Tenant       @relation(fields: [tenantId], references: [id])
   createdBy       User         @relation("CreatedBy", fields: [createdById], references: [id])
   indicatedByUser User?        @relation("IndicatedByUser", fields: [indicatedByUserId], references: [id], onDelete: SetNull)
   church          Church       @relation(fields: [churchId], references: [id])
@@ -197,6 +249,7 @@ model Indication {
   @@index([churchId])
   @@index([municipalityId])
   @@index([indicatedByUserId])
+  @@index([tenantId])
   @@map("indications")
 }
 
@@ -206,6 +259,7 @@ model Indication {
 // e o acompanhamento real cruza com os apoiadores cadastrados no município.
 model MetaCidade {
   id             String       @id @default(cuid())
+  tenantId       String       @map("tenant_id")
   municipalityId String       @unique @map("municipality_id")
   regiao         String?
   eleitores      Int          @default(0)
@@ -214,7 +268,9 @@ model MetaCidade {
   observacao     String?
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
+  tenant         Tenant       @relation(fields: [tenantId], references: [id])
   municipality   Municipality @relation(fields: [municipalityId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@map("metas_cidade")
 }

@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
+import { getTenantId } from './tenantContext.js';
 import {
   emitInactive7Days,
   emitPointsAwarded,
@@ -116,6 +117,7 @@ async function upsertScore(
     where: { userId },
     create: {
       userId,
+      tenantId: getTenantId(),
       score: deltaScore,
       lastActivityAt: now,
       ...extraCreate,
@@ -151,12 +153,13 @@ export async function awardPoints(
         userId,
         eventType,
         points,
+        tenantId: getTenantId(),
         ...(metadata !== undefined && { metadata }),
       },
     }),
     prisma.leaderStats.upsert({
       where: { userId },
-      create: { userId, score: points, lastActivityAt: new Date() },
+      create: { userId, tenantId: getTenantId(), score: points, lastActivityAt: new Date() },
       update: { score: { increment: points }, lastActivityAt: new Date() },
     }),
   ]);
@@ -196,6 +199,7 @@ export async function incrementLeaderIndication(
         userId,
         eventType,
         points,
+        tenantId: getTenantId(),
         ...(metadata !== undefined && { metadata }),
       },
     }),
@@ -203,6 +207,7 @@ export async function incrementLeaderIndication(
       where: { userId },
       create: {
         userId,
+        tenantId: getTenantId(),
         totalIndications: 1,
         weeklyIndications: 1,
         monthlyIndications: 1,
@@ -237,7 +242,13 @@ export async function incrementLeaderIndication(
 
     if (!alreadyFired) {
       await prisma.leaderPointsLedger.create({
-        data: { userId, eventType: 'weekly_goal_reached', points: 0, metadata: { weekKey } },
+        data: {
+          userId,
+          eventType: 'weekly_goal_reached',
+          points: 0,
+          metadata: { weekKey },
+          tenantId: getTenantId(),
+        },
       });
       fireWeeklyGoal(userId);
     }
@@ -266,12 +277,13 @@ export async function incrementLeaderConfirmed(
         userId,
         eventType: 'event.indication.confirmed',
         points,
+        tenantId: getTenantId(),
         ...(metadata !== undefined && { metadata }),
       },
     }),
     prisma.leaderStats.upsert({
       where: { userId },
-      create: { userId, totalConfirmed: 1, score: points, lastActivityAt: now },
+      create: { userId, tenantId: getTenantId(), totalConfirmed: 1, score: points, lastActivityAt: now },
       update: { totalConfirmed: { increment: 1 }, score: { increment: points }, lastActivityAt: now },
     }),
   ]);
@@ -301,12 +313,13 @@ export async function incrementLeaderPresent(
         userId,
         eventType: 'event.indication.present',
         points,
+        tenantId: getTenantId(),
         ...(metadata !== undefined && { metadata }),
       },
     }),
     prisma.leaderStats.upsert({
       where: { userId },
-      create: { userId, totalPresent: 1, score: points, lastActivityAt: now },
+      create: { userId, tenantId: getTenantId(), totalPresent: 1, score: points, lastActivityAt: now },
       update: { totalPresent: { increment: 1 }, score: { increment: points }, lastActivityAt: now },
     }),
   ]);
@@ -355,6 +368,7 @@ export async function recalculateRanking(): Promise<number> {
         where: { userId: u.id },
         create: {
           userId: u.id,
+          tenantId: getTenantId(),
           totalIndications: totalInd,
           weeklyIndications: weeklyInd,
           monthlyIndications: monthlyInd,
@@ -411,7 +425,7 @@ export async function recalculateRanking(): Promise<number> {
 export async function getLeaderStats(userId: string) {
   return prisma.leaderStats.upsert({
     where: { userId },
-    create: { userId },
+    create: { userId, tenantId: getTenantId() },
     update: {},
     include: {
       user: { select: { id: true, name: true, email: true, role: true } },
@@ -514,6 +528,7 @@ export async function scanAndAlertInactiveLeaders(): Promise<InactiveScanResult>
         userId: c.userId,
         eventType: INACTIVE_ALERT_EVENT,
         points: 0,
+        tenantId: getTenantId(),
         metadata: {
           alertedAt: now.toISOString(),
           lastActivityAt: c.lastActivityAt ? c.lastActivityAt.toISOString() : null,

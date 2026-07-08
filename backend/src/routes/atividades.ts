@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { normalizeRole } from '../lib/access.js';
+import { getTenantId } from '../lib/tenantContext.js';
 
 const paramsSchema = z.object({ id: z.string().min(1) });
 const liderParamsSchema = z.object({ id: z.string().min(1) });
@@ -104,7 +105,8 @@ export async function atividadeRoutes(app: FastifyInstance) {
         descricao: body.data.descricao,
         dataHora: new Date(body.data.dataHora),
         local: body.data.local,
-        qtdEnvolvidos: body.data.qtdEnvolvidos
+        qtdEnvolvidos: body.data.qtdEnvolvidos,
+        tenantId: getTenantId()
       },
       include: atividadeInclude
     });

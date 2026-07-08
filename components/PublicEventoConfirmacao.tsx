@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { BRAND } from '../branding';
 import { EventoIndicadoStatus } from '../types';
 import { confirmarPublicEventoIndicado, fetchPublicEventoIndicado, getApiErrorMessage } from '../api';
 
@@ -93,9 +94,9 @@ const PublicEventoConfirmacao: React.FC = () => {
         <div className="w-full max-w-md space-y-5">
           <div className="text-center mb-6">
             <div className="theme-brand-mark w-14 h-14 rounded-3xl flex items-center justify-center text-white font-black text-2xl mx-auto mb-3 shadow-lg">
-              G
+              {BRAND.initial}
             </div>
-            <h1 className="font-black text-xl">Rede SP · Guti 2026</h1>
+            <h1 className="font-black text-xl">{BRAND.publicHeader}</h1>
           </div>
 
           <div className={`bg-green-50 dark:bg-green-900/20 rounded-3xl p-8 text-center space-y-3 ${freshlyConfirmed ? 'animate-soft-pop' : ''}`}>
@@ -125,7 +126,7 @@ const PublicEventoConfirmacao: React.FC = () => {
             </div>
           )}
 
-          <p className="text-center text-[10px] opacity-20 font-bold pb-4">Rede SP · Guti 2026</p>
+          <p className="text-center text-[10px] opacity-20 font-bold pb-4">{BRAND.publicHeader}</p>
         </div>
       </div>
     );
@@ -150,9 +151,9 @@ const PublicEventoConfirmacao: React.FC = () => {
       <div className="w-full max-w-md space-y-5">
         <div className="text-center mb-6">
           <div className="theme-brand-mark w-14 h-14 rounded-3xl flex items-center justify-center text-white font-black text-2xl mx-auto mb-3 shadow-lg">
-            G
+            {BRAND.initial}
           </div>
-          <h1 className="font-black text-xl">Rede SP · Guti 2026</h1>
+          <h1 className="font-black text-xl">{BRAND.publicHeader}</h1>
           <p className="text-xs opacity-40 font-bold uppercase tracking-widest">Confirmação de presença</p>
         </div>
 
@@ -203,7 +204,7 @@ const PublicEventoConfirmacao: React.FC = () => {
           </button>
         </div>
 
-        <p className="text-center text-[10px] opacity-20 font-bold pb-4">Rede SP · Guti 2026</p>
+        <p className="text-center text-[10px] opacity-20 font-bold pb-4">{BRAND.publicHeader}</p>
       </div>
     </div>
   );

@@ -164,7 +164,8 @@ export const createIndication = async (payload: {
   name: string;
   phone?: string;
   email?: string;
-  churchId: string;
+  // Opcional quando a instância não coleta igreja; o backend associa à sentinela.
+  churchId?: string;
   municipalityId: string;
 }) => {
   const data = await request<{ indication: ApiIndication }>('/indications', {
@@ -232,7 +233,8 @@ export const createPublicIndication = async (payload: {
   name: string;
   phone: string;
   email: string;
-  churchName: string;
+  // Opcional quando a instância não coleta igreja; o backend associa à sentinela.
+  churchName?: string;
   municipalityName: string;
   indicatedBy?: string;
   indicatedByUserId?: string;

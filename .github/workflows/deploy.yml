@@ -12,49 +12,15 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      VPS_HOST: 76.13.112.138
-      VPS_USER: paiva
-      VPS_APP_DIR: /home/paiva/rede-guti
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-
-      - name: Build frontend
-        run: |
-          echo "VITE_API_URL=/api" > .env.local
-          bun install --frozen-lockfile
-          bun run build
-
-      - name: Sync frontend to VPS
-        uses: burnett01/rsync-deployments@7.0.1
-        with:
-          switches: -az --delete
-          path: dist/
-          remote_path: /var/www/rede/dist/
-          remote_host: ${{ env.VPS_HOST }}
-          remote_user: ${{ env.VPS_USER }}
-          remote_key: ${{ secrets.VPS_SSH_KEY }}
-
-      - name: Rebuild backend + migrate
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ env.VPS_HOST }}
-          username: ${{ env.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          request_pty: true
-          command_timeout: 20m
-          script: |
-            set -euo pipefail
-            cd ${{ env.VPS_APP_DIR }}
-            git fetch origin main
-            git reset --hard origin/main
-            git clean -fd
-            docker compose build api
-            docker compose up -d
-            docker compose exec -T api npm run prisma:deploy
-            docker compose exec -T api npm run seed
+    uses: ./.github/workflows/deploy-instance.yml
+    with:
+      vps_host: 76.13.112.138
+      vps_user: paiva
+      app_dir: /home/paiva/rede-guti
+      remote_dist_path: /var/www/rede/dist/
+      # Sem VITE_BRAND_*/VITE_GEO_*: os defaults do código reproduzem o
+      # branding e a geografia originais (Rede SP / Guti 2026).
+      frontend_env: |
+        VITE_API_URL=/api
+    secrets:
+      ssh_key: ${{ secrets.VPS_SSH_KEY }}

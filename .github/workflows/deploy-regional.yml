@@ -1,0 +1,50 @@
+# Deploy da segunda instância (vertical regional). Ver DEPLOY-REGIONAL.md para
+# o provisionamento inicial do VPS (checkout, .env, DNS).
+#
+# Fica em workflow_dispatch (manual) até a instância estar provisionada no VPS;
+# depois, habilite o deploy automático adicionando:
+#   push:
+#     branches:
+#       - main
+name: Deploy VPS (regional)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy-regional
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-instance.yml
+    with:
+      vps_host: 76.13.112.138
+      vps_user: paiva
+      app_dir: /home/paiva/rede-guti-regional
+      remote_dist_path: /var/www/rede-regional/dist/
+      compose: docker compose -p rede-regional -f docker-compose.regional.yml
+      # Branding/geografia/flags da vertical regional (build-time).
+      # Ajuste os textos à identidade final da vertical antes do primeiro deploy.
+      frontend_env: |
+        VITE_API_URL=/api
+        VITE_CHURCH_FIELD_ENABLED=false
+        VITE_BRAND_NAME=Rede Regional
+        VITE_BRAND_CAMPAIGN=Guti 2026
+        VITE_BRAND_INITIAL=G
+        VITE_BRAND_SHARE_NAME=Rede Guti 2026 – Regional
+        VITE_BRAND_TAGLINE=Rede de Apoiadores por Região
+        VITE_BRAND_NETWORK_TOTAL_LABEL=Total da Rede Regional
+        VITE_BRAND_WELCOME_TITLE=Bem-vindo à Rede Regional!
+        VITE_BRAND_FOOTER=Guti 2026 • Rede Regional
+        VITE_BRAND_PUBLIC_HEADER=Rede Regional · Guti 2026
+        VITE_BRAND_DIRECT_LEADERSHIP_LABEL=Liderança Direta
+        VITE_BRAND_HTML_TITLE=Rede de Apoiadores – Regional (Guti 2026)
+        VITE_BRAND_HTML_DESCRIPTION=Aplicativo para cadastro e gestão de apoiadores por região.
+        VITE_BRAND_SITE_NAME=Rede de Apoiadores – Regional
+        VITE_BRAND_PUBLIC_URL=https://regional.redeguti.ddnsfree.com
+        VITE_BRAND_PWA_NAME=Rede Regional (Guti 2026)
+        VITE_BRAND_PWA_SHORT_NAME=Rede Regional
+        VITE_BRAND_PWA_DESCRIPTION=Aplicativo para cadastro e gestão de apoiadores por região.
+    secrets:
+      ssh_key: ${{ secrets.VPS_SSH_KEY }}

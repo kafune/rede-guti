@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
+import { config } from '../config.js';
 
 const municipalitySchema = z.object({
   name: z.string().min(2),
@@ -20,7 +21,7 @@ export async function municipalityRoutes(app: FastifyInstance) {
     }
 
     const name = body.data.name.trim();
-    const stateCode = (body.data.stateCode ?? 'SP').toUpperCase();
+    const stateCode = (body.data.stateCode ?? config.geoStateCode).toUpperCase();
 
     try {
       const municipality = await prisma.municipality.create({

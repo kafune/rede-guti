@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { BRAND } from './branding';
+import { FEATURES } from './features';
 import {
   Church,
   Evento,
@@ -327,14 +329,14 @@ const App: React.FC = () => {
 
       try {
         const [church, municipality] = await Promise.all([
-          ensureChurch(payload.churchName),
+          payload.churchName ? ensureChurch(payload.churchName) : Promise.resolve(null),
           ensureMunicipality(payload.municipalityName)
         ]);
 
         const indication = await createIndication({
           name: payload.name.trim(),
           phone: normalizedPhone,
-          churchId: church.id,
+          churchId: church?.id,
           municipalityId: municipality.id
         });
 
@@ -395,8 +397,10 @@ const App: React.FC = () => {
     const churchMap: Record<string, { id: string; name: string }> = {};
     const municipalityMap: Record<string, { id: string; name: string }> = {};
 
-    for (const name of uniqueChurchNames) {
-      try { churchMap[name] = await ensureChurch(name); } catch { /* skip */ }
+    if (FEATURES.churchFieldEnabled) {
+      for (const name of uniqueChurchNames) {
+        try { churchMap[name] = await ensureChurch(name); } catch { /* skip */ }
+      }
     }
     for (const name of uniqueMunicipalityNames) {
       try { municipalityMap[name] = await ensureMunicipality(name); } catch { /* skip */ }
@@ -404,13 +408,17 @@ const App: React.FC = () => {
 
     const results = await Promise.allSettled(
       supporters.map(async (supporter) => {
-        const church = churchMap[supporter.church];
+        const church = FEATURES.churchFieldEnabled ? churchMap[supporter.church] : undefined;
         const municipality = municipalityMap[supporter.region];
-        if (!church || !municipality) throw new Error('Igreja ou município não encontrado');
+        if ((FEATURES.churchFieldEnabled && !church) || !municipality) {
+          throw new Error(
+            FEATURES.churchFieldEnabled ? 'Igreja ou município não encontrado' : 'Município não encontrado'
+          );
+        }
         const indication = await createIndication({
           name: supporter.name.trim(),
           phone: normalizePhone(supporter.whatsapp),
-          churchId: church.id,
+          churchId: church?.id,
           municipalityId: municipality.id
         });
         return mapIndicationToSupporter(indication);
@@ -504,11 +512,11 @@ const App: React.FC = () => {
           onClick={() => setView('dashboard')}
         >
           <div className="theme-brand-mark w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-xl">
-            G
+            {BRAND.initial}
           </div>
           <div>
-            <h1 className="font-black text-lg leading-none">Rede SP</h1>
-            <p className="text-[10px] font-bold opacity-40 tracking-widest uppercase">Guti 2026</p>
+            <h1 className="font-black text-lg leading-none">{BRAND.name}</h1>
+            <p className="text-[10px] font-bold opacity-40 tracking-widest uppercase">{BRAND.campaign}</p>
           </div>
         </div>
         <div className="flex items-center gap-4">

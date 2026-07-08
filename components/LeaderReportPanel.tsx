@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Supporter } from '../types';
+import { FEATURES } from '../features';
 import {
   REPORT_REGION_FILTERS,
   ReportRegionFilter,
@@ -242,8 +243,9 @@ const LeaderReportPanel: React.FC<Props> = ({ supporters }) => {
               </tfoot>
             </table>
             <p className="text-xs italic text-gray-500 mt-3 print:hidden">
-              Toque em uma liderança para ver o relatório detalhado (distribuição por igreja e
-              cidade).
+              {FEATURES.churchFieldEnabled
+                ? 'Toque em uma liderança para ver o relatório detalhado (distribuição por igreja e cidade).'
+                : 'Toque em uma liderança para ver o relatório detalhado (distribuição por cidade).'}
             </p>
           </section>
         </div>

@@ -1,17 +1,18 @@
 import { RegistrationTarget, SUPPORTER_REGISTRATION_TARGET, UserRole } from './types';
 
-export const getRoleLabel = (role: UserRole) => {
-  switch (role) {
-    case UserRole.COORDENADOR:
-      return 'Coordenador';
-    case UserRole.LIDER_REGIONAL:
-      return 'Lider Regional';
-    case UserRole.VERIFICADORA:
-      return 'Verificadora';
-    default:
-      return role;
-  }
+// Rótulos dos papéis podem variar por instância (o enum no banco não muda);
+// os defaults preservam a nomenclatura da instância original.
+const env = (import.meta as any).env ?? {};
+const roleLabel = (key: string, fallback: string): string =>
+  String(env[key] ?? '').trim() || fallback;
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  [UserRole.COORDENADOR]: roleLabel('VITE_ROLE_LABEL_COORDENADOR', 'Coordenador'),
+  [UserRole.LIDER_REGIONAL]: roleLabel('VITE_ROLE_LABEL_LIDER_REGIONAL', 'Lider Regional'),
+  [UserRole.VERIFICADORA]: roleLabel('VITE_ROLE_LABEL_VERIFICADORA', 'Verificadora'),
 };
+
+export const getRoleLabel = (role: UserRole) => ROLE_LABELS[role] ?? role;
 
 export const getCreatableUserRoles = (role: UserRole) => {
   return getCreatableRegistrationTargets(role).filter(isUserRoleRegistrationTarget);

@@ -16,13 +16,17 @@ import {
   validateAndNormalizeBrazilWhatsapp
 } from '../lib/public-registration.js';
 import { incrementLeaderIndication } from '../lib/engagementService.js';
+import { config } from '../config.js';
+import { SENTINEL_CHURCH_NAME } from '../lib/church.js';
+
+const churchNameSchema = z.string().trim().min(2, 'Informe sua igreja.');
 
 const createPublicSchema = z
   .object({
     name: z.string().trim().min(2, 'Informe seu nome completo.'),
     phone: z.string().trim().min(1, 'Informe seu WhatsApp.'),
     email: z.string().trim().email('Informe um e-mail valido.'),
-    churchName: z.string().trim().min(2, 'Informe sua igreja.'),
+    churchName: config.churchFieldEnabled ? churchNameSchema : churchNameSchema.optional(),
     municipalityName: z.string().trim().min(2, 'Informe seu municipio.'),
     indicatedBy: z.string().trim().min(2).optional(),
     indicatedByUserId: z.string().trim().min(1).optional()
@@ -111,7 +115,8 @@ export async function publicRoutes(app: FastifyInstance) {
     return {
       churches: churches.map((c) => c.name),
       municipalities: getPublicMunicipalityOptions(),
-      whatsappGroupLink: settings?.whatsappGroupLink ?? null
+      whatsappGroupLink: settings?.whatsappGroupLink ?? null,
+      churchFieldEnabled: config.churchFieldEnabled
     };
   });
 
@@ -136,7 +141,7 @@ export async function publicRoutes(app: FastifyInstance) {
     }
 
     const email = data.email.toLowerCase().trim();
-    const churchName = normalizeText(data.churchName);
+    const churchName = data.churchName ? normalizeText(data.churchName) : SENTINEL_CHURCH_NAME;
     const municipalityName = normalizeMunicipalityName(data.municipalityName);
     if (!municipalityName) {
       return reply.code(400).send({ error: 'Selecione um municipio valido da lista.' });
@@ -205,12 +210,12 @@ export async function publicRoutes(app: FastifyInstance) {
     let municipality = await prisma.municipality.findFirst({
       where: {
         name: { equals: municipalityName, mode: 'insensitive' },
-        stateCode: 'SP'
+        stateCode: config.geoStateCode
       }
     });
     if (!municipality) {
       municipality = await prisma.municipality.create({
-        data: { name: municipalityName, stateCode: 'SP' }
+        data: { name: municipalityName, stateCode: config.geoStateCode }
       });
     }
 

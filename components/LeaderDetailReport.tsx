@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Supporter } from '../types';
+import { FEATURES } from '../features';
 import { formatPct, getSupporterCity, tallyBy, todayLabel } from '../reportUtils';
 
 interface Props {
@@ -68,11 +69,13 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
 
   const handleExport = () => {
     const workbook = XLSX.utils.book_new();
-    const igrejas = XLSX.utils.json_to_sheet(
-      byChurch.map((r) => ({ 'Igreja / Vínculo': r.label, Apoiadores: r.count, '%': formatPct(r.count, total) }))
-    );
-    igrejas['!cols'] = [{ wch: 40 }, { wch: 14 }, { wch: 10 }];
-    XLSX.utils.book_append_sheet(workbook, igrejas, 'Por igreja');
+    if (FEATURES.churchFieldEnabled) {
+      const igrejas = XLSX.utils.json_to_sheet(
+        byChurch.map((r) => ({ 'Igreja / Vínculo': r.label, Apoiadores: r.count, '%': formatPct(r.count, total) }))
+      );
+      igrejas['!cols'] = [{ wch: 40 }, { wch: 14 }, { wch: 10 }];
+      XLSX.utils.book_append_sheet(workbook, igrejas, 'Por igreja');
+    }
     const cidades = XLSX.utils.json_to_sheet(
       byCity.map((r) => ({ Cidade: r.label, Apoiadores: r.count, '%': formatPct(r.count, total) }))
     );
@@ -140,8 +143,13 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
                 {formatPct(mainCity.count, total)})
               </>
             )}
-            . A base está distribuída em <strong>{distinctChurches}</strong>{' '}
-            {distinctChurches === 1 ? 'vínculo religioso' : 'vínculos religiosos distintos'} e{' '}
+            . A base está distribuída em{' '}
+            {FEATURES.churchFieldEnabled && (
+              <>
+                <strong>{distinctChurches}</strong>{' '}
+                {distinctChurches === 1 ? 'vínculo religioso' : 'vínculos religiosos distintos'} e{' '}
+              </>
+            )}
             <strong>{distinctCities}</strong> {distinctCities === 1 ? 'cidade' : 'cidades'}.
           </p>
         </section>
@@ -170,10 +178,12 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
                   {mainCity ? `${mainCity.label} (${formatPct(mainCity.count, total)})` : '—'}
                 </td>
               </tr>
-              <tr className="border-b border-gray-200">
-                <td className="py-2 px-3">Vínculos religiosos distintos</td>
-                <td className="py-2 px-3 text-right font-semibold">{distinctChurches}</td>
-              </tr>
+              {FEATURES.churchFieldEnabled && (
+                <tr className="border-b border-gray-200">
+                  <td className="py-2 px-3">Vínculos religiosos distintos</td>
+                  <td className="py-2 px-3 text-right font-semibold">{distinctChurches}</td>
+                </tr>
+              )}
               <tr className="border-b border-gray-200">
                 <td className="py-2 px-3">Cidades distintas</td>
                 <td className="py-2 px-3 text-right font-semibold">{distinctCities}</td>
@@ -182,15 +192,17 @@ const LeaderDetailReport: React.FC<Props> = ({ leaderName, supporters, onBack })
           </table>
         </section>
 
-        <SectionTable
-          title="3. Distribuição por igreja"
-          columnLabel="Igreja / Vínculo"
-          rows={byChurch}
-          total={total}
-        />
+        {FEATURES.churchFieldEnabled && (
+          <SectionTable
+            title="3. Distribuição por igreja"
+            columnLabel="Igreja / Vínculo"
+            rows={byChurch}
+            total={total}
+          />
+        )}
 
         <SectionTable
-          title="4. Distribuição por cidade"
+          title={FEATURES.churchFieldEnabled ? '4. Distribuição por cidade' : '3. Distribuição por cidade'}
           columnLabel="Cidade"
           rows={byCity}
           total={total}

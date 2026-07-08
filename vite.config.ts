@@ -1,9 +1,28 @@
 import path from 'path';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+    const env = loadEnv(mode, process.cwd(), '');
+    const brandEnv = (key: string, fallback: string) => (env[key] ?? '').trim() || fallback;
+
+    // Identidade da instância em build-time (título, metas OG, manifest PWA).
+    // Sem as envs VITE_BRAND_*, os defaults reproduzem a instância original.
+    const htmlTitle = brandEnv('VITE_BRAND_HTML_TITLE', 'Rede de Apoiadores – SP (Guti 2026)');
+    const htmlDescription = brandEnv(
+      'VITE_BRAND_HTML_DESCRIPTION',
+      'Aplicativo para cadastro e Gestão de Apoiadores por região do estado de São Paulo.'
+    );
+    const siteName = brandEnv('VITE_BRAND_SITE_NAME', 'Rede de Apoiadores – SP');
+    const publicUrl = brandEnv('VITE_BRAND_PUBLIC_URL', 'https://redeguti.ddnsfree.com').replace(/\/+$/, '');
+    const pwaName = brandEnv('VITE_BRAND_PWA_NAME', 'Rede Evangélica – SP (Guti 2026)');
+    const pwaShortName = brandEnv('VITE_BRAND_PWA_SHORT_NAME', 'Rede Evangélica');
+    const pwaDescription = brandEnv(
+      'VITE_BRAND_PWA_DESCRIPTION',
+      'Aplicativo para cadastro e gestão de lideranças religiosas apoiadoras por região do estado de São Paulo.'
+    );
+
     return {
       server: {
         port: 3000,
@@ -11,6 +30,16 @@ export default defineConfig(() => {
       },
       plugins: [
         react(),
+        {
+          name: 'brand-html',
+          transformIndexHtml(html: string) {
+            return html
+              .replaceAll('%BRAND_HTML_TITLE%', htmlTitle)
+              .replaceAll('%BRAND_HTML_DESCRIPTION%', htmlDescription)
+              .replaceAll('%BRAND_SITE_NAME%', siteName)
+              .replaceAll('%BRAND_PUBLIC_URL%', publicUrl);
+          },
+        },
         VitePWA({
           registerType: 'autoUpdate',
           includeAssets: [
@@ -22,10 +51,9 @@ export default defineConfig(() => {
             'favicon.ico',
           ],
           manifest: {
-            name: 'Rede Evang\u00e9lica \u2013 SP (Guti 2026)',
-            short_name: 'Rede Evang\u00e9lica',
-            description:
-              'Aplicativo para cadastro e gest\u00e3o de lideran\u00e7as religiosas apoiadoras por regi\u00e3o do estado de S\u00e3o Paulo.',
+            name: pwaName,
+            short_name: pwaShortName,
+            description: pwaDescription,
             start_url: '/',
             scope: '/',
             display: 'standalone',

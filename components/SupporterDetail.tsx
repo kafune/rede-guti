@@ -1,6 +1,8 @@
 ﻿
 import React, { useState, useMemo } from 'react';
 import { SupportStatus, Supporter, User } from '../types';
+import { BRAND } from '../branding';
+import { FEATURES } from '../features';
 import { canDeleteSupporters, canUpdateSupporterStatus } from '../roleUtils';
 
 interface Props {
@@ -91,8 +93,17 @@ const SupporterDetail: React.FC<Props> = ({
           </div>
           <h3 className="text-2xl font-black mb-1">{supporter.name}</h3>
           <div className="flex items-center justify-center gap-2 opacity-80 mb-4">
-             <i className="fa-solid fa-church text-xs"></i>
-             <p className="text-sm font-bold uppercase tracking-wide">{supporter.church}</p>
+            {FEATURES.churchFieldEnabled ? (
+              <>
+                <i className="fa-solid fa-church text-xs"></i>
+                <p className="text-sm font-bold uppercase tracking-wide">{supporter.church}</p>
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-location-dot text-xs"></i>
+                <p className="text-sm font-bold uppercase tracking-wide">{supporter.notes || supporter.region}</p>
+              </>
+            )}
           </div>
           
           <div className="absolute top-6 right-6 flex flex-col items-end gap-2">
@@ -149,29 +160,35 @@ const SupporterDetail: React.FC<Props> = ({
             </div>
           </div>
           
-          {/* Card: Igreja Mapeada */}
+          {/* Card: Igreja Mapeada (ou só localização, na liderança geral) */}
           <div className="space-y-4">
-             <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-[0.2em] mb-4">Dados da Igreja</h4>
+             <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-[0.2em] mb-4">
+               {FEATURES.churchFieldEnabled ? 'Dados da Igreja' : 'Localização'}
+             </h4>
              <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
-                  <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Denominação</p>
-                  <p className="font-bold text-sm">{supporter.churchDenomination || 'Livre / Independente'}</p>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
-                  <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Tipo Unidade</p>
-                  <p className="font-bold text-sm">{supporter.isMainBranch ? 'Sede / Campo' : 'Congregação'}</p>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
-                  <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Membros</p>
-                  <p className="font-bold text-sm">{supporter.churchMembersCount || '-'}</p>
-                </div>
+                {FEATURES.churchFieldEnabled && (
+                  <>
+                    <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
+                      <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Denominação</p>
+                      <p className="font-bold text-sm">{supporter.churchDenomination || 'Livre / Independente'}</p>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
+                      <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Tipo Unidade</p>
+                      <p className="font-bold text-sm">{supporter.isMainBranch ? 'Sede / Campo' : 'Congregação'}</p>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
+                      <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Membros</p>
+                      <p className="font-bold text-sm">{supporter.churchMembersCount || '-'}</p>
+                    </div>
+                  </>
+                )}
                 <div className="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border dark:border-gray-700">
                   <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Cidade</p>
                   <p className="font-bold text-sm truncate">{supporter.notes || supporter.region}</p>
                 </div>
              </div>
 
-             {supporter.churchAddress && (
+             {FEATURES.churchFieldEnabled && supporter.churchAddress && (
                <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-3xl border dark:border-gray-700">
                   <p className="text-[10px] font-black opacity-30 uppercase tracking-tighter mb-1">Endereco da Igreja</p>
                   <div className="flex items-start gap-2">
@@ -196,7 +213,7 @@ const SupporterDetail: React.FC<Props> = ({
           )}
 
           {/* Online Presence */}
-          {supporter.churchSocialMedia && (
+          {FEATURES.churchFieldEnabled && supporter.churchSocialMedia && (
             <div className="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-3xl border border-indigo-100 dark:border-indigo-800">
                <div className="flex items-center justify-between gap-3 min-w-0">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -225,13 +242,15 @@ const SupporterDetail: React.FC<Props> = ({
                     </div>
                     <div>
                       <span className="text-sm font-black block">{referrer.name}</span>
-                      <span className="text-[9px] font-bold opacity-40 uppercase">{referrer.church}</span>
+                      {FEATURES.churchFieldEnabled && (
+                        <span className="text-[9px] font-bold opacity-40 uppercase">{referrer.church}</span>
+                      )}
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <p className="text-xs font-bold text-gray-400 italic">
-                      {supporter.indicatedBy || supporter.indicatedByUser?.name || 'Lideranca Direta (Rede Guti)'}
+                      {supporter.indicatedBy || supporter.indicatedByUser?.name || BRAND.directLeadershipLabel}
                     </p>
                     {hierarchyTrail && (
                       <p className="text-[10px] font-black uppercase tracking-wide text-blue-600 break-words">

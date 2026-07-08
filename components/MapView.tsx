@@ -2,6 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { geoMercator, geoPath } from 'd3-geo';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import { Supporter } from '../types';
+import { GEO } from '../geography';
+import { FEATURES } from '../features';
+
+// Todos os GeoJSON disponíveis; a instância escolhe o seu via VITE_GEO_DATASET.
+// sp.geo.json é um arquivo morto (nenhum código o carrega) — excluído para não
+// virar chunk pré-cacheado pelo service worker.
+const GEO_MODULES = import.meta.glob(['../data/*.geo.json', '!../data/sp.geo.json']);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos & constantes
@@ -94,11 +101,16 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
 
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  // Lazy-load do GeoJSON dos 645 municípios (~1.9MB → gzip ~600KB)
+  // Lazy-load do GeoJSON do dataset da instância (SP: ~1.9MB → gzip ~600KB)
   useEffect(() => {
     let cancelled = false;
-    import('../data/sp-municipios.geo.json')
-      .then((mod) => {
+    const loadGeoDataset = GEO_MODULES[`../data/${GEO.dataset}.geo.json`];
+    if (!loadGeoDataset) {
+      setLoadError(`Dataset geográfico "${GEO.dataset}" não encontrado.`);
+      return;
+    }
+    loadGeoDataset()
+      .then((mod: any) => {
         if (!cancelled) setGeoData(mod.default as MunicipalityCollection);
       })
       .catch((err) => {
@@ -216,7 +228,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
       {/* HEADER ─────────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">Mapa político de São Paulo</p>
+          <p className="text-[10px] font-black uppercase opacity-40 tracking-widest">{GEO.mapTitle}</p>
           <h2 className="text-2xl sm:text-3xl font-black">Apoiadores por Município</h2>
         </div>
         {selectedName && (
@@ -272,7 +284,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
                   <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Municípios ativos</p>
                   <p className="text-2xl font-black text-amber-600 dark:text-amber-400 tabular-nums">
                     {animatedActive}
-                    <span className="text-xs font-bold opacity-40 ml-1">/ 645</span>
+                    <span className="text-xs font-bold opacity-40 ml-1">/ {GEO.totalMunicipalities}</span>
                   </p>
                 </div>
               </div>
@@ -283,7 +295,7 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
               <div className="flex-1 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3 opacity-60">
                   <i className="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500"></i>
-                  <p className="text-xs font-black uppercase tracking-widest">Carregando mapa político de SP...</p>
+                  <p className="text-xs font-black uppercase tracking-widest">{GEO.loadingLabel}</p>
                 </div>
               </div>
             )}
@@ -642,12 +654,14 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-black text-sm truncate">{supporter.name}</p>
-                      <p className="text-[10px] opacity-40 font-bold uppercase truncate">
-                        {supporter.church}
-                      </p>
+                      {FEATURES.churchFieldEnabled && (
+                        <p className="text-[10px] opacity-40 font-bold uppercase truncate">
+                          {supporter.church}
+                        </p>
+                      )}
                     </div>
                     <span className="text-[10px] font-black uppercase text-blue-600 shrink-0">
-                      {supporter.notes || 'SP'}
+                      {supporter.notes || GEO.stateCode}
                     </span>
                   </button>
                 ))

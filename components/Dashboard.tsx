@@ -462,7 +462,8 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-sm truncate">{supporter.name}</p>
                   <p className="text-[10px] opacity-40 truncate">
-                    {FEATURES.churchFieldEnabled ? `${supporter.notes} - ${supporter.church}` : supporter.notes}
+                    {supporter.notes}
+                    {FEATURES.churchFieldEnabled && <> - {supporter.church}</>}
                   </p>
                 </div>
                 <i className="fa-solid fa-chevron-right text-[10px] opacity-20"></i>

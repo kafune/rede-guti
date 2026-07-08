@@ -3,6 +3,7 @@ import { geoMercator, geoPath } from 'd3-geo';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import { Supporter } from '../types';
 import { GEO } from '../geography';
+import { FEATURES } from '../features';
 
 // Todos os GeoJSON disponíveis; a instância escolhe o seu via VITE_GEO_DATASET.
 const GEO_MODULES = import.meta.glob('../data/*.geo.json');
@@ -651,12 +652,14 @@ const MapView: React.FC<Props> = ({ supporters, onSelectSupporter }) => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-black text-sm truncate">{supporter.name}</p>
-                      <p className="text-[10px] opacity-40 font-bold uppercase truncate">
-                        {supporter.church}
-                      </p>
+                      {FEATURES.churchFieldEnabled && (
+                        <p className="text-[10px] opacity-40 font-bold uppercase truncate">
+                          {supporter.church}
+                        </p>
+                      )}
                     </div>
                     <span className="text-[10px] font-black uppercase text-blue-600 shrink-0">
-                      {supporter.notes || 'SP'}
+                      {supporter.notes || GEO.stateCode}
                     </span>
                   </button>
                 ))

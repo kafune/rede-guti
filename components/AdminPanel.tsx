@@ -11,6 +11,7 @@ import {
   UserRole
 } from '../types';
 import { deleteUser, fetchSettings, fetchUsers, getApiErrorMessage, updateSettings, updateUser } from '../api';
+import { FEATURES } from '../features';
 import {
   canManageUsers,
   canViewSupporterIdentity,
@@ -409,7 +410,7 @@ const AdminPanel: React.FC<Props> = ({
                   </span>
                 </div>
                 <div className="text-xs opacity-60 mt-1 space-y-1 break-words">
-                  <div>{supporter.church}</div>
+                  {FEATURES.churchFieldEnabled && <div>{supporter.church}</div>}
                   <div>{supporter.notes || supporter.region}</div>
                   {supporter.hierarchyPath && supporter.hierarchyPath.length > 0 && (
                     <div>Rede: {supporter.hierarchyPath.map((item) => item.name).join(' > ')}</div>

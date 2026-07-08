@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Municipality, Supporter, User } from '../types';
+import { FEATURES } from '../features';
 import { canViewAllSupporters } from '../roleUtils';
 
 interface Props {
@@ -43,7 +44,7 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
       const q = search.toLowerCase();
       result = result.filter(s =>
         s.name.toLowerCase().includes(q) ||
-        s.church.toLowerCase().includes(q) ||
+        (FEATURES.churchFieldEnabled && s.church.toLowerCase().includes(q)) ||
         s.whatsapp.includes(q) ||
         (s.indicatedBy || '').toLowerCase().includes(q)
       );
@@ -76,7 +77,7 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
           <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 opacity-40"></i>
           <input 
             type="text" 
-            placeholder="Buscar por nome, igreja..."
+            placeholder={FEATURES.churchFieldEnabled ? 'Buscar por nome, igreja...' : 'Buscar por nome, WhatsApp...'}
             className="w-full bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-2xl pl-11 pr-4 py-4 focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -155,7 +156,9 @@ const SupporterList: React.FC<Props> = ({ supporters, user, municipalities, onSe
                 <div className="flex justify-between items-start mb-0.5">
                   <h3 className="font-black truncate text-sm">{s.name}</h3>
                 </div>
-                <p className="text-[10px] opacity-40 font-bold uppercase truncate mb-2">{s.church}</p>
+                {FEATURES.churchFieldEnabled && (
+                  <p className="text-[10px] opacity-40 font-bold uppercase truncate mb-2">{s.church}</p>
+                )}
                 <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                   <span className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-md font-black uppercase tracking-tighter max-w-full truncate">
                     {s.notes || s.region}

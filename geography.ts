@@ -17,4 +17,6 @@ export const GEO = {
   loadingLabel: read('VITE_GEO_LOADING_LABEL', 'Carregando mapa político de SP...'),
   /** Total de municípios da área coberta (denominador do contador "ativos"). */
   totalMunicipalities: Number(read('VITE_GEO_TOTAL_MUNICIPALITIES', '645')) || 645,
+  /** UF/sigla curta usada como fallback de localização na UI. */
+  stateCode: read('VITE_GEO_STATE_CODE', 'SP'),
 };

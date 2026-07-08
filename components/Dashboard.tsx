@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AppSettings, SupportStatus, Supporter, User, UserRole } from '../types';
 import { BRAND } from '../branding';
+import { FEATURES } from '../features';
 import { fetchSettings } from '../api';
 import { canCreateRegistrations } from '../roleUtils';
 import LeaderImpactPanel from './LeaderImpactPanel';
@@ -313,9 +314,9 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
             <i className="fa-solid fa-eye text-blue-500 mt-1"></i>
           </div>
           <p className="text-sm opacity-60 mb-4">
-            Aqui voce acompanha, em modo somente leitura, os apoiadores que se
-            cadastraram pelo seu link de indicacao: nome, igreja, cidade, status e
-            data. Voce nao pode editar nem excluir cadastros.
+            {FEATURES.churchFieldEnabled
+              ? 'Aqui voce acompanha, em modo somente leitura, os apoiadores que se cadastraram pelo seu link de indicacao: nome, igreja, cidade, status e data. Voce nao pode editar nem excluir cadastros.'
+              : 'Aqui voce acompanha, em modo somente leitura, os apoiadores que se cadastraram pelo seu link de indicacao: nome, cidade, status e data. Voce nao pode editar nem excluir cadastros.'}
           </p>
           <button
             onClick={onViewList}
@@ -461,7 +462,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-sm truncate">{supporter.name}</p>
                   <p className="text-[10px] opacity-40 truncate">
-                    {supporter.notes} - {supporter.church}
+                    {FEATURES.churchFieldEnabled ? `${supporter.notes} - ${supporter.church}` : supporter.notes}
                   </p>
                 </div>
                 <i className="fa-solid fa-chevron-right text-[10px] opacity-20"></i>

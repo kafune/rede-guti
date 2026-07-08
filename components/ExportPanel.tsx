@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { AdminUser, Supporter, UserRole } from '../types';
+import { FEATURES } from '../features';
 import { fetchUsers, getApiErrorMessage } from '../api';
 
 interface Props {
@@ -60,7 +61,7 @@ const ExportPanel: React.FC<Props> = ({ supporters }) => {
       Cidade: s.notes || s.region,
       Numero: s.whatsapp,
       Email: s.email || '',
-      Igreja: s.church,
+      ...(FEATURES.churchFieldEnabled ? { Igreja: s.church } : {}),
       Status: s.status,
       'Lider Regional': s.createdByName || ''
     }));
@@ -71,7 +72,7 @@ const ExportPanel: React.FC<Props> = ({ supporters }) => {
       { wch: 20 },
       { wch: 18 },
       { wch: 30 },
-      { wch: 28 },
+      ...(FEATURES.churchFieldEnabled ? [{ wch: 28 }] : []),
       { wch: 14 },
       { wch: 24 }
     ];

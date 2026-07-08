@@ -6,7 +6,9 @@ import { GEO } from '../geography';
 import { FEATURES } from '../features';
 
 // Todos os GeoJSON disponíveis; a instância escolhe o seu via VITE_GEO_DATASET.
-const GEO_MODULES = import.meta.glob('../data/*.geo.json');
+// sp.geo.json é um arquivo morto (nenhum código o carrega) — excluído para não
+// virar chunk pré-cacheado pelo service worker.
+const GEO_MODULES = import.meta.glob(['../data/*.geo.json', '!../data/sp.geo.json']);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos & constantes

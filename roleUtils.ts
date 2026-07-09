@@ -56,6 +56,12 @@ export const canAccessManagementPanel = (role: UserRole) =>
 
 export const canManageUsers = (role: UserRole) => role === UserRole.COORDENADOR;
 
+// Espelho UI-only das regras do backend (backend/src/lib/access.ts).
+export const canAccessEquipes = (role: UserRole) =>
+  role === UserRole.COORDENADOR || role === UserRole.LIDER_REGIONAL;
+
+export const canManageEquipeValores = (role: UserRole) => role === UserRole.COORDENADOR;
+
 export const canCreateRegistrations = (role: UserRole) =>
   getCreatableRegistrationTargets(role).length > 0;
 

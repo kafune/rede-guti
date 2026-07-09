@@ -41,6 +41,8 @@ model Tenant {
   leaderStats     LeaderStats[]
   pointsLedger    LeaderPointsLedger[]
   metasCidade     MetaCidade[]
+  equipes         Equipe[]
+  equipeMembros   EquipeMembro[]
   appConfig       AppConfig?
 
   @@map("tenants")
@@ -63,6 +65,7 @@ model User {
   indicatedSupporters Indication[] @relation("IndicatedByUser")
   eventoIndicacoes   EventoIndicado[]   @relation("LiderEventoIndicados")
   atividades         Atividade[]        @relation("LiderAtividades")
+  equipes            Equipe[]           @relation("LiderEquipes")
   leaderStats        LeaderStats?
   pointsLedger       LeaderPointsLedger[]
 
@@ -273,4 +276,54 @@ model MetaCidade {
 
   @@index([tenantId])
   @@map("metas_cidade")
+}
+
+enum EquipeStatus {
+  ATIVA
+  INATIVA
+}
+
+// Equipe de campanha (porta de igreja): 1 motorista com carro próprio + até 4
+// apoiadores. Pertence a uma liderança (liderId). valor/valorObservacoes são o
+// custo combinado com a coordenação — visíveis e editáveis SOMENTE pelo
+// COORDENADOR (a rota faz strip para os demais papéis).
+model Equipe {
+  id                String         @id @default(cuid())
+  tenantId          String         @map("tenant_id")
+  liderId           String         @map("lider_id")
+  nome              String
+  motoristaNome     String         @map("motorista_nome")
+  motoristaCnh      String         @map("motorista_cnh")
+  motoristaTelefone String         @map("motorista_telefone")
+  carroPlaca        String         @map("carro_placa")
+  carroModelo       String         @map("carro_modelo")
+  carroCor          String         @map("carro_cor")
+  status            EquipeStatus   @default(ATIVA)
+  valor             Decimal?       @db.Decimal(12, 2)
+  valorObservacoes  String?        @map("valor_observacoes")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  tenant            Tenant         @relation(fields: [tenantId], references: [id])
+  lider             User           @relation("LiderEquipes", fields: [liderId], references: [id])
+  membros           EquipeMembro[]
+
+  @@index([liderId])
+  @@index([tenantId])
+  @@map("equipes")
+}
+
+model EquipeMembro {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  equipeId  String   @map("equipe_id")
+  nome      String
+  telefone  String
+  ordem     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  equipe    Equipe   @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+
+  @@index([equipeId])
+  @@index([tenantId])
+  @@map("equipe_membros")
 }

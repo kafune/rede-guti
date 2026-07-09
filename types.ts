@@ -208,6 +208,49 @@ export interface MetaCidade {
   updatedAt: string;
 }
 
+export type EquipeStatus = 'ATIVA' | 'INATIVA';
+
+export interface EquipeMembro {
+  id?: string; // ausente ao criar
+  nome: string;
+  telefone: string;
+  ordem?: number;
+}
+
+// Equipe de campanha (porta de igreja): motorista com carro próprio + até 4
+// apoiadores. valor/valorObservacoes só vêm do backend para o COORDENADOR.
+export interface Equipe {
+  id: string;
+  liderId: string;
+  liderNome: string;
+  nome: string;
+  motoristaNome: string;
+  motoristaCnh: string;
+  motoristaTelefone: string;
+  carroPlaca: string;
+  carroModelo: string;
+  carroCor: string;
+  status: EquipeStatus;
+  membros: EquipeMembro[];
+  createdAt: string;
+  updatedAt: string;
+  valor?: string | null;
+  valorObservacoes?: string | null;
+}
+
+export interface EquipePayload {
+  nome: string;
+  motoristaNome: string;
+  motoristaCnh: string;
+  motoristaTelefone: string;
+  carroPlaca: string;
+  carroModelo: string;
+  carroCor: string;
+  status?: EquipeStatus;
+  membros: { nome: string; telefone: string }[];
+  liderId?: string; // só usado pelo coordenador ao cadastrar por uma liderança
+}
+
 export interface DashboardStats {
   total: number;
   last7Days: number;

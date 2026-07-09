@@ -3,7 +3,8 @@ import { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-import { creatableUserRolesByActor } from '../lib/access.js';
+import { creatableUserRolesByActor, normalizeRole } from '../lib/access.js';
+import { isLiderAccessBlocked } from '../lib/userAccess.js';
 import { getTenantId } from '../lib/tenantContext.js';
 import { buildUserHierarchyPath, serializeUserSummary, userHierarchySelect } from '../lib/hierarchy.js';
 
@@ -61,6 +62,7 @@ export async function authRoutes(app: FastifyInstance) {
       where: { email, tenantId: getTenantId() },
       select: {
         ...authUserSelect,
+        active: true,
         passwordHash: true
       }
     });
@@ -72,6 +74,16 @@ export async function authRoutes(app: FastifyInstance) {
     const ok = await bcrypt.compare(body.data.password, user.passwordHash);
     if (!ok) {
       return reply.code(401).send({ error: 'Invalid credentials' });
+    }
+
+    if (!user.active) {
+      return reply.code(403).send({ error: 'Conta desativada. Fale com a coordenação.' });
+    }
+
+    if (normalizeRole(user.role) === 'LIDER_REGIONAL' && (await isLiderAccessBlocked())) {
+      return reply
+        .code(403)
+        .send({ error: 'Sistema temporariamente indisponível para lideranças. Tente mais tarde.' });
     }
 
     const token = app.jwt.sign({

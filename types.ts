@@ -79,6 +79,7 @@ export interface AdminUser {
   email: string;
   name?: string | null;
   role: UserRole;
+  active: boolean;
   whatsapp?: string | null;
   createdAt: string;
   indicatedByUserId?: string | null;
@@ -91,6 +92,7 @@ export interface AdminUser {
 export interface AppSettings {
   whatsappGroupLink?: string | null;
   announcement?: string | null;
+  liderAccessBlocked?: boolean;
   updatedAt?: string | null;
 }
 

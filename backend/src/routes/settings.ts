@@ -6,7 +6,8 @@ import { getTenantId } from '../lib/tenantContext.js';
 const updateSchema = z
   .object({
     whatsappGroupLink: z.string().url().nullable().optional(),
-    announcement: z.string().max(1000).nullable().optional()
+    announcement: z.string().max(1000).nullable().optional(),
+    liderAccessBlocked: z.boolean().optional()
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Invalid payload'
@@ -15,16 +16,19 @@ const updateSchema = z
 const settingsSelect = {
   whatsappGroupLink: true,
   announcement: true,
+  liderAccessBlocked: true,
   updatedAt: true
 } as const;
 
 const serializeSettings = (settings?: {
   whatsappGroupLink: string | null;
   announcement: string | null;
+  liderAccessBlocked: boolean;
   updatedAt: Date;
 } | null) => ({
   whatsappGroupLink: settings?.whatsappGroupLink ?? null,
   announcement: settings?.announcement ?? null,
+  liderAccessBlocked: settings?.liderAccessBlocked ?? false,
   updatedAt: settings?.updatedAt ?? null
 });
 
@@ -45,7 +49,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Invalid payload' });
     }
 
-    const data: { whatsappGroupLink?: string | null; announcement?: string | null } = {};
+    const data: {
+      whatsappGroupLink?: string | null;
+      announcement?: string | null;
+      liderAccessBlocked?: boolean;
+    } = {};
 
     if (body.data.whatsappGroupLink !== undefined) {
       data.whatsappGroupLink = body.data.whatsappGroupLink?.trim() || null;
@@ -53,6 +61,10 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     if (body.data.announcement !== undefined) {
       data.announcement = body.data.announcement?.trim() || null;
+    }
+
+    if (body.data.liderAccessBlocked !== undefined) {
+      data.liderAccessBlocked = body.data.liderAccessBlocked;
     }
 
     const tenantId = getTenantId();

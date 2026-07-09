@@ -10,7 +10,15 @@ import {
   User,
   UserRole
 } from '../types';
-import { deleteUser, fetchSettings, fetchUsers, getApiErrorMessage, updateSettings, updateUser } from '../api';
+import {
+  bulkUpdateUsersActive,
+  deleteUser,
+  fetchSettings,
+  fetchUsers,
+  getApiErrorMessage,
+  updateSettings,
+  updateUser
+} from '../api';
 import { FEATURES } from '../features';
 import {
   canManageUsers,
@@ -81,6 +89,12 @@ const AdminPanel: React.FC<Props> = ({
   const [settingsSuccess, setSettingsSuccess] = useState('');
   const [whatsappGroupLinkInput, setWhatsappGroupLinkInput] = useState('');
   const [announcementInput, setAnnouncementInput] = useState('');
+  const [liderBlockSaving, setLiderBlockSaving] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'ativos' | 'inativos'>('todos');
+  const [roleFilter, setRoleFilter] = useState<'todos' | UserRole>('todos');
+  const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
+  const [bulkUpdating, setBulkUpdating] = useState(false);
   const [editUser, setEditUser] = useState({
     name: '',
     email: '',
@@ -274,6 +288,86 @@ const AdminPanel: React.FC<Props> = ({
       setSettingsSaving(false);
     }
   };
+
+  const handleToggleActive = async (user: AdminUser) => {
+    if (!allowUserEditing || user.id === currentUser.id) return;
+
+    setTogglingUserId(user.id);
+    setUsersError(null);
+    try {
+      const updated = await updateUser(user.id, { active: !user.active });
+      setUsers((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (error) {
+      setUsersError(getApiErrorMessage(error, 'Erro ao alterar o status do usuario.'));
+    } finally {
+      setTogglingUserId(null);
+    }
+  };
+
+  const handleBulkActive = async (active: boolean, targets: AdminUser[]) => {
+    if (!allowUserEditing) return;
+    const ids = targets
+      .filter((user) => user.active !== active)
+      .filter((user) => active || user.id !== currentUser.id)
+      .map((user) => user.id);
+    if (ids.length === 0) return;
+
+    const action = active ? 'Reativar' : 'Desativar';
+    if (!confirm(`${action} ${ids.length} usuario(s) da lista filtrada?`)) return;
+
+    setBulkUpdating(true);
+    setUsersError(null);
+    try {
+      await bulkUpdateUsersActive(ids, active);
+      await loadUsers();
+    } catch (error) {
+      setUsersError(getApiErrorMessage(error, 'Erro ao atualizar usuarios em massa.'));
+    } finally {
+      setBulkUpdating(false);
+    }
+  };
+
+  const handleToggleLiderBlock = async () => {
+    if (!allowUserEditing) return;
+    const next = !(settings?.liderAccessBlocked ?? false);
+    if (
+      next &&
+      !confirm(
+        'Bloquear o acesso de TODAS as liderancas? Elas serao desconectadas e nao conseguirao entrar ate voce liberar.'
+      )
+    ) {
+      return;
+    }
+
+    setLiderBlockSaving(true);
+    setSettingsError(null);
+    setSettingsSuccess('');
+    try {
+      const updated = await updateSettings({ liderAccessBlocked: next });
+      setSettings(updated);
+      setSettingsSuccess(
+        next ? 'Acesso das liderancas bloqueado.' : 'Acesso das liderancas liberado.'
+      );
+    } catch (error) {
+      setSettingsError(getApiErrorMessage(error, 'Erro ao alterar o bloqueio de acesso.'));
+    } finally {
+      setLiderBlockSaving(false);
+    }
+  };
+
+  const filteredUsers = useMemo(() => {
+    const search = userSearch.trim().toLowerCase();
+    return users.filter((user) => {
+      if (statusFilter === 'ativos' && !user.active) return false;
+      if (statusFilter === 'inativos' && user.active) return false;
+      if (roleFilter !== 'todos' && user.role !== roleFilter) return false;
+      if (!search) return true;
+      return (
+        (user.name ?? '').toLowerCase().includes(search) ||
+        user.email.toLowerCase().includes(search)
+      );
+    });
+  }, [users, userSearch, statusFilter, roleFilter]);
 
   const networkUsers = useMemo<NetworkUserNode[]>(() => {
     const baseUsers = [...users];
@@ -541,6 +635,49 @@ const AdminPanel: React.FC<Props> = ({
         </div>
       </div>
 
+      {allowUserEditing && (
+        <div
+          className={`theme-panel p-6 rounded-3xl border shadow-sm transition-all duration-500 ease-out ${
+            settings?.liderAccessBlocked
+              ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+              : 'bg-white dark:bg-gray-800 dark:border-gray-700'
+          }`}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shrink-0 ${
+                settings?.liderAccessBlocked
+                  ? 'bg-red-100 dark:bg-red-900/40 text-red-600'
+                  : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600'
+              }`}
+            >
+              <i className={`fa-solid ${settings?.liderAccessBlocked ? 'fa-lock' : 'fa-lock-open'}`}></i>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold mb-1">Acesso das lideranças</h3>
+              <p className="text-sm opacity-60">
+                {settings?.liderAccessBlocked
+                  ? 'O sistema está BLOQUEADO para todas as lideranças: elas não conseguem entrar nem usar a conta até você liberar.'
+                  : 'O sistema está liberado para as lideranças. Use o bloqueio para indisponibilizar temporariamente o acesso de todas de uma vez.'}
+              </p>
+            </div>
+            <button
+              onClick={handleToggleLiderBlock}
+              disabled={liderBlockSaving || settingsLoading}
+              className={`px-5 py-3 rounded-2xl font-bold text-sm text-white active:scale-95 transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50 ${
+                settings?.liderAccessBlocked ? 'bg-emerald-600' : 'bg-red-500'
+              }`}
+            >
+              {liderBlockSaving
+                ? 'Salvando...'
+                : settings?.liderAccessBlocked
+                  ? 'Liberar acesso'
+                  : 'Bloquear acesso'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="theme-panel bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-3xl border dark:border-gray-700 shadow-sm transition-all duration-500 ease-out">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div>
@@ -576,6 +713,77 @@ const AdminPanel: React.FC<Props> = ({
           </div>
         )}
 
+        {allowUserEditing && users.length > 0 && (
+          <div className="mt-6 space-y-3">
+            <div className="flex flex-col lg:flex-row gap-3">
+              <div className="relative flex-1">
+                <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 opacity-40 pointer-events-none"></i>
+                <input
+                  type="text"
+                  placeholder="Filtrar por nome ou e-mail..."
+                  value={userSearch}
+                  onChange={(event) => setUserSearch(event.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl pl-11 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    ['todos', 'Todos'],
+                    ['ativos', 'Ativos'],
+                    ['inativos', 'Inativos']
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setStatusFilter(value)}
+                    className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition-all ${
+                      statusFilter === value
+                        ? 'bg-blue-600 text-white shadow'
+                        : 'bg-gray-100 dark:bg-gray-900 opacity-60 hover:opacity-100'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <select
+                  value={roleFilter}
+                  onChange={(event) => setRoleFilter(event.target.value as 'todos' | UserRole)}
+                  className="bg-gray-100 dark:bg-gray-900 border-none rounded-full px-4 py-2 text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="todos">Todos os perfis</option>
+                  {[UserRole.COORDENADOR, UserRole.LIDER_REGIONAL, UserRole.VERIFICADORA].map((role) => (
+                    <option key={role} value={role}>
+                      {getRoleLabel(role)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold opacity-50">
+                {filteredUsers.length} usuario(s) na lista filtrada
+              </span>
+              <button
+                onClick={() => handleBulkActive(false, filteredUsers)}
+                disabled={bulkUpdating || filteredUsers.every((user) => !user.active || user.id === currentUser.id)}
+                className="px-4 py-2 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold uppercase transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <i className="fa-solid fa-ban mr-1"></i>
+                {bulkUpdating ? 'Atualizando...' : 'Desativar lista filtrada'}
+              </button>
+              <button
+                onClick={() => handleBulkActive(true, filteredUsers)}
+                disabled={bulkUpdating || filteredUsers.every((user) => user.active)}
+                className="px-4 py-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold uppercase transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <i className="fa-solid fa-rotate-left mr-1"></i>
+                {bulkUpdating ? 'Atualizando...' : 'Reativar lista filtrada'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mt-6 space-y-3">
           {usersLoading && (
             <div className="text-sm text-blue-600 font-semibold bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
@@ -585,7 +793,10 @@ const AdminPanel: React.FC<Props> = ({
           {!usersLoading && users.length === 0 && (
             <div className="text-sm opacity-60 px-2">Nenhum usuario encontrado nesta hierarquia.</div>
           )}
-          {users.map((user) => {
+          {!usersLoading && users.length > 0 && filteredUsers.length === 0 && (
+            <div className="text-sm opacity-60 px-2">Nenhum usuario corresponde aos filtros.</div>
+          )}
+          {filteredUsers.map((user) => {
             const isEditing = editingUserId === user.id;
             const isSelf = user.id === currentUser.id;
             const editableRoles =
@@ -597,7 +808,9 @@ const AdminPanel: React.FC<Props> = ({
             return (
               <div
                 key={user.id}
-                className="rounded-2xl border dark:border-gray-700 p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 transition-all duration-500 ease-out hover:-translate-y-0.5"
+                className={`rounded-2xl border dark:border-gray-700 p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 transition-all duration-500 ease-out hover:-translate-y-0.5 ${
+                  user.active ? '' : 'opacity-60 bg-gray-50 dark:bg-gray-900/40'
+                }`}
               >
                 <div className="flex-1 space-y-2">
                   {isEditing ? (
@@ -654,6 +867,11 @@ const AdminPanel: React.FC<Props> = ({
                             Voce
                           </span>
                         )}
+                        {!user.active && (
+                          <span className="text-[10px] font-black uppercase px-2 py-1 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                            Inativo
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs opacity-60 space-y-1">
                         <div>{user.email}</div>
@@ -700,6 +918,24 @@ const AdminPanel: React.FC<Props> = ({
                     </>
                   ) : (
                     <>
+                      {allowUserEditing && (
+                        <button
+                          onClick={() => handleToggleActive(user)}
+                          disabled={isSelf || togglingUserId === user.id}
+                          title={isSelf ? 'Nao e possivel desativar o proprio usuario' : undefined}
+                          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50 ${
+                            user.active
+                              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                              : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                          }`}
+                        >
+                          {togglingUserId === user.id
+                            ? 'Salvando...'
+                            : user.active
+                              ? 'Desativar'
+                              : 'Reativar'}
+                        </button>
+                      )}
                       {allowUserEditing && (
                         <button
                           onClick={() => startEdit(user)}

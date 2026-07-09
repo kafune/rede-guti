@@ -3,6 +3,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { config } from '../config.js';
 import { normalizeRole } from '../lib/access.js';
 import { getTenantId } from '../lib/tenantContext.js';
+import { getAccessDeniedReason } from '../lib/userAccess.js';
 
 const matchesAutomationToken = (header: string | undefined) => {
   if (!config.automationToken || !header?.startsWith('Bearer ')) {
@@ -30,6 +31,13 @@ export const registerAuth = (app: FastifyInstance) => {
     } catch {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
+
+    // Desativação/bloqueio vale mesmo com JWT ainda válido; 401 força o
+    // logout automático no frontend.
+    const denied = await getAccessDeniedReason(request.user.sub);
+    if (denied) {
+      return reply.code(401).send({ error: denied });
+    }
   });
 
   app.decorate('requireCoordinator', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -43,6 +51,11 @@ export const registerAuth = (app: FastifyInstance) => {
       }
     } catch {
       return reply.code(401).send({ error: 'Unauthorized' });
+    }
+
+    const denied = await getAccessDeniedReason(request.user.sub);
+    if (denied) {
+      return reply.code(401).send({ error: denied });
     }
   });
 

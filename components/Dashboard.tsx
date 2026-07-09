@@ -5,6 +5,7 @@ import { FEATURES } from '../features';
 import { fetchSettings } from '../api';
 import { canCreateRegistrations } from '../roleUtils';
 import LeaderImpactPanel from './LeaderImpactPanel';
+import ShareLinkQrCode from './ShareLinkQrCode';
 
 interface Props {
   supporters: Supporter[];
@@ -299,6 +300,7 @@ const Dashboard: React.FC<Props> = ({ supporters, currentUser, onViewList, onVie
               Enviar pelo WhatsApp
             </button>
           </div>
+          <ShareLinkQrCode url={shareUrl} ownerName={indicatorName} />
           {indicatorName && (
             <p className="text-[10px] uppercase tracking-widest opacity-40 font-black mt-3">
               Indicacao vinculada a {indicatorName}

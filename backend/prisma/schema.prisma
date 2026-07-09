@@ -56,6 +56,8 @@ model User {
   devzappLink        String?      @map("devzapp_link")
   passwordHash       String       @map("password_hash")
   role               Role         @default(LIDER_REGIONAL)
+  // Conta desativada não faz login nem usa a API (checado em plugins/auth.ts).
+  active             Boolean      @default(true)
   indicatedByUserId  String?      @map("indicated_by_user_id")
   createdAt          DateTime     @default(now()) @map("created_at")
   tenant             Tenant       @relation(fields: [tenantId], references: [id])
@@ -126,6 +128,9 @@ model AppConfig {
   tenantId          String   @unique @map("tenant_id")
   whatsappGroupLink String?  @map("whatsapp_group_link")
   announcement      String?  @map("announcement")
+  // Chave geral: bloqueia temporariamente o acesso de todas as lideranças
+  // (LIDER_REGIONAL) sem desativá-las individualmente.
+  liderAccessBlocked Boolean @default(false) @map("lider_access_blocked")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

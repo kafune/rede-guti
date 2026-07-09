@@ -275,6 +275,7 @@ export const updateUser = async (
     password?: string;
     role?: UserRole;
     whatsapp?: string | null;
+    active?: boolean;
   }
 ) => {
   const data = await request<{ user: AdminUser }>(`/users/${id}`, {
@@ -293,9 +294,18 @@ export const fetchSettings = async () => {
   return data.settings;
 };
 
+export const bulkUpdateUsersActive = async (userIds: string[], active: boolean) => {
+  const data = await request<{ updated: number }>('/users/bulk-active', {
+    method: 'PATCH',
+    body: JSON.stringify({ userIds, active })
+  });
+  return data.updated;
+};
+
 export const updateSettings = async (payload: {
   whatsappGroupLink?: string | null;
   announcement?: string | null;
+  liderAccessBlocked?: boolean;
 }) => {
   const data = await request<{ settings: AppSettings }>('/settings', {
     method: 'PATCH',

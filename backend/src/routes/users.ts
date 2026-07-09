@@ -29,11 +29,17 @@ const updateSchema = z
     name: z.string().min(2).optional(),
     password: z.string().min(6).optional(),
     role: z.nativeEnum(Role).optional(),
-    whatsapp: z.string().trim().nullable().optional()
+    whatsapp: z.string().trim().nullable().optional(),
+    active: z.boolean().optional()
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Invalid payload'
   });
+
+const bulkActiveSchema = z.object({
+  userIds: z.array(z.string().min(1)).min(1).max(500),
+  active: z.boolean()
+});
 
 // WhatsApp da liderança (devzapp_link): só dígitos, com DDI 55. Usado pelas
 // automações de WhatsApp (parabéns, resumo semanal, alerta de inatividade).
@@ -52,6 +58,7 @@ const userListSelect = {
   email: true,
   name: true,
   role: true,
+  active: true,
   devzappLink: true,
   createdAt: true,
   indicatedByUserId: true,
@@ -71,6 +78,7 @@ const serializeUserRecord = (user: {
   email: string;
   name: string | null;
   role: RoleType;
+  active: boolean;
   devzappLink: string | null;
   createdAt: Date;
   indicatedByUserId: string | null;
@@ -90,6 +98,7 @@ const serializeUserRecord = (user: {
   email: user.email,
   name: user.name,
   role: user.role,
+  active: user.active,
   whatsapp: user.devzappLink,
   createdAt: user.createdAt,
   indicatedByUserId: user.indicatedByUserId,
@@ -187,6 +196,10 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'User not found' });
     }
 
+    if (body.data.active === false && existing.id === request.user.sub) {
+      return reply.code(400).send({ error: 'Nao e possivel desativar o proprio usuario.' });
+    }
+
     if (body.data.role) {
       if (body.data.role === 'COORDENADOR' && existing.role !== 'COORDENADOR') {
         return reply.code(409).send({ error: 'Coordenadores devem ser criados manualmente.' });
@@ -212,7 +225,12 @@ export async function userRoutes(app: FastifyInstance) {
       role?: RoleType;
       passwordHash?: string;
       devzappLink?: string | null;
+      active?: boolean;
     } = {};
+
+    if (body.data.active !== undefined) {
+      updateData.active = body.data.active;
+    }
 
     if (body.data.email) {
       updateData.email = body.data.email.toLowerCase();
@@ -248,6 +266,26 @@ export async function userRoutes(app: FastifyInstance) {
       }
       throw error;
     }
+  });
+
+  // Ativa/desativa em massa (ex.: uma lista filtrada inteira). O próprio
+  // usuário é sempre excluído da desativação para não se trancar fora.
+  app.patch('/users/bulk-active', { preHandler: app.requireCoordinator }, async (request, reply) => {
+    const body = bulkActiveSchema.safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: 'Invalid payload' });
+    }
+
+    const userIds = body.data.active
+      ? body.data.userIds
+      : body.data.userIds.filter((id) => id !== request.user.sub);
+
+    const result = await prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data: { active: body.data.active }
+    });
+
+    return { updated: result.count };
   });
 
   app.delete('/users/:id', { preHandler: app.requireCoordinator }, async (request, reply) => {

@@ -139,6 +139,35 @@ export const canViewUserEngagement = (role: Role | string) => {
 export const canRecalculateStats = (role: Role | string) =>
   normalizeRole(role) === 'COORDENADOR';
 
+// --- Equipes de Campanha ---
+
+/** COORDENADOR e LIDER_REGIONAL acessam o módulo de equipes. */
+export const canAccessEquipes = (role: Role | string) => {
+  const r = normalizeRole(role);
+  return r === 'COORDENADOR' || r === 'LIDER_REGIONAL';
+};
+
+/** Somente COORDENADOR vê/edita valor e valorObservacoes das equipes. */
+export const canManageEquipeValores = (role: Role | string) =>
+  normalizeRole(role) === 'COORDENADOR';
+
+/** Coordenador vê todas as equipes do tenant; líder só as próprias. */
+export const visibleEquipesWhere = (
+  actor: AuthenticatedUser
+): Prisma.EquipeWhereInput | null => {
+  const actorRole = normalizeRole(actor.role);
+
+  if (actorRole === 'COORDENADOR') {
+    return { tenantId: actor.tenantId };
+  }
+
+  if (actorRole === 'LIDER_REGIONAL') {
+    return { tenantId: actor.tenantId, liderId: actor.sub };
+  }
+
+  return null;
+};
+
 export const roleAllowsIndicator = (
   role: Role | string,
   indicatorRole: Role | string | null | undefined

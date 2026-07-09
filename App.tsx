@@ -34,6 +34,7 @@ import AdminPanel from './components/AdminPanel';
 import ExportPanel from './components/ExportPanel';
 import LeaderReportPanel from './components/LeaderReportPanel';
 import MetasPanel from './components/metas/MetasPanel';
+import EquipesPanel from './components/equipes/EquipesPanel';
 import Login from './components/Login';
 import MapView from './components/MapView';
 import PublicSignup from './components/PublicSignup';
@@ -46,6 +47,7 @@ import PublicEventoConfirmacao from './components/PublicEventoConfirmacao';
 import PublicAtividadeCadastro from './components/PublicAtividadeCadastro';
 import AtividadesList from './components/atividades/AtividadesList';
 import {
+  canAccessEquipes,
   canAccessManagementPanel,
   canCreateRegistrations,
   canViewSupporterIdentity,
@@ -85,7 +87,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState<
     'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' | 'relatorio' |
-    'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades'
+    'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'equipes'
   >('dashboard');
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
   const [selectedEventoId, setSelectedEventoId] = useState<string | null>(null);
@@ -496,6 +498,7 @@ const App: React.FC = () => {
   const supporterDirectoryLabel = isLeader ? 'Meus Cadastros' : 'Apoiadores';
   const canCreateNewEntries = canCreateRegistrations(currentUser.role);
   const canExportData = currentUser.role === 'COORDENADOR';
+  const canManageEquipes = canAccessEquipes(currentUser.role);
   const isMapView = view === 'map';
   const mainWidthClass = isMapView ? 'max-w-none w-full px-2 sm:px-4 lg:px-8' : 'max-w-4xl';
 
@@ -629,6 +632,10 @@ const App: React.FC = () => {
           <MetasPanel municipalities={municipalities} />
         )}
 
+        {view === 'equipes' && canManageEquipes && (
+          <EquipesPanel currentUser={currentUser} />
+        )}
+
         {view === 'eventos' && (
           <EventoList
             currentUser={currentUser}
@@ -744,6 +751,15 @@ const App: React.FC = () => {
               <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Metas</span>
             </button>
           )}
+          {canManageEquipes && (
+            <button
+              onClick={() => setView('equipes')}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'equipes' ? 'text-blue-600' : 'opacity-40'}`}
+            >
+              <i className="fa-solid fa-car-side text-lg leading-none"></i>
+              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Equipes</span>
+            </button>
+          )}
           <button
             onClick={() => setView('eventos')}
             className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${['eventos', 'evento-novo', 'evento-detalhe'].includes(view) ? 'text-blue-600' : 'opacity-40'}`}
@@ -846,6 +862,17 @@ const App: React.FC = () => {
             title="Metas por Cidade"
           >
             <i className="fa-solid fa-bullseye text-xl"></i>
+          </button>
+        )}
+        {canManageEquipes && (
+          <button
+            onClick={() => setView('equipes')}
+            className={`p-4 rounded-2xl transition-all ${
+              view === 'equipes' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
+            }`}
+            title="Equipes de Campanha"
+          >
+            <i className="fa-solid fa-car-side text-xl"></i>
           </button>
         )}
         <button

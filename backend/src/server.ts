@@ -17,6 +17,7 @@ import { settingsRoutes } from './routes/settings.js';
 import { eventoRoutes } from './routes/eventos.js';
 import { atividadeRoutes } from './routes/atividades.js';
 import { metaRoutes } from './routes/metas.js';
+import { equipeRoutes } from './routes/equipes.js';
 import { engagementRoutes } from './routes/engagement.js';
 import { automationRoutes } from './routes/automation.js';
 
@@ -43,6 +44,7 @@ await app.register(settingsRoutes);
 await app.register(eventoRoutes);
 await app.register(atividadeRoutes);
 await app.register(metaRoutes);
+await app.register(equipeRoutes);
 await app.register(engagementRoutes);
 await app.register(automationRoutes);
 

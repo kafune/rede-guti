@@ -4,6 +4,8 @@ import {
   Atividade,
   AtividadePublicLider,
   Church,
+  Equipe,
+  EquipePayload,
   Evento,
   EventoIndicado,
   EventoIndicadoStatus,
@@ -552,6 +554,44 @@ export const updateMeta = async (
 
 export const deleteMeta = async (id: string) => {
   await request<void>(`/metas/${id}`, { method: 'DELETE' });
+};
+
+// ── EQUIPES DE CAMPANHA ──────────────────────────────────────────────────────
+
+export const fetchEquipes = async () => {
+  const data = await request<{ equipes: Equipe[] }>('/equipes');
+  return data.equipes;
+};
+
+export const createEquipe = async (payload: EquipePayload) => {
+  const data = await request<{ equipe: Equipe }>('/equipes', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return data.equipe;
+};
+
+export const updateEquipe = async (id: string, payload: Partial<EquipePayload>) => {
+  const data = await request<{ equipe: Equipe }>(`/equipes/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+  return data.equipe;
+};
+
+export const updateEquipeValor = async (
+  id: string,
+  payload: { valor: number | null; valorObservacoes?: string | null }
+) => {
+  const data = await request<{ equipe: Equipe }>(`/equipes/${id}/valor`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+  return data.equipe;
+};
+
+export const deleteEquipe = async (id: string) => {
+  await request<void>(`/equipes/${id}`, { method: 'DELETE' });
 };
 
 export { getApiBase };

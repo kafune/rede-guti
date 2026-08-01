@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview",
     "db:shell": "bash ./scripts/db-shell.sh",
     "db:status": "bash ./scripts/db-status.sh",
@@ -23,12 +25,17 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/d3-geo": "^3.1.0",
     "@types/node": "^22.14.0",
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-react": "^5.0.0",
+    "jsdom": "^26.1.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^3.2.4"
   }
 }

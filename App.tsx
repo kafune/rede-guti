@@ -46,6 +46,7 @@ import PublicEventoIndicacao from './components/PublicEventoIndicacao';
 import PublicEventoConfirmacao from './components/PublicEventoConfirmacao';
 import PublicAtividadeCadastro from './components/PublicAtividadeCadastro';
 import AtividadesList from './components/atividades/AtividadesList';
+import { MensagensPanel } from './components/mensagens/MensagensPanel';
 import {
   canAccessEquipes,
   canAccessManagementPanel,
@@ -87,7 +88,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState<
     'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' | 'relatorio' |
-    'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'equipes'
+    'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'equipes' | 'mensagens'
   >('dashboard');
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
   const [selectedEventoId, setSelectedEventoId] = useState<string | null>(null);
@@ -231,6 +232,11 @@ const App: React.FC = () => {
 
     // O mapa continua restrito a quem enxerga a base completa.
     if (view === 'map' && !canDirectory) {
+      setView('dashboard');
+      return;
+    }
+
+    if (view === 'mensagens' && currentUser.role !== 'COORDENADOR') {
       setView('dashboard');
       return;
     }
@@ -668,6 +674,10 @@ const App: React.FC = () => {
         {view === 'atividades' && (
           <AtividadesList currentUser={currentUser} onLogout={handleLogout} />
         )}
+
+        {view === 'mensagens' && currentUser.role === 'COORDENADOR' && (
+          <MensagensPanel />
+        )}
       </main>
 
       <nav
@@ -722,6 +732,15 @@ const App: React.FC = () => {
             >
               <i className="fa-solid fa-sitemap text-lg leading-none"></i>
               <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Rede</span>
+            </button>
+          )}
+          {canExportData && (
+            <button
+              onClick={() => setView('mensagens')}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'mensagens' ? 'text-emerald-600' : 'opacity-40'}`}
+            >
+              <i className="fa-brands fa-whatsapp text-lg leading-none"></i>
+              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Mensagens</span>
             </button>
           )}
           {canExportData && (
@@ -829,6 +848,17 @@ const App: React.FC = () => {
             title="Rede"
           >
             <i className="fa-solid fa-sitemap text-xl"></i>
+          </button>
+        )}
+        {canExportData && (
+          <button
+            onClick={() => setView('mensagens')}
+            className={`p-4 rounded-2xl transition-all ${
+              view === 'mensagens' ? 'bg-emerald-600 text-white shadow-lg' : 'opacity-30'
+            }`}
+            title="Mensagens"
+          >
+            <i className="fa-brands fa-whatsapp text-xl"></i>
           </button>
         )}
         {canExportData && (

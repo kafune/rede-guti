@@ -8,7 +8,6 @@ datasource db {
   provider = "postgresql"
 }
 
-
 enum Role {
   COORDENADOR
   LIDER_REGIONAL
@@ -18,6 +17,48 @@ enum Role {
 enum IndicationStatus {
   ATIVO
   INATIVO
+}
+
+enum WhatsAppCampaignStatus {
+  DRAFT
+  SCHEDULED
+  QUEUED
+  SENDING
+  PAUSED
+  COMPLETED
+  CANCELED
+  FAILED
+}
+
+enum WhatsAppRecipientStatus {
+  PENDING
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  PLAYED
+  FAILED
+  CANCELED
+}
+
+enum WhatsAppRecipientOrigin {
+  INDICATION
+  EVENT_GUEST
+  TEAM_DRIVER
+  TEAM_MEMBER
+  MANUAL
+}
+
+enum WhatsAppCampaignCategory {
+  MARKETING
+  UTILITY
+}
+
+enum WhatsAppInteractionStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
 }
 
 // Fase B multi-tenant: cada instância (vertical) é um tenant. Todas as tabelas
@@ -31,45 +72,57 @@ model Tenant {
   name      String
   createdAt DateTime @default(now()) @map("created_at")
 
-  users           User[]
-  churches        Church[]
-  municipalities  Municipality[]
-  indications     Indication[]
-  eventos         Evento[]
-  eventoIndicados EventoIndicado[]
-  atividades      Atividade[]
-  leaderStats     LeaderStats[]
-  pointsLedger    LeaderPointsLedger[]
-  metasCidade     MetaCidade[]
-  equipes         Equipe[]
-  equipeMembros   EquipeMembro[]
-  appConfig       AppConfig?
+  users                User[]
+  churches             Church[]
+  municipalities       Municipality[]
+  indications          Indication[]
+  eventos              Evento[]
+  eventoIndicados      EventoIndicado[]
+  atividades           Atividade[]
+  leaderStats          LeaderStats[]
+  pointsLedger         LeaderPointsLedger[]
+  metasCidade          MetaCidade[]
+  equipes              Equipe[]
+  equipeMembros        EquipeMembro[]
+  appConfig            AppConfig?
+  whatsappConfig       WhatsAppConfig?
+  whatsappCampaigns    WhatsAppCampaign[]
+  whatsappRecipients   WhatsAppRecipient[]
+  whatsappTemplates    WhatsAppTemplate[]
+  whatsappMedia        WhatsAppMedia[]
+  whatsappSuppressions WhatsAppSuppression[]
+  whatsappInteractions WhatsAppInteraction[]
 
   @@map("tenants")
 }
 
 model User {
-  id                 String       @id @default(cuid())
-  tenantId           String       @map("tenant_id")
-  email              String
-  name               String?      @map("name")
-  devzappLink        String?      @map("devzapp_link")
-  passwordHash       String       @map("password_hash")
-  role               Role         @default(LIDER_REGIONAL)
+  id                          String                @id @default(cuid())
+  tenantId                    String                @map("tenant_id")
+  email                       String
+  name                        String?               @map("name")
+  devzappLink                 String?               @map("devzapp_link")
+  passwordHash                String                @map("password_hash")
+  role                        Role                  @default(LIDER_REGIONAL)
   // Conta desativada não faz login nem usa a API (checado em plugins/auth.ts).
-  active             Boolean      @default(true)
-  indicatedByUserId  String?      @map("indicated_by_user_id")
-  createdAt          DateTime     @default(now()) @map("created_at")
-  tenant             Tenant       @relation(fields: [tenantId], references: [id])
-  indicatedByUser    User?        @relation("UserIndications", fields: [indicatedByUserId], references: [id], onDelete: SetNull)
-  indicatedUsers     User[]       @relation("UserIndications")
-  createdIndications Indication[] @relation("CreatedBy")
-  indicatedSupporters Indication[] @relation("IndicatedByUser")
-  eventoIndicacoes   EventoIndicado[]   @relation("LiderEventoIndicados")
-  atividades         Atividade[]        @relation("LiderAtividades")
-  equipes            Equipe[]           @relation("LiderEquipes")
-  leaderStats        LeaderStats?
-  pointsLedger       LeaderPointsLedger[]
+  active                      Boolean               @default(true)
+  indicatedByUserId           String?               @map("indicated_by_user_id")
+  createdAt                   DateTime              @default(now()) @map("created_at")
+  tenant                      Tenant                @relation(fields: [tenantId], references: [id])
+  indicatedByUser             User?                 @relation("UserIndications", fields: [indicatedByUserId], references: [id], onDelete: SetNull)
+  indicatedUsers              User[]                @relation("UserIndications")
+  createdIndications          Indication[]          @relation("CreatedBy")
+  indicatedSupporters         Indication[]          @relation("IndicatedByUser")
+  eventoIndicacoes            EventoIndicado[]      @relation("LiderEventoIndicados")
+  atividades                  Atividade[]           @relation("LiderAtividades")
+  equipes                     Equipe[]              @relation("LiderEquipes")
+  leaderStats                 LeaderStats?
+  pointsLedger                LeaderPointsLedger[]
+  authoredWhatsAppCampaigns   WhatsAppCampaign[]    @relation("WhatsAppCampaignAuthor")
+  authoredWhatsAppTemplates   WhatsAppTemplate[]    @relation("WhatsAppTemplateAuthor")
+  uploadedWhatsAppMedia       WhatsAppMedia[]       @relation("WhatsAppMediaUploader")
+  createdWhatsAppSuppressions WhatsAppSuppression[] @relation("WhatsAppSuppressionCreatedBy")
+  whatsappReauthorizations    WhatsAppSuppression[] @relation("WhatsAppSuppressionReauthorizedBy")
 
   @@unique([tenantId, email])
   @@index([role])
@@ -124,15 +177,15 @@ model LeaderPointsLedger {
 
 // Uma linha por tenant (deixou de ser singleton na Fase B).
 model AppConfig {
-  id                String   @id @default(cuid())
-  tenantId          String   @unique @map("tenant_id")
-  whatsappGroupLink String?  @map("whatsapp_group_link")
-  announcement      String?  @map("announcement")
+  id                 String   @id @default(cuid())
+  tenantId           String   @unique @map("tenant_id")
+  whatsappGroupLink  String?  @map("whatsapp_group_link")
+  announcement       String?  @map("announcement")
   // Chave geral: bloqueia temporariamente o acesso de todas as lideranças
   // (LIDER_REGIONAL) sem desativá-las individualmente.
-  liderAccessBlocked Boolean @default(false) @map("lider_access_blocked")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  liderAccessBlocked Boolean  @default(false) @map("lider_access_blocked")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -153,12 +206,12 @@ model Church {
 }
 
 model Municipality {
-  id        String       @id @default(cuid())
-  tenantId  String       @map("tenant_id")
-  name      String
-  stateCode String       @default("SP") @map("state_code")
-  createdAt DateTime     @default(now()) @map("created_at")
-  tenant    Tenant       @relation(fields: [tenantId], references: [id])
+  id          String       @id @default(cuid())
+  tenantId    String       @map("tenant_id")
+  name        String
+  stateCode   String       @default("SP") @map("state_code")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
   indications Indication[]
   metas       MetaCidade[]
 
@@ -233,18 +286,18 @@ model Atividade {
 }
 
 model Indication {
-  id                String       @id @default(cuid())
-  tenantId          String       @map("tenant_id")
+  id                String           @id @default(cuid())
+  tenantId          String           @map("tenant_id")
   name              String
   phone             String?
   email             String?
   status            IndicationStatus @default(ATIVO)
-  indicatedBy       String?      @map("indicated_by")
-  indicatedByUserId String?      @map("indicated_by_user_id")
-  createdAt         DateTime     @default(now()) @map("created_at")
-  createdById       String       @map("created_by_id")
-  churchId          String       @map("church_id")
-  municipalityId    String       @map("municipality_id")
+  indicatedBy       String?          @map("indicated_by")
+  indicatedByUserId String?          @map("indicated_by_user_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  createdById       String           @map("created_by_id")
+  churchId          String           @map("church_id")
+  municipalityId    String           @map("municipality_id")
 
   tenant          Tenant       @relation(fields: [tenantId], references: [id])
   createdBy       User         @relation("CreatedBy", fields: [createdById], references: [id])
@@ -331,4 +384,195 @@ model EquipeMembro {
   @@index([equipeId])
   @@index([tenantId])
   @@map("equipe_membros")
+}
+
+model WhatsAppConfig {
+  id                     String    @id @default(cuid())
+  tenantId               String    @unique @map("tenant_id")
+  instanceId             String?   @map("instance_id")
+  instanceName           String?   @map("instance_name")
+  instanceTokenEncrypted String?   @map("instance_token_encrypted")
+  phone                  String?
+  status                 String?
+  webhookConfiguredAt    DateTime? @map("webhook_configured_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("whatsapp_configs")
+}
+
+model WhatsAppCampaign {
+  id                    String                   @id @default(cuid())
+  tenantId              String                   @map("tenant_id")
+  createdById           String                   @map("created_by_id")
+  name                  String
+  status                WhatsAppCampaignStatus   @default(DRAFT)
+  category              WhatsAppCampaignCategory
+  audienceFilter        Json                     @map("audience_filter")
+  content               Json
+  consentAt             DateTime                 @map("consent_at")
+  scheduledAt           DateTime?                @map("scheduled_at")
+  remoteFolderId        String?                  @map("remote_folder_id")
+  remoteFolderStatus    String?                  @map("remote_folder_status")
+  remoteFolderCreatedAt DateTime?                @map("remote_folder_created_at")
+  totalRecipients       Int                      @default(0) @map("total_recipients")
+  validRecipients       Int                      @default(0) @map("valid_recipients")
+  excludedRecipients    Int                      @default(0) @map("excluded_recipients")
+  queuedCount           Int                      @default(0) @map("queued_count")
+  sentCount             Int                      @default(0) @map("sent_count")
+  failedCount           Int                      @default(0) @map("failed_count")
+  deliveredCount        Int                      @default(0) @map("delivered_count")
+  readCount             Int                      @default(0) @map("read_count")
+  playedCount           Int                      @default(0) @map("played_count")
+  replyCount            Int                      @default(0) @map("reply_count")
+  optOutCount           Int                      @default(0) @map("opt_out_count")
+  lastError             String?                  @map("last_error")
+  queuedAt              DateTime?                @map("queued_at")
+  startedAt             DateTime?                @map("started_at")
+  pausedAt              DateTime?                @map("paused_at")
+  completedAt           DateTime?                @map("completed_at")
+  canceledAt            DateTime?                @map("canceled_at")
+  failedAt              DateTime?                @map("failed_at")
+  createdAt             DateTime                 @default(now()) @map("created_at")
+  updatedAt             DateTime                 @updatedAt @map("updated_at")
+
+  tenant       Tenant                @relation(fields: [tenantId], references: [id])
+  createdBy    User                  @relation("WhatsAppCampaignAuthor", fields: [createdById], references: [id])
+  recipients   WhatsAppRecipient[]
+  interactions WhatsAppInteraction[]
+
+  @@index([tenantId, status])
+  @@index([createdById])
+  @@index([scheduledAt])
+  @@map("whatsapp_campaigns")
+}
+
+model WhatsAppRecipient {
+  id                  String                  @id @default(cuid())
+  tenantId            String                  @map("tenant_id")
+  campaignId          String                  @map("campaign_id")
+  origin              WhatsAppRecipientOrigin
+  sourceId            String?                 @map("source_id")
+  sourceName          String?                 @map("source_name")
+  personName          String                  @map("person_name")
+  phoneOriginal       String                  @map("phone_original")
+  phoneNormalized     String?                 @map("phone_normalized")
+  personalizedContent Json                    @map("personalized_content")
+  isValid             Boolean                 @default(true) @map("is_valid")
+  exclusionReason     String?                 @map("exclusion_reason")
+  status              WhatsAppRecipientStatus @default(PENDING)
+  externalMessageIds  String[]                @default([]) @map("external_message_ids")
+  externalChatId      String?                 @map("external_chat_id")
+  error               String?
+  queuedAt            DateTime?               @map("queued_at")
+  sentAt              DateTime?               @map("sent_at")
+  deliveredAt         DateTime?               @map("delivered_at")
+  readAt              DateTime?               @map("read_at")
+  playedAt            DateTime?               @map("played_at")
+  failedAt            DateTime?               @map("failed_at")
+  canceledAt          DateTime?               @map("canceled_at")
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+
+  tenant       Tenant                @relation(fields: [tenantId], references: [id])
+  campaign     WhatsAppCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  interactions WhatsAppInteraction[]
+
+  @@index([tenantId, phoneNormalized])
+  @@index([campaignId, status])
+  @@map("whatsapp_recipients")
+}
+
+model WhatsAppTemplate {
+  id          String                   @id @default(cuid())
+  tenantId    String                   @map("tenant_id")
+  createdById String                   @map("created_by_id")
+  name        String
+  category    WhatsAppCampaignCategory
+  content     Json
+  favorite    Boolean                  @default(false)
+  version     Int                      @default(1)
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id])
+  createdBy User   @relation("WhatsAppTemplateAuthor", fields: [createdById], references: [id])
+
+  @@unique([tenantId, name])
+  @@index([createdById])
+  @@map("whatsapp_templates")
+}
+
+model WhatsAppMedia {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  uploadedById String   @map("uploaded_by_id")
+  filename     String
+  mimeType     String   @map("mime_type")
+  sizeBytes    Int      @map("size_bytes")
+  bytes        Bytes
+  publicToken  String   @unique @map("public_token")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tenant     Tenant @relation(fields: [tenantId], references: [id])
+  uploadedBy User   @relation("WhatsAppMediaUploader", fields: [uploadedById], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([uploadedById])
+  @@map("whatsapp_media")
+}
+
+model WhatsAppSuppression {
+  id               String    @id @default(cuid())
+  tenantId         String    @map("tenant_id")
+  phoneNormalized  String    @map("phone_normalized")
+  active           Boolean   @default(true)
+  reason           String?
+  source           String?
+  createdById      String?   @map("created_by_id")
+  firstOptOutAt    DateTime  @default(now()) @map("first_opt_out_at")
+  lastOptOutAt     DateTime  @default(now()) @map("last_opt_out_at")
+  reauthorizedAt   DateTime? @map("reauthorized_at")
+  reauthorizedById String?   @map("reauthorized_by_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  tenant         Tenant @relation(fields: [tenantId], references: [id])
+  createdBy      User?  @relation("WhatsAppSuppressionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  reauthorizedBy User?  @relation("WhatsAppSuppressionReauthorizedBy", fields: [reauthorizedById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, phoneNormalized])
+  @@index([tenantId, active])
+  @@index([createdById])
+  @@index([reauthorizedById])
+  @@map("whatsapp_suppressions")
+}
+
+model WhatsAppInteraction {
+  id              String                    @id @default(cuid())
+  tenantId        String                    @map("tenant_id")
+  campaignId      String?                   @map("campaign_id")
+  recipientId     String?                   @map("recipient_id")
+  externalId      String                    @map("external_id")
+  eventType       String                    @map("event_type")
+  direction       String
+  status          WhatsAppInteractionStatus @default(RECEIVED)
+  phoneNormalized String?                   @map("phone_normalized")
+  payload         Json
+  occurredAt      DateTime                  @map("occurred_at")
+  processedAt     DateTime?                 @map("processed_at")
+  error           String?
+  createdAt       DateTime                  @default(now()) @map("created_at")
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id])
+  campaign  WhatsAppCampaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  recipient WhatsAppRecipient? @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, externalId])
+  @@index([campaignId])
+  @@index([recipientId])
+  @@index([tenantId, occurredAt])
+  @@map("whatsapp_interactions")
 }

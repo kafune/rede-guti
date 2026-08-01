@@ -6,10 +6,20 @@ import { AudienceValidationError } from '../../whatsapp/domain/audience.js';
 import { applyMarketingFooter, personalizeContent } from '../../whatsapp/domain/content.js';
 import {
   CampaignDispatchError,
+  CampaignConflictError,
+  CampaignNotFoundError,
   CampaignStateIndeterminateError,
   CampaignValidationError,
+  cancelCampaign,
   createCampaign,
+  editUnstartedCampaign,
+  pauseCampaign,
+  rescheduleCampaign,
+  resumeCampaign,
+  retryFailedRecipients,
   sendTestCampaign,
+  syncActiveCampaigns,
+  syncCampaign,
 } from '../../whatsapp/services/campaign-service.js';
 import { previewAudience } from '../../whatsapp/services/audience-service.js';
 import type { WhatsAppCampaignContent } from '../../whatsapp/types.js';
@@ -109,8 +119,16 @@ const createSchema = previewSchema.extend({
   scheduledAt: z.string().datetime({ offset: true }).optional(),
 }).strict();
 const paramsSchema = z.object({ id });
+const rescheduleSchema = z.object({ scheduledAt: z.string().datetime({ offset: true }) }).strict();
+const editSchema = z.object({
+  name: z.string().trim().min(1).max(160).optional(),
+  content: campaignContentSchema.optional(),
+}).strict().refine((value) => value.name !== undefined || value.content !== undefined);
 
 function sendCampaignError(reply: FastifyReply, error: unknown) {
+  if (error instanceof CampaignConflictError || error instanceof CampaignNotFoundError) {
+    return reply.code(error.statusCode).send({ error: error.message });
+  }
   if (error instanceof CampaignValidationError) {
     return reply.code(error.statusCode).send({ error: error.message });
   }
@@ -173,6 +191,75 @@ export async function whatsappCampaignRoutes(app: FastifyInstance) {
         content: input.data.content as WhatsAppCampaignContent,
       }, request.user.sub);
       return reply.code(201).send({ campaign });
+    } catch (error) {
+      return sendCampaignError(reply, error);
+    }
+  });
+
+  app.post('/campaigns/sync', async (_request, reply) => {
+    try {
+      return await syncActiveCampaigns();
+    } catch (error) {
+      return sendCampaignError(reply, error);
+    }
+  });
+
+  app.post('/campaigns/:id/sync', async (request, reply) => {
+    const params = paramsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'Invalid id' });
+    try {
+      return { campaign: await syncCampaign(params.data.id) };
+    } catch (error) {
+      return sendCampaignError(reply, error);
+    }
+  });
+
+  for (const [action, operation] of [
+    ['pause', pauseCampaign],
+    ['resume', resumeCampaign],
+    ['cancel', cancelCampaign],
+  ] as const) {
+    app.post(`/campaigns/:id/${action}`, async (request, reply) => {
+      const params = paramsSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: 'Invalid id' });
+      try {
+        return { campaign: await operation(params.data.id) };
+      } catch (error) {
+        return sendCampaignError(reply, error);
+      }
+    });
+  }
+
+  app.post('/campaigns/:id/reschedule', async (request, reply) => {
+    const params = paramsSchema.safeParse(request.params);
+    const input = rescheduleSchema.safeParse(request.body);
+    if (!params.success || !input.success) return reply.code(400).send({ error: 'Invalid payload' });
+    try {
+      return { campaign: await rescheduleCampaign(params.data.id, input.data.scheduledAt) };
+    } catch (error) {
+      return sendCampaignError(reply, error);
+    }
+  });
+
+  app.patch('/campaigns/:id', async (request, reply) => {
+    const params = paramsSchema.safeParse(request.params);
+    const input = editSchema.safeParse(request.body);
+    if (!params.success || !input.success) return reply.code(400).send({ error: 'Invalid payload' });
+    try {
+      return { campaign: await editUnstartedCampaign(params.data.id, {
+        ...input.data,
+        content: input.data.content as WhatsAppCampaignContent | undefined,
+      }) };
+    } catch (error) {
+      return sendCampaignError(reply, error);
+    }
+  });
+
+  app.post('/campaigns/:id/retry-failed', async (request, reply) => {
+    const params = paramsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'Invalid id' });
+    try {
+      return { campaign: await retryFailedRecipients(params.data.id) };
     } catch (error) {
       return sendCampaignError(reply, error);
     }

@@ -5,6 +5,8 @@ import type { AudienceFilter, AudiencePreview } from '../domain/audience.js';
 import { applyMarketingFooter, buildUazapiMessage, personalizeContent } from '../domain/content.js';
 import { normalizeBrazilianPhone } from '../domain/phone.js';
 import type { WhatsAppCampaignContent, WhatsAppContentItem } from '../types.js';
+import type { WhatsAppCampaignMetrics, WhatsAppCampaignStatus, WhatsAppRecipientStatus } from '../types.js';
+import { advanceRecipientStatus, mergeCampaignMetrics } from '../domain/metrics.js';
 import { UazapiError } from '../uazapi/client.js';
 import { previewAudience } from './audience-service.js';
 import { getConfiguredUazapiClient } from './config-service.js';
@@ -31,6 +33,18 @@ export class CampaignDispatchError extends Error {
 
 export class CampaignValidationError extends Error {
   readonly statusCode = 400;
+}
+
+export class CampaignConflictError extends Error {
+  readonly statusCode = 409;
+}
+
+export class CampaignNotFoundError extends Error {
+  readonly statusCode = 404;
+
+  constructor() {
+    super('Campaign not found.');
+  }
 }
 
 export class CampaignStateIndeterminateError extends Error {
@@ -101,6 +115,390 @@ function remoteFolder(response: unknown) {
     status: stringValue(root.status) ?? stringValue(nested.status),
     createdAt: createdAt !== null && Number.isFinite(createdAt.getTime()) ? createdAt : null,
   };
+}
+
+function folderRecord(value: unknown) {
+  const root = record(value);
+  const nested = record(root.folder);
+  return {
+    id: stringValue(root.folder_id) ?? stringValue(root.id) ?? stringValue(nested.id),
+    status: stringValue(root.status) ?? stringValue(nested.status),
+  };
+}
+
+function responseItems(value: unknown, keys: string[]): unknown[] {
+  if (Array.isArray(value)) return value;
+  const root = record(value);
+  for (const key of keys) if (Array.isArray(root[key])) return root[key] as unknown[];
+  return [];
+}
+
+function remoteMessageStatus(value: unknown): WhatsAppRecipientStatus | null {
+  const normalized = String(value ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+  const statuses: Record<string, WhatsAppRecipientStatus> = {
+    scheduled: 'QUEUED', queued: 'QUEUED', pending: 'QUEUED',
+    sent: 'SENT', delivered: 'DELIVERED', read: 'READ', played: 'PLAYED',
+    failed: 'FAILED', error: 'FAILED', canceled: 'CANCELED', cancelled: 'CANCELED',
+  };
+  return statuses[normalized] ?? null;
+}
+
+function remotePhone(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const candidate = value.split('@')[0].replace(/\D/g, '');
+  const normalized = normalizeBrazilianPhone(candidate);
+  return normalized.valid ? normalized.normalized : null;
+}
+
+function messageTimestamp(value: unknown): Date | null {
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value;
+  if (typeof value === 'number') {
+    const date = new Date(value < 10_000_000_000 ? value * 1000 : value);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const numeric = Number(value);
+    const date = Number.isFinite(numeric)
+      ? new Date(numeric < 10_000_000_000 ? numeric * 1000 : numeric)
+      : new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  return null;
+}
+
+function statusDateField(status: WhatsAppRecipientStatus):
+  'queuedAt' | 'sentAt' | 'deliveredAt' | 'readAt' | 'playedAt' | 'failedAt' | 'canceledAt' | null {
+  const fields = {
+    QUEUED: 'queuedAt', SENT: 'sentAt', DELIVERED: 'deliveredAt', READ: 'readAt',
+    PLAYED: 'playedAt', FAILED: 'failedAt', CANCELED: 'canceledAt',
+  } as const;
+  return status === 'PENDING' ? null : fields[status];
+}
+
+const sentOrBeyond = new Set<WhatsAppRecipientStatus>(['SENT', 'DELIVERED', 'READ', 'PLAYED']);
+
+function metricsFromCampaign(campaign: any, recipients: Array<{ status: WhatsAppRecipientStatus }>): WhatsAppCampaignMetrics {
+  return {
+    status: campaign.status,
+    queued: recipients.filter(({ status }) => status !== 'PENDING').length,
+    sent: recipients.filter(({ status }) => sentOrBeyond.has(status)).length,
+    failed: recipients.filter(({ status }) => status === 'FAILED').length,
+    delivered: recipients.filter(({ status }) => ['DELIVERED', 'READ', 'PLAYED'].includes(status)).length,
+    read: recipients.filter(({ status }) => ['READ', 'PLAYED'].includes(status)).length,
+    played: recipients.filter(({ status }) => status === 'PLAYED').length,
+    replies: campaign.replyCount,
+    optOuts: campaign.optOutCount,
+  };
+}
+
+export async function refreshCampaignMetrics(
+  campaignId: string,
+  incomingStatus?: WhatsAppCampaignStatus,
+) {
+  const campaign = await prisma.whatsAppCampaign.findUnique({
+    where: { id: campaignId }, include: { recipients: { where: { isValid: true } } },
+  });
+  if (!campaign) throw new CampaignNotFoundError();
+  const current: WhatsAppCampaignMetrics = {
+    status: campaign.status,
+    queued: campaign.queuedCount,
+    sent: campaign.sentCount,
+    failed: campaign.failedCount,
+    delivered: campaign.deliveredCount,
+    read: campaign.readCount,
+    played: campaign.playedCount,
+    replies: campaign.replyCount,
+    optOuts: campaign.optOutCount,
+  };
+  const derived = metricsFromCampaign(campaign, campaign.recipients as Array<{ status: WhatsAppRecipientStatus }>);
+  const merged = mergeCampaignMetrics(current, { ...derived, status: incomingStatus ?? derived.status });
+  const now = new Date();
+  return prisma.whatsAppCampaign.update({
+    where: { id: campaignId },
+    data: {
+      status: merged.status,
+      queuedCount: merged.queued,
+      sentCount: merged.sent,
+      failedCount: merged.failed,
+      deliveredCount: merged.delivered,
+      readCount: merged.read,
+      playedCount: merged.played,
+      replyCount: merged.replies,
+      optOutCount: merged.optOuts,
+      ...(merged.status === 'SENDING' && campaign.startedAt === null ? { startedAt: now } : {}),
+      ...(merged.status === 'COMPLETED' && campaign.completedAt === null ? { completedAt: now } : {}),
+    },
+  });
+}
+
+function campaignStatusFromRemote(status: string | null, hasSent: boolean): WhatsAppCampaignStatus | undefined {
+  const normalized = status?.trim().toLowerCase().replace(/[\s_-]+/g, '');
+  if (!normalized) return hasSent ? 'SENDING' : undefined;
+  if (['completed', 'complete', 'archived', 'finished'].includes(normalized)) return 'COMPLETED';
+  if (['canceled', 'cancelled', 'deleted'].includes(normalized)) return 'CANCELED';
+  if (['failed', 'error'].includes(normalized)) return 'FAILED';
+  if (['paused', 'stopped'].includes(normalized)) return 'PAUSED';
+  if (['active', 'sending', 'running'].includes(normalized)) return hasSent ? 'SENDING' : 'QUEUED';
+  if (['scheduled', 'queued', 'pending'].includes(normalized)) return 'SCHEDULED';
+  return hasSent ? 'SENDING' : undefined;
+}
+
+function advanceRemoteFolderStatus(current: string | null, incoming: string | null) {
+  if (incoming === null) return current;
+  if (current === null) return incoming;
+  const normalize = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, '');
+  const terminal = new Set(['completed', 'complete', 'archived', 'finished', 'failed', 'error', 'canceled', 'cancelled', 'deleted']);
+  const currentNormalized = normalize(current);
+  const incomingNormalized = normalize(incoming);
+  if (terminal.has(currentNormalized)) return current;
+  if (terminal.has(incomingNormalized)) return incoming;
+  const rank = (value: string) => ['scheduled', 'queued', 'pending'].includes(value) ? 0 : 1;
+  return rank(incomingNormalized) >= rank(currentNormalized) ? incoming : current;
+}
+
+async function requireCampaign(campaignId: string) {
+  const campaign = await prisma.whatsAppCampaign.findUnique({
+    where: { id: campaignId }, include: { recipients: true },
+  });
+  if (!campaign) throw new CampaignNotFoundError();
+  return campaign;
+}
+
+async function listAllFolderMessages(client: Awaited<ReturnType<typeof getConfiguredUazapiClient>>, folderId: string) {
+  const messages: unknown[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const response = await client.listMessages({ folder_id: folderId, limit: 1000, offset });
+    const page = responseItems(response, ['messages', 'data', 'items']);
+    messages.push(...page);
+    const total = Number(record(response).total);
+    if (page.length < 1000 || (Number.isFinite(total) && messages.length >= total)) break;
+  }
+  return messages;
+}
+
+export async function syncCampaign(campaignId: string, folders?: unknown[]) {
+  const campaign = await requireCampaign(campaignId);
+  if (!campaign.remoteFolderId) return refreshCampaignMetrics(campaign.id);
+  const client = await getConfiguredUazapiClient();
+  const remoteFolders = folders ?? await client.listFolders();
+  const folder = responseItems(remoteFolders, ['folders', 'data', 'items'])
+    .map(folderRecord)
+    .find(({ id }) => id === campaign.remoteFolderId);
+  const messages = await listAllFolderMessages(client, campaign.remoteFolderId);
+  const byPhone = new Map<string, Array<{ id: string | null; status: WhatsAppRecipientStatus; occurredAt: Date | null; chatId: string | null }>>();
+  for (const value of messages) {
+    const message = record(value);
+    const phone = remotePhone(message.chatid ?? message.chatId) ?? remotePhone(message.sender ?? message.number);
+    const status = remoteMessageStatus(message.status ?? message.messageStatus);
+    if (!phone || !status) continue;
+    const values = byPhone.get(phone) ?? [];
+    values.push({
+      id: stringValue(message.messageid) ?? stringValue(message.messageId) ?? stringValue(message.id),
+      status,
+      occurredAt: messageTimestamp(message.timestamp ?? message.created_at ?? message.updated_at),
+      chatId: stringValue(message.chatid) ?? stringValue(message.chatId),
+    });
+    byPhone.set(phone, values);
+  }
+  for (const recipient of campaign.recipients) {
+    if (!recipient.phoneNormalized) continue;
+    const matched = byPhone.get(recipient.phoneNormalized);
+    if (!matched?.length) continue;
+    let next = recipient.status as WhatsAppRecipientStatus;
+    let transitionAt: Date | null = null;
+    for (const message of matched) {
+      const advanced = advanceRecipientStatus(next, message.status);
+      if (advanced !== next) {
+        next = advanced;
+        transitionAt = message.occurredAt;
+      }
+    }
+    const externalMessageIds = [...new Set([
+      ...recipient.externalMessageIds,
+      ...matched.map(({ id }) => id).filter((id): id is string => id !== null),
+    ])];
+    const field = statusDateField(next);
+    await prisma.whatsAppRecipient.update({
+      where: { id: recipient.id },
+      data: {
+        status: next,
+        externalMessageIds,
+        externalChatId: matched.find(({ chatId }) => chatId)?.chatId ?? recipient.externalChatId,
+        ...(field !== null && recipient[field] === null ? { [field]: transitionAt ?? new Date() } : {}),
+      },
+    });
+  }
+  const fresh = await prisma.whatsAppRecipient.findMany({ where: { campaignId } });
+  const hasSent = fresh.some(({ status }) => sentOrBeyond.has(status));
+  const incomingStatus = campaignStatusFromRemote(folder?.status ?? null, hasSent);
+  if (folder?.status !== undefined) {
+    await prisma.whatsAppCampaign.update({
+      where: { id: campaignId },
+      data: { remoteFolderStatus: advanceRemoteFolderStatus(campaign.remoteFolderStatus, folder.status) },
+    });
+  }
+  return refreshCampaignMetrics(campaignId, incomingStatus);
+}
+
+export async function syncActiveCampaigns() {
+  const campaigns = await prisma.whatsAppCampaign.findMany({
+    where: { status: { in: ['SCHEDULED', 'QUEUED', 'SENDING', 'PAUSED'] }, remoteFolderId: { not: null } },
+    orderBy: { id: 'asc' },
+  });
+  const client = campaigns.length === 0 ? null : await getConfiguredUazapiClient();
+  const folders = client === null ? [] : await client.listFolders();
+  for (const campaign of campaigns) await syncCampaign(campaign.id, folders);
+  return { synced: campaigns.length, campaignIds: campaigns.map(({ id }) => id) };
+}
+
+async function editRemoteFolder(campaignId: string, action: 'stop' | 'continue' | 'delete') {
+  const campaign = await requireCampaign(campaignId);
+  if (['COMPLETED', 'CANCELED', 'FAILED'].includes(campaign.status)) {
+    throw new CampaignConflictError('Campaign is terminal.');
+  }
+  if (!campaign.remoteFolderId) throw new CampaignConflictError('Campaign has no remote folder.');
+  const client = await getConfiguredUazapiClient();
+  await client.editFolder({ folder_id: campaign.remoteFolderId, action });
+  return campaign;
+}
+
+export async function pauseCampaign(campaignId: string) {
+  await editRemoteFolder(campaignId, 'stop');
+  return prisma.whatsAppCampaign.update({
+    where: { id: campaignId }, data: { status: 'PAUSED', pausedAt: new Date() },
+  });
+}
+
+export async function resumeCampaign(campaignId: string) {
+  await editRemoteFolder(campaignId, 'continue');
+  return prisma.whatsAppCampaign.update({
+    where: { id: campaignId }, data: { status: 'SENDING', pausedAt: null },
+  });
+}
+
+export async function cancelCampaign(campaignId: string) {
+  await editRemoteFolder(campaignId, 'delete');
+  const canceledAt = new Date();
+  await prisma.$transaction([
+    prisma.whatsAppRecipient.updateMany({
+      where: { campaignId, status: { in: ['PENDING', 'QUEUED'] } },
+      data: { status: 'CANCELED', canceledAt },
+    }),
+    prisma.whatsAppCampaign.update({
+      where: { id: campaignId }, data: { status: 'CANCELED', canceledAt },
+    }),
+  ]);
+  return prisma.whatsAppCampaign.findUniqueOrThrow({ where: { id: campaignId } });
+}
+
+async function assertUnstarted(campaign: Awaited<ReturnType<typeof requireCampaign>>) {
+  if (['COMPLETED', 'CANCELED', 'FAILED'].includes(campaign.status)) {
+    throw new CampaignConflictError('Campaign is terminal.');
+  }
+  if (campaign.recipients.some(({ status }) => sentOrBeyond.has(status))) {
+    throw new CampaignConflictError('Campaign has already started.');
+  }
+}
+
+async function recreateCampaignFolder(
+  campaign: Awaited<ReturnType<typeof requireCampaign>>,
+  options: { name: string; content: WhatsAppCampaignContent; scheduledAt: Date; retry?: boolean },
+) {
+  const client = await getConfiguredUazapiClient();
+  if (!options.retry && campaign.remoteFolderId) {
+    await client.editFolder({ folder_id: campaign.remoteFolderId, action: 'delete' });
+  }
+  const mediaUrl = await mediaUrlFactory(options.content);
+  const recipients = campaign.recipients.filter(({ isValid, status }) => isValid && status !== 'CANCELED');
+  const personalized = recipients.map((recipient) => ({
+    recipient,
+    content: options.retry
+      ? recipient.personalizedContent as unknown as WhatsAppCampaignContent
+      : personalizeContent(options.content, { name: recipient.personName }),
+  }));
+  const response = await client.sendAdvanced({
+    delayMin: config.whatsappDelayMin,
+    delayMax: config.whatsappDelayMax,
+    info: options.retry ? `${options.name} (retry)` : options.name,
+    scheduled_for: options.scheduledAt.getTime(),
+    messages: personalized.flatMap(({ recipient, content }) =>
+      allItems(content).map((item) => buildUazapiMessage(item, {
+        number: recipient.phoneNormalized!, mediaUrl,
+      }))),
+  });
+  const folder = remoteFolder(response);
+  const queuedAt = new Date();
+  for (const { recipient, content } of personalized) {
+    await prisma.whatsAppRecipient.update({
+      where: { id: recipient.id },
+      data: {
+        status: 'QUEUED', queuedAt, error: null, failedAt: null,
+        ...(!options.retry ? { personalizedContent: content as any, externalMessageIds: [] } : {}),
+      },
+    });
+  }
+  return { folder, queuedAt };
+}
+
+export async function rescheduleCampaign(campaignId: string, scheduledAtValue: string) {
+  const campaign = await requireCampaign(campaignId);
+  await assertUnstarted(campaign);
+  const scheduledAt = new Date(scheduledAtValue);
+  if (!Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+    throw new CampaignValidationError('Scheduled time must be in the future.');
+  }
+  const recreated = await recreateCampaignFolder(campaign, {
+    name: campaign.name, content: campaign.content as unknown as WhatsAppCampaignContent, scheduledAt,
+  });
+  return prisma.whatsAppCampaign.update({
+    where: { id: campaignId },
+    data: {
+      status: 'SCHEDULED', scheduledAt, remoteFolderId: recreated.folder.id,
+      remoteFolderStatus: recreated.folder.status, remoteFolderCreatedAt: recreated.folder.createdAt,
+      queuedAt: recreated.queuedAt,
+    },
+  });
+}
+
+export async function editUnstartedCampaign(
+  campaignId: string,
+  input: { name?: string; content?: WhatsAppCampaignContent },
+) {
+  const campaign = await requireCampaign(campaignId);
+  await assertUnstarted(campaign);
+  const name = input.name ?? campaign.name;
+  const content = campaignContent({ category: campaign.category, content: input.content ?? campaign.content as unknown as WhatsAppCampaignContent });
+  const scheduledAt = campaign.scheduledAt ?? new Date();
+  const recreated = await recreateCampaignFolder(campaign, { name, content, scheduledAt });
+  return prisma.whatsAppCampaign.update({
+    where: { id: campaignId },
+    data: {
+      name, content: content as any, remoteFolderId: recreated.folder.id,
+      remoteFolderStatus: recreated.folder.status, remoteFolderCreatedAt: recreated.folder.createdAt,
+      queuedAt: recreated.queuedAt,
+    },
+  });
+}
+
+export async function retryFailedRecipients(campaignId: string) {
+  const campaign = await requireCampaign(campaignId);
+  const failed = campaign.recipients.filter(({ status, isValid }) => status === 'FAILED' && isValid);
+  if (failed.length === 0) throw new CampaignConflictError('Campaign has no failed recipients.');
+  const retryCampaign = { ...campaign, recipients: failed };
+  const recreated = await recreateCampaignFolder(retryCampaign as typeof campaign, {
+    name: campaign.name,
+    content: campaign.content as unknown as WhatsAppCampaignContent,
+    scheduledAt: new Date(),
+    retry: true,
+  });
+  return prisma.whatsAppCampaign.update({
+    where: { id: campaignId },
+    data: {
+      status: 'QUEUED', remoteFolderId: recreated.folder.id,
+      remoteFolderStatus: recreated.folder.status, remoteFolderCreatedAt: recreated.folder.createdAt,
+      queuedAt: recreated.queuedAt, lastError: null, failedAt: null,
+    },
+  });
 }
 
 async function persistAudit(

@@ -6,6 +6,8 @@ import { whatsappCampaignRoutes } from './campaigns.js';
 import { whatsappInstanceRoutes } from './instance.js';
 import { publicWhatsAppMediaRoutes, whatsappMediaRoutes } from './media.js';
 import { whatsappTemplateRoutes } from './templates.js';
+import { whatsappSuppressionRoutes } from './suppressions.js';
+import { publicWhatsAppWebhookRoutes } from './webhook.js';
 
 export async function whatsappRoutes(app: FastifyInstance) {
   await app.register(async (whatsapp) => {
@@ -29,7 +31,9 @@ export async function whatsappRoutes(app: FastifyInstance) {
     await whatsapp.register(whatsappCampaignRoutes);
     await whatsapp.register(whatsappTemplateRoutes);
     await whatsapp.register(whatsappMediaRoutes);
+    await whatsapp.register(whatsappSuppressionRoutes);
   }, { prefix: '/whatsapp' });
 
   await app.register(publicWhatsAppMediaRoutes);
+  await app.register(publicWhatsAppWebhookRoutes);
 }

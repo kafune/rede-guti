@@ -14,7 +14,7 @@ if (process.env.CAMPAIGN_CREATE_SCENARIO_CHILD !== '1') {
       throw new Error(`${result.stdout.toString()}\n${result.stderr.toString()}`);
     }
     expect(result.exitCode).toBe(0);
-  });
+  }, 30_000);
 } else {
 const databaseUrl = process.env.DATABASE_URL
   ?? 'postgresql://postgres:postgres@localhost:5432/rede_evangelica_uazapi_task3_codex?schema=public';

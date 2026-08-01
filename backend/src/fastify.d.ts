@@ -1,5 +1,6 @@
 ﻿import type { FastifyReply, FastifyRequest } from 'fastify';
 import 'fastify';
+import '@fastify/multipart';
 
 declare module 'fastify' {
   interface FastifyInstance {

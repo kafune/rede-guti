@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { normalizeRole } from '../../lib/access.js';
 import { getTenantId } from '../../lib/tenantContext.js';
 import { getAccessDeniedReason } from '../../lib/userAccess.js';
+import { whatsappCampaignRoutes } from './campaigns.js';
 import { whatsappInstanceRoutes } from './instance.js';
 import { publicWhatsAppMediaRoutes, whatsappMediaRoutes } from './media.js';
 import { whatsappTemplateRoutes } from './templates.js';
@@ -25,6 +26,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
     });
 
     await whatsapp.register(whatsappInstanceRoutes);
+    await whatsapp.register(whatsappCampaignRoutes);
     await whatsapp.register(whatsappTemplateRoutes);
     await whatsapp.register(whatsappMediaRoutes);
   }, { prefix: '/whatsapp' });

@@ -27,40 +27,69 @@ export interface BuildAppOptions {
 }
 
 const REDACTED = '[REDACTED]';
+const REQUIRED_REDACT_PATHS = [
+  'req.headers.authorization',
+  'req.headers["x-webhook-secret"]',
+  'headers.authorization',
+  'headers["x-webhook-secret"]',
+];
 
 function redactSecretQuery(url: string | undefined) {
-  return url?.replace(/([?&]secret=)[^&]*/gi, `$1${REDACTED}`);
+  if (url === undefined) return undefined;
+  const queryStart = url.indexOf('?');
+  if (queryStart === -1) return url;
+  const fragmentStart = url.indexOf('#', queryStart);
+  const prefix = url.slice(0, queryStart + 1);
+  const query = url.slice(queryStart + 1, fragmentStart === -1 ? undefined : fragmentStart);
+  const fragment = fragmentStart === -1 ? '' : url.slice(fragmentStart);
+  const redacted = query.split('&').map((parameter) => {
+    const separator = parameter.indexOf('=');
+    const encodedName = separator === -1 ? parameter : parameter.slice(0, separator);
+    let decodedName: string;
+    try {
+      decodedName = decodeURIComponent(encodedName.replace(/\+/g, ' '));
+    } catch {
+      return parameter;
+    }
+    if (decodedName.toLowerCase() !== 'secret') return parameter;
+    return `${encodedName}=${REDACTED}`;
+  }).join('&');
+  return `${prefix}${redacted}${fragment}`;
 }
 
 function safeRequestLog(request: any) {
-  const headers = { ...(request.headers ?? {}) };
-  for (const name of ['authorization', 'x-webhook-secret']) {
-    if (headers[name] !== undefined) headers[name] = REDACTED;
-  }
   return {
+    id: request.id,
     method: request.method,
     url: redactSecretQuery(request.url),
-    host: request.hostname ?? headers.host,
+    host: request.hostname ?? request.headers?.host,
     remoteAddress: request.ip ?? request.socket?.remoteAddress,
-    headers,
+    remotePort: request.socket?.remotePort,
   };
+}
+
+function mergedRedact(value: unknown) {
+  if (Array.isArray(value)) {
+    return { paths: [...new Set([...value, ...REQUIRED_REDACT_PATHS])], censor: REDACTED };
+  }
+  if (value !== null && typeof value === 'object') {
+    const configured = value as { paths?: unknown; [key: string]: unknown };
+    const paths = Array.isArray(configured.paths) ? configured.paths : [];
+    return { ...configured, paths: [...new Set([...paths, ...REQUIRED_REDACT_PATHS])] };
+  }
+  return { paths: REQUIRED_REDACT_PATHS, censor: REDACTED };
 }
 
 function loggerOptions(input: BuildAppOptions['logger']) {
   if (input === false) return false;
   const supplied = input !== null && typeof input === 'object' ? input : {};
+  const serializers = supplied.serializers !== null && typeof supplied.serializers === 'object'
+    ? supplied.serializers as Record<string, unknown>
+    : {};
   return {
     ...supplied,
-    redact: {
-      paths: [
-        'req.headers.authorization',
-        'req.headers["x-webhook-secret"]',
-        'headers.authorization',
-        'headers["x-webhook-secret"]',
-      ],
-      censor: REDACTED,
-    },
-    serializers: { req: safeRequestLog },
+    redact: mergedRedact(supplied.redact),
+    serializers: { ...serializers, req: safeRequestLog },
   };
 }
 

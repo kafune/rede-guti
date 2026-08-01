@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import { Writable } from 'node:stream';
+import { Client } from 'pg';
 
 if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
   test('runs the webhook and suppression integration scenario in an isolated process', () => {
@@ -141,7 +142,7 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
       expect(accepted.json()).toEqual({ accepted: true, processed: false, duplicate: false });
     });
 
-    test('redacts query/header secrets and authorization from real Fastify request logs', async () => {
+    test('redacts decoded secret params and never serializes sensitive request headers', async () => {
       const chunks: string[] = [];
       const stream = new Writable({
         write(chunk, _encoding, callback) {
@@ -149,11 +150,15 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
           callback();
         },
       });
-      const loggedApp = await buildAppFactory({ logger: { stream } } as any);
+      const loggedApp = await buildAppFactory({ logger: {
+        stream,
+        redact: { paths: ['custom.secret'], censor: 'CUSTOM_REDACTED' },
+        serializers: { req: () => ({ url: '/?secret=caller-serializer-bypass' }) },
+      } } as any);
       const bearer = `Bearer ${coordinatorToken}`;
       await loggedApp.inject({
         method: 'POST',
-        url: '/public/whatsapp/webhook?secret=webhook-secret-with-symbols%2F%25',
+        url: '/public/whatsapp/webhook?secr%65t=webhook-secret-with-symbols%2F%25',
         payload: { event: 'messages', eventId: 'logger-query-event', data: {
           messageid: 'logger-query-message', sender: '5511911111111', text: 'Olá', fromMe: false,
         } },
@@ -165,15 +170,35 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
           messageid: 'logger-header-message', sender: '5511911111111', text: 'Olá', fromMe: false,
         } },
       });
-      await loggedApp.inject({ method: 'GET', url: '/whatsapp/campaigns', headers: auth() });
+      await loggedApp.inject({
+        method: 'GET',
+        url: '/health?foo=ok&secret=plain-query-sentinel&secr%65t=encoded-query-sentinel&bad%=kept',
+        headers: {
+          ...auth(),
+          cookie: 'cookie-sentinel',
+          'proxy-authorization': 'proxy-authorization-sentinel',
+          'x-api-key': 'api-key-sentinel',
+          'x-webhook-secret': 'header-sentinel',
+        },
+      });
+      loggedApp.log.info({ custom: { secret: 'custom-redact-sentinel' } }, 'custom redact probe');
       await loggedApp.close();
 
       const logs = chunks.join('');
       expect(logs).not.toContain('webhook-secret-with-symbols');
+      expect(logs).not.toContain('plain-query-sentinel');
+      expect(logs).not.toContain('encoded-query-sentinel');
       expect(logs).not.toContain(coordinatorToken);
       expect(logs).not.toContain(bearer);
+      expect(logs).not.toContain('cookie-sentinel');
+      expect(logs).not.toContain('proxy-authorization-sentinel');
+      expect(logs).not.toContain('api-key-sentinel');
+      expect(logs).not.toContain('header-sentinel');
+      expect(logs).not.toContain('caller-serializer-bypass');
+      expect(logs).not.toContain('custom-redact-sentinel');
       expect(logs).toContain('[REDACTED]');
-      expect(logs).toContain('secret=[REDACTED]');
+      expect(logs).toContain('secr%65t=[REDACTED]');
+      expect(logs).toContain('CUSTOM_REDACTED');
     });
 
     test('deduplicates explicit and stable fallback ids while delivery states only advance', async () => {
@@ -282,13 +307,34 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
     });
 
     test('atomically keeps READ over concurrent DELIVERED and never overwrites a completed SAIR cancellation', async () => {
+      const lockNamespace = 424242;
+      const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+      await blocker.connect();
+      const waitForBlockedTransaction = async (lockKey: number) => {
+        const deadline = Date.now() + 5_000;
+        while (Date.now() < deadline) {
+          const rows = await basePrisma.$queryRawUnsafe<Array<{ waiting: number }>>(`
+            SELECT count(*)::int AS waiting
+            FROM pg_locks
+            WHERE locktype = 'advisory'
+              AND classid = ${lockNamespace}
+              AND objid = ${lockKey}
+              AND granted = false
+          `);
+          if (rows[0]?.waiting === 1) return;
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+        throw new Error(`Timed out waiting for advisory lock ${lockKey}`);
+      };
       await basePrisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS test_delay_webhook_delivery_trigger ON whatsapp_interactions');
       await basePrisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS test_delay_webhook_delivery()');
       await basePrisma.$executeRawUnsafe(`
         CREATE FUNCTION test_delay_webhook_delivery() RETURNS trigger AS $$
         BEGIN
-          IF NEW.external_id IN ('concurrent-delivered', 'delivery-after-optout') THEN
-            PERFORM pg_sleep(0.2);
+          IF NEW.external_id = 'concurrent-delivered' THEN
+            PERFORM pg_advisory_xact_lock(${lockNamespace}, 1);
+          ELSIF NEW.external_id = 'delivery-after-optout' THEN
+            PERFORM pg_advisory_xact_lock(${lockNamespace}, 2);
           END IF;
           RETURN NEW;
         END;
@@ -299,46 +345,57 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
         BEFORE INSERT ON whatsapp_interactions
         FOR EACH ROW EXECUTE FUNCTION test_delay_webhook_delivery()
       `);
-      const concurrentPhone = '5511961111111';
-      await createCampaign('webhook-concurrent-campaign', coordinatorId, 'SENDING');
-      await createRecipient({
-        id: 'webhook-concurrent-recipient', campaignId: 'webhook-concurrent-campaign',
-        phone: concurrentPhone, status: 'SENT', externalMessageIds: ['concurrent-outbound'],
-        sentAt: new Date(Date.now() - 60_000),
-      });
-      const staleDelivered = webhook({ event: 'messages_update', eventId: 'concurrent-delivered', data: {
+      try {
+        const concurrentPhone = '5511961111111';
+        await createCampaign('webhook-concurrent-campaign', coordinatorId, 'SENDING');
+        await createRecipient({
+          id: 'webhook-concurrent-recipient', campaignId: 'webhook-concurrent-campaign',
+          phone: concurrentPhone, status: 'SENT', externalMessageIds: ['concurrent-outbound'],
+          sentAt: new Date(Date.now() - 60_000),
+        });
+        await blocker.query(`SELECT pg_advisory_lock(${lockNamespace}, 1)`);
+        const staleDelivered = webhook({ event: 'messages_update', eventId: 'concurrent-delivered', data: {
           messageid: 'concurrent-outbound', sender: concurrentPhone, status: 'Delivered',
         } });
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      const freshRead = webhook({ event: 'messages_update', eventId: 'concurrent-read', data: {
-        messageid: 'concurrent-outbound', sender: concurrentPhone, status: 'Read',
-      } });
-      await Promise.all([staleDelivered, freshRead]);
-      expect(await prisma.whatsAppRecipient.findUnique({
-        where: { id: 'webhook-concurrent-recipient' },
-      })).toMatchObject({ status: 'READ' });
+        await waitForBlockedTransaction(1);
+        const freshRead = webhook({ event: 'messages_update', eventId: 'concurrent-read', data: {
+          messageid: 'concurrent-outbound', sender: concurrentPhone, status: 'Read',
+        } });
+        await freshRead;
+        await blocker.query(`SELECT pg_advisory_unlock(${lockNamespace}, 1)`);
+        await Promise.all([staleDelivered, freshRead]);
+        expect(await prisma.whatsAppRecipient.findUnique({
+          where: { id: 'webhook-concurrent-recipient' },
+        })).toMatchObject({ status: 'READ' });
 
-      const canceledPhone = '5511962222222';
-      await createCampaign('webhook-canceled-campaign', coordinatorId, 'QUEUED');
-      await createRecipient({
-        id: 'webhook-canceled-recipient', campaignId: 'webhook-canceled-campaign',
-        phone: canceledPhone, status: 'QUEUED', externalMessageIds: ['canceled-outbound'],
-      });
-      const staleAfterOptOut = webhook({
-        event: 'messages_update', eventId: 'delivery-after-optout', data: {
-          messageid: 'canceled-outbound', sender: canceledPhone, status: 'Delivered',
-        },
-      });
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      const optOut = webhook({ event: 'messages', eventId: 'concurrent-optout', data: {
-        messageid: 'concurrent-optout-message', sender: canceledPhone, fromMe: false, text: 'SAIR.',
-      } });
-      await Promise.all([staleAfterOptOut, optOut]);
-      expect(await prisma.whatsAppRecipient.findUnique({
-        where: { id: 'webhook-canceled-recipient' },
-      })).toMatchObject({ status: 'CANCELED' });
-      await basePrisma.$executeRawUnsafe('DROP TRIGGER test_delay_webhook_delivery_trigger ON whatsapp_interactions');
-      await basePrisma.$executeRawUnsafe('DROP FUNCTION test_delay_webhook_delivery()');
+        const canceledPhone = '5511962222222';
+        await createCampaign('webhook-canceled-campaign', coordinatorId, 'QUEUED');
+        await createRecipient({
+          id: 'webhook-canceled-recipient', campaignId: 'webhook-canceled-campaign',
+          phone: canceledPhone, status: 'QUEUED', externalMessageIds: ['canceled-outbound'],
+        });
+        await blocker.query(`SELECT pg_advisory_lock(${lockNamespace}, 2)`);
+        const staleAfterOptOut = webhook({
+          event: 'messages_update', eventId: 'delivery-after-optout', data: {
+            messageid: 'canceled-outbound', sender: canceledPhone, status: 'Delivered',
+          },
+        });
+        await waitForBlockedTransaction(2);
+        const optOut = webhook({ event: 'messages', eventId: 'concurrent-optout', data: {
+          messageid: 'concurrent-optout-message', sender: canceledPhone, fromMe: false, text: 'SAIR.',
+        } });
+        await optOut;
+        await blocker.query(`SELECT pg_advisory_unlock(${lockNamespace}, 2)`);
+        await Promise.all([staleAfterOptOut, optOut]);
+        expect(await prisma.whatsAppRecipient.findUnique({
+          where: { id: 'webhook-canceled-recipient' },
+        })).toMatchObject({ status: 'CANCELED' });
+      } finally {
+        await blocker.query('SELECT pg_advisory_unlock_all()');
+        await blocker.end();
+        await basePrisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS test_delay_webhook_delivery_trigger ON whatsapp_interactions');
+        await basePrisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS test_delay_webhook_delivery()');
+      }
     });
 
     test('rolls back marker and effects together so a failed event can retry exactly once', async () => {

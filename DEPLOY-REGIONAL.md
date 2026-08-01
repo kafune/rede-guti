@@ -56,10 +56,6 @@ COORD_PASSWORD="<senha>"
 COORD_NAME="Coordenação Regional"
 LR_EMAIL="lider@vertical-regional.com"
 LR_PASSWORD="<senha>"
-APP_PUBLIC_URL="https://regional.redeguti.ddnsfree.com"
-# Token próprio se a vertical usar as automações n8n
-# AUTOMATION_API_TOKEN="<token novo>"
-
 # Parâmetros da instância
 GEO_DATASET="sp"            # ou <nome> → backend/src/data/municipios_<nome>.csv
 GEO_STATE_CODE="SP"

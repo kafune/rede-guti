@@ -95,5 +95,3 @@ tenant e o comportamento é o mesmo de antes.
   'default' temporário nas colunas `tenant_id`).
 - `scripts/create-coordinator.ts`, `prisma/seed.ts` e
   `scripts/scan-inactive.ts` operam no tenant do `TENANT_SLUG` do ambiente.
-- O token estático `AUTOMATION_API_TOKEN` é por instância e as rotas
-  `/automation/*` respondem apenas com dados do tenant do processo.

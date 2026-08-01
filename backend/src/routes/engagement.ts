@@ -117,7 +117,7 @@ export async function engagementRoutes(app: FastifyInstance) {
 
   // ── POST /engagement/recalculate ────────────────────────────────────────
   // Recomputa LeaderStats de todos os usuários a partir dos dados-fonte.
-  // Restrito a COORDENADOR (crons usam /automation/recalculate).
+  // Restrito a COORDENADOR.
   app.post('/engagement/recalculate', { preHandler: app.authenticate }, async (request, reply) => {
     if (!canRecalculateStats(request.user.role)) {
       return reply.code(403).send({ error: 'Apenas coordenadores podem recalcular o ranking.' });
@@ -149,8 +149,7 @@ export async function engagementRoutes(app: FastifyInstance) {
 
   // ── POST /engagement/scan-inactive ─────────────────────────────────────
   // Job idempotente para detectar lideranças sem atividade nos últimos 7 dias
-  // e disparar leader.inactive_7_days via webhook. Pode ser chamado por cron
-  // do sistema, n8n ou manualmente. Apenas COORDENADOR.
+  // e registrar a varredura manual. Apenas COORDENADOR.
   app.post(
     '/engagement/scan-inactive',
     { preHandler: app.authenticate },

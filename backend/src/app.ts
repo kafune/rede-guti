@@ -8,7 +8,6 @@ import { config } from './config.js';
 import { registerAuth } from './plugins/auth.js';
 import { atividadeRoutes } from './routes/atividades.js';
 import { authRoutes } from './routes/auth.js';
-import { automationRoutes } from './routes/automation.js';
 import { churchRoutes } from './routes/churches.js';
 import { engagementRoutes } from './routes/engagement.js';
 import { equipeRoutes } from './routes/equipes.js';
@@ -119,7 +118,6 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await app.register(metaRoutes);
   await app.register(equipeRoutes);
   await app.register(engagementRoutes);
-  await app.register(automationRoutes);
   await app.register(whatsappRoutes);
 
   return app;

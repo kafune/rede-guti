@@ -29,9 +29,10 @@ export async function whatsappSuppressionRoutes(app: FastifyInstance) {
     const phone = normalizeBrazilianPhone(input.data.phone);
     if (!phone.valid) return reply.code(400).send({ error: 'Invalid Brazilian phone.' });
     const tenantId = getTenantId();
-    return withAdvisoryLock(`whatsapp:recipient:${tenantId}:${phone.normalized}`, async () => {
-      const now = new Date();
-      const suppression = await prisma.whatsAppSuppression.upsert({
+    const now = new Date();
+    const suppression = await withAdvisoryLock(
+      `whatsapp:recipient:${tenantId}:${phone.normalized}`,
+      () => prisma.whatsAppSuppression.upsert({
         where: {
           tenantId_phoneNormalized: {
             tenantId, phoneNormalized: phone.normalized,
@@ -46,17 +47,17 @@ export async function whatsappSuppressionRoutes(app: FastifyInstance) {
           active: true, reason: input.data.reason, source: 'MANUAL', createdById: request.user.sub,
           lastOptOutAt: now, reauthorizedAt: null, reauthorizedById: null,
         },
-      });
-      try {
-        await reconcileSuppressedPhone(phone.normalized, now);
-      } catch (error) {
-        if (error instanceof CampaignSuppressionReconciliationError) {
-          return reply.code(error.statusCode).send({ error: error.message });
-        }
-        throw error;
+      }),
+    );
+    try {
+      await reconcileSuppressedPhone(phone.normalized, now);
+    } catch (error) {
+      if (error instanceof CampaignSuppressionReconciliationError) {
+        return reply.code(error.statusCode).send({ error: error.message });
       }
-      return reply.code(201).send({ suppression });
-    });
+      throw error;
+    }
+    return reply.code(201).send({ suppression });
   });
 
   app.post('/suppressions/:id/reauthorize', async (request, reply) => {

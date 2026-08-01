@@ -258,7 +258,7 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
     } });
   }
 
-  describe('campaign synchronization', () => {
+  describe.serial('campaign synchronization', () => {
     test('paginates remote messages, stores ids, advances recipient states and counts recipients only', async () => {
       await createCampaign({ id: 'campaign-sync', status: 'SENDING', remoteFolderId: 'folder-sync' });
       await createRecipient({ id: 'recipient-read', campaignId: 'campaign-sync', phone: '5511987654321', status: 'READ' });
@@ -502,7 +502,7 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
     });
   });
 
-  describe('campaign controls', () => {
+  describe.serial('campaign controls', () => {
     test('uses official pause/resume states and confirms deleting cancellation only after the folder disappears', async () => {
       for (const [id, status, folder] of [
         ['campaign-pause', 'SENDING', 'folder-pause'],
@@ -971,7 +971,7 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
     });
   });
 
-  describe('remote suppression reconciliation', () => {
+  describe.serial('remote suppression reconciliation', () => {
     test('rebuilds a mixed queued folder without the suppressed or already sent contacts', async () => {
       const suppressedPhone = '5511991111001';
       const remainingPhone = '5511991111002';
@@ -1085,6 +1085,68 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
         { id: 'suppression-concurrent-first', status: 'CANCELED' },
         { id: 'suppression-concurrent-remaining', status: 'QUEUED' },
         { id: 'suppression-concurrent-second', status: 'CANCELED' },
+      ]);
+    });
+
+    test('processes more simultaneous route suppressions than the advisory pool capacity', async () => {
+      const phones = Array.from({ length: 6 }, (_, index) => `551195550000${index + 1}`);
+      const remainingPhone = '5511955500009';
+      await createCampaign({
+        id: 'campaign-suppression-pool', status: 'QUEUED',
+        remoteFolderId: 'folder-suppression-pool',
+      });
+      for (const [index, phone] of phones.entries()) {
+        await createRecipient({
+          id: `suppression-pool-${index + 1}`, campaignId: 'campaign-suppression-pool',
+          phone, status: 'QUEUED',
+        });
+      }
+      await createRecipient({
+        id: 'suppression-pool-remaining', campaignId: 'campaign-suppression-pool',
+        phone: remainingPhone, status: 'PENDING',
+      });
+      folderStatuses.set('folder-suppression-pool', 'sending');
+
+      // Hold all five outer phone-lock connections long enough for them to
+      // reach reconciliation together. A nested campaign-lock acquisition
+      // then deterministically exhausts the advisory pool.
+      await basePrisma.$executeRawUnsafe(`
+        CREATE OR REPLACE FUNCTION whatsapp_test_delay_pool_suppression()
+        RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW.reason = 'Teste concorrente do pool' THEN
+            PERFORM pg_sleep(0.2);
+          END IF;
+          RETURN NEW;
+        END;
+        $$
+      `);
+      await basePrisma.$executeRawUnsafe(`
+        CREATE TRIGGER whatsapp_test_delay_pool_suppression
+        BEFORE INSERT OR UPDATE ON whatsapp_suppressions
+        FOR EACH ROW EXECUTE FUNCTION whatsapp_test_delay_pool_suppression()
+      `);
+
+      let responses;
+      try {
+        responses = await Promise.all(phones.map((phone) => app.inject({
+          method: 'POST', url: '/whatsapp/suppressions', headers: auth(),
+          payload: { phone, reason: 'Teste concorrente do pool' },
+        })));
+      } finally {
+        await basePrisma.$executeRawUnsafe(
+          'DROP TRIGGER IF EXISTS whatsapp_test_delay_pool_suppression ON whatsapp_suppressions',
+        );
+        await basePrisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS whatsapp_test_delay_pool_suppression()');
+      }
+
+      expect(responses.map(({ statusCode }) => statusCode)).toEqual(Array(6).fill(201));
+      expect(await prisma.whatsAppRecipient.findMany({
+        where: { campaignId: 'campaign-suppression-pool' }, orderBy: { id: 'asc' },
+        select: { id: true, status: true },
+      })).toEqual([
+        ...phones.map((_, index) => ({ id: `suppression-pool-${index + 1}`, status: 'CANCELED' })),
+        { id: 'suppression-pool-remaining', status: 'QUEUED' },
       ]);
     });
 

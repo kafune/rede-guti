@@ -272,7 +272,7 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
 
   const process = async () => {
     try {
-      const result = await prisma.$transaction(async (tx) => {
+      return await prisma.$transaction(async (tx) => {
       // Tenant predicates are explicit throughout this transaction. This keeps
       // isolation independent of whether Prisma propagates client extensions
       // to an interactive transaction client in a future adapter release.
@@ -363,28 +363,28 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
       }
       return { accepted: true, processed: true, duplicate: false };
       }) as WebhookProcessResult;
-      if (result.processed && optOut && phone !== null) {
-        try {
-          await reconcileSuppressedPhone(phone, occurredAt);
-        } catch (error) {
-          await prisma.whatsAppInteraction.updateMany({
-            where: { tenantId, externalId },
-            data: {
-              status: 'FAILED',
-              error: error instanceof Error ? error.message.slice(0, 1_000) : 'Suppression reconciliation failed.',
-            },
-          });
-          throw error;
-        }
-      }
-      return result;
     } catch (error) {
       if (isUniqueViolation(error)) return { accepted: true, processed: false, duplicate: true } as const;
       throw error;
     }
   };
-  if (optOut && phone !== null) {
-    return withAdvisoryLock(`whatsapp:recipient:${tenantId}:${phone}`, process);
+
+  const result = optOut && phone !== null
+    ? await withAdvisoryLock(`whatsapp:recipient:${tenantId}:${phone}`, process)
+    : await process();
+  if (result.processed && optOut && phone !== null) {
+    try {
+      await reconcileSuppressedPhone(phone, occurredAt);
+    } catch (error) {
+      await prisma.whatsAppInteraction.updateMany({
+        where: { tenantId, externalId },
+        data: {
+          status: 'FAILED',
+          error: error instanceof Error ? error.message.slice(0, 1_000) : 'Suppression reconciliation failed.',
+        },
+      });
+      throw error;
+    }
   }
-  return process();
+  return result;
 }

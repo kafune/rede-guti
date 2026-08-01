@@ -29,6 +29,9 @@ backend/.env
 # Claude Code
 .claude/
 
+# Agent worktrees
+.worktrees/
+
 # Bun
 bun.lockb
 backend/bun.lock

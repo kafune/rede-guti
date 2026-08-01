@@ -11,16 +11,18 @@ export const isLiderAccessBlocked = async () => {
   return config?.liderAccessBlocked ?? false;
 };
 
+export const getCurrentUserAccess = (userId: string) => prisma.user.findUnique({
+  where: { id: userId },
+  select: { active: true, role: true },
+});
+
 /**
  * Revalida um usuário já autenticado por JWT: conta desativada ou liderança
  * sob bloqueio geral perde o acesso imediatamente, mesmo com token válido.
  * Retorna null quando o acesso está liberado; senão, a mensagem de erro.
  */
 export const getAccessDeniedReason = async (userId: string): Promise<string | null> => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { active: true, role: true }
-  });
+  const user = await getCurrentUserAccess(userId);
 
   if (!user || !user.active) {
     return 'Conta desativada. Fale com a coordenação.';

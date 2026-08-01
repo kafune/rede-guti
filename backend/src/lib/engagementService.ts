@@ -1,12 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { getTenantId } from './tenantContext.js';
-import {
-  emitInactive7Days,
-  emitPointsAwarded,
-  emitTopRankChanged,
-  emitWeeklyGoalReached,
-} from './automationWebhookService.js';
 
 // ---------------------------------------------------------------------------
 // Point table — single source of truth for all event types
@@ -22,27 +16,6 @@ export const POINT_VALUES = {
 export const WEEKLY_INDICATION_GOAL = 5;
 
 type EngagementMetadata = Prisma.InputJsonObject;
-
-// Fire-and-forget wrappers: webhooks must never break the engagement flow.
-const fireAwarded = (
-  userId: string,
-  eventType: string,
-  points: number,
-  metadata?: EngagementMetadata
-) =>
-  void emitPointsAwarded({ userId, awardedEventType: eventType, points, metadata }).catch(
-    () => undefined
-  );
-
-const fireWeeklyGoal = (userId: string) =>
-  void emitWeeklyGoalReached({ userId, goal: WEEKLY_INDICATION_GOAL }).catch(() => undefined);
-
-const fireRankChanged = (
-  userId: string,
-  previousPosition: number | null,
-  newPosition: number
-) =>
-  void emitTopRankChanged({ userId, previousPosition, newPosition }).catch(() => undefined);
 
 export type EngagementEventType = keyof typeof POINT_VALUES;
 
@@ -164,7 +137,6 @@ export async function awardPoints(
     }),
   ]);
 
-  fireAwarded(userId, eventType, points, metadata);
 }
 
 /**
@@ -185,8 +157,8 @@ export async function incrementLeaderIndication(
   const points = POINT_VALUES[eventType];
   const now = new Date();
 
-  // Snapshot weeklyIndications before mutation so we can detect the
-  // cross-the-threshold transition for the weekly_goal_reached webhook.
+  // Snapshot weeklyIndications before mutation so the weekly goal ledger
+  // marker is created exactly once when the counter crosses the threshold.
   const before = await prisma.leaderStats.findUnique({
     where: { userId },
     select: { weeklyIndications: true },
@@ -224,11 +196,7 @@ export async function incrementLeaderIndication(
     }),
   ]);
 
-  fireAwarded(userId, eventType, points, metadata);
-
-  // Fire weekly_goal_reached only on the exact crossing, and at most once per
-  // ISO week. A 0-point ledger entry (eventType='weekly_goal_reached') acts as
-  // the dedup marker so a weekly counter reset cannot trigger a second dispatch.
+  // Keep the weekly-goal ledger marker idempotent across counter resets.
   if (previousWeekly < WEEKLY_INDICATION_GOAL && previousWeekly + 1 >= WEEKLY_INDICATION_GOAL) {
     const weekKey = isoWeekKey(now);
     const alreadyFired = await prisma.leaderPointsLedger.findFirst({
@@ -250,7 +218,6 @@ export async function incrementLeaderIndication(
           tenantId: getTenantId(),
         },
       });
-      fireWeeklyGoal(userId);
     }
   }
 }
@@ -288,7 +255,6 @@ export async function incrementLeaderConfirmed(
     }),
   ]);
 
-  fireAwarded(userId, 'event.indication.confirmed', points, metadata);
 }
 
 /**
@@ -324,7 +290,6 @@ export async function incrementLeaderPresent(
     }),
   ]);
 
-  fireAwarded(userId, 'event.indication.present', points, metadata);
 }
 
 /**
@@ -332,17 +297,10 @@ export async function incrementLeaderPresent(
  * Overwrites counters and score; does NOT touch the ledger.
  * Reassigns rankingPosition in score-descending order.
  *
- * Use after bulk imports or as a nightly cron.
+ * Run explicitly after bulk imports or from the coordinator recalculation route.
  */
 export async function recalculateRanking(): Promise<number> {
   const users = await prisma.user.findMany({ select: { id: true } });
-
-  // Snapshot previous ranking positions for the top_rank_changed webhook.
-  const previousPositions = new Map<string, number | null>();
-  const beforeRows = await prisma.leaderStats.findMany({
-    select: { userId: true, rankingPosition: true },
-  });
-  for (const row of beforeRows) previousPositions.set(row.userId, row.rankingPosition);
 
   const now = new Date();
   const weekAgo  = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000);
@@ -401,21 +359,6 @@ export async function recalculateRanking(): Promise<number> {
     )
   );
 
-  // Emit leader.top_rank_changed for users who entered top 10 or moved up
-  // within top 10. Avoids spamming webhooks for tail-rank reshuffles.
-  const TOP_THRESHOLD = 10;
-  for (let idx = 0; idx < sorted.length; idx++) {
-    const newPos = idx + 1;
-    if (newPos > TOP_THRESHOLD) break;
-    const userId = sorted[idx].userId;
-    const prevPos = previousPositions.get(userId) ?? null;
-    const movedUp =
-      prevPos === null ||
-      prevPos > TOP_THRESHOLD ||
-      newPos < prevPos;
-    if (movedUp) fireRankChanged(userId, prevPos, newPos);
-  }
-
   return results.length;
 }
 
@@ -451,10 +394,10 @@ export async function getLeaderboard(limit = 50) {
 // Inactive-leader scan
 // ---------------------------------------------------------------------------
 //
-// Daily job (cron / n8n / protected endpoint) that detects leaders with no
+// Manual coordinator scan that detects leaders with no
 // activity in the last INACTIVE_THRESHOLD_DAYS days, filters out those with
 // no WhatsApp link cadastrado (devzappLink), dedupes against a 7-day cooldown
-// window using the ledger, fires leader.inactive_7_days, and writes a
+// window using the ledger, and writes a
 // 0-point ledger marker so the same leader is not alerted again until the
 // cooldown elapses.
 
@@ -520,9 +463,8 @@ export async function scanAndAlertInactiveLeaders(): Promise<InactiveScanResult>
       continue;
     }
 
-    // Insert the dedup marker BEFORE firing the webhook so a crash mid-flight
-    // never causes a double alert. Worst case: webhook fails and the leader
-    // misses one cycle — preferable to spamming.
+    // Keep a cooldown marker so the manual scan reports each inactive leader
+    // at most once per cooldown window.
     await prisma.leaderPointsLedger.create({
       data: {
         userId: c.userId,
@@ -536,12 +478,6 @@ export async function scanAndAlertInactiveLeaders(): Promise<InactiveScanResult>
         },
       },
     });
-
-    await emitInactive7Days({
-      userId: c.userId,
-      lastActivityAt: c.lastActivityAt,
-      extraMetadata: { devzappLink: link },
-    }).catch(() => undefined);
 
     alerted++;
   }

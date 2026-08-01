@@ -91,7 +91,7 @@ export async function authRoutes(app: FastifyInstance) {
       role: user.role,
       email: user.email,
       tenantId: getTenantId()
-    });
+    }, { expiresIn: '8h' });
     return reply.send({
       token,
       user: serializeAuthUser(user)

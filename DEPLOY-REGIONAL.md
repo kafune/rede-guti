@@ -56,15 +56,30 @@ COORD_PASSWORD="<senha>"
 COORD_NAME="Coordenação Regional"
 LR_EMAIL="lider@vertical-regional.com"
 LR_PASSWORD="<senha>"
-APP_PUBLIC_URL="https://regional.redeguti.ddnsfree.com"
-# Token próprio se a vertical usar as automações n8n
-# AUTOMATION_API_TOKEN="<token novo>"
-
 # Parâmetros da instância
 GEO_DATASET="sp"            # ou <nome> → backend/src/data/municipios_<nome>.csv
 GEO_STATE_CODE="SP"
 CHURCH_FIELD_ENABLED="false" # vertical regional não coleta igreja
+# WhatsApp / UazapiGO — exatamente 9 variáveis
+UAZAPI_BASE_URL="https://uazapi.exemplo.com"
+UAZAPI_ADMIN_TOKEN="<token administrativo>"
+UAZAPI_WEBHOOK_SECRET="<openssl rand -hex 32>"
+WHATSAPP_ENCRYPTION_KEY="<openssl rand -hex 32>"
+PUBLIC_API_URL="https://regional.redeguti.ddnsfree.com/api"
+WHATSAPP_DELAY_MIN=5
+WHATSAPP_DELAY_MAX=15
+WHATSAPP_UPLOAD_MAX_MB=20
+WHATSAPP_MASS_MAX_RECIPIENTS=1000
 ```
+
+`PUBLIC_API_URL` é a URL HTTPS externa da API (inclua `/api` porque o Traefik
+remove esse prefixo). Ao criar a instância, o backend registra automaticamente
+o webhook público usando essa URL e `UAZAPI_WEBHOOK_SECRET`.
+
+Adote um número **WhatsApp Business dedicado** para esta vertical. Não use número
+pessoal, da instância principal ou de atendimento crítico. O UazapiGO depende de
+API não oficial do WhatsApp, com risco de bloqueio, desconexão e quebra de
+compatibilidade; a operação precisa aceitar e monitorar esse risco.
 
 ## 3. Dataset geográfico (se a área não for o estado de SP)
 
@@ -114,18 +129,20 @@ Rótulos de papéis também são configuráveis (`VITE_ROLE_LABEL_COORDENADOR`,
 `VITE_ROLE_LABEL_LIDER_REGIONAL`, `VITE_ROLE_LABEL_VERIFICADORA`) — sem essas
 variáveis valem "Coordenador", "Lider Regional" e "Verificadora".
 
-## 5. Subir a stack e inicializar o banco
+## 5. Migrar antes de subir a API
 
 ```bash
 cd /home/paiva/rede-guti-regional
 docker compose -p rede-regional -f docker-compose.regional.yml build api
-docker compose -p rede-regional -f docker-compose.regional.yml up -d
-# Banco novo e vazio: aplica todas as migrations e cria os acessos iniciais
-docker compose -p rede-regional -f docker-compose.regional.yml exec -T api npm run prisma:deploy
+docker compose -p rede-regional -f docker-compose.regional.yml up -d db-regional
+# Banco novo ou existente: migration obrigatória antes de expor a nova API
+docker compose -p rede-regional -f docker-compose.regional.yml run --rm api npm run prisma:deploy
+docker compose -p rede-regional -f docker-compose.regional.yml up -d api frontend
 docker compose -p rede-regional -f docker-compose.regional.yml exec -T api npm run seed
 ```
 
 Nenhum dado da instância 1 é copiado — o isolamento é total por construção.
+Nunca suba a versão nova da API antes de `prisma:deploy` terminar com sucesso.
 
 ## 6. Verificação
 
@@ -135,6 +152,11 @@ Nenhum dado da instância 1 é copiado — o isolamento é total por construçã
 - Cadastro público ponta a ponta: formulário → município validado contra o dataset da
   instância → indicação criada (sem campo igreja quando `CHURCH_FIELD_ENABLED=false`).
 - A instância 1 continua intacta em seu domínio.
+- No WhatsApp: conecte o QR, faça um envio de teste e depois uma campanha pequena
+  apenas para contatos consentidos. Valide também webhook e controles conforme
+  `docs/whatsapp-homologation.md`.
+- Não há automações nem disparos espontâneos: cada teste, campanha imediata ou
+  agendamento nasce de uma ação explícita da coordenação.
 
 ## Scripts utilitários de banco
 

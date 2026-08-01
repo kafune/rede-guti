@@ -1,10 +1,10 @@
 ﻿import type { FastifyReply, FastifyRequest } from 'fastify';
 import 'fastify';
+import '@fastify/multipart';
 
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireCoordinator: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-    requireAutomation: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }

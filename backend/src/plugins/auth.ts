@@ -1,19 +1,7 @@
-import { timingSafeEqual } from 'node:crypto';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { config } from '../config.js';
 import { normalizeRole } from '../lib/access.js';
 import { getTenantId } from '../lib/tenantContext.js';
-import { getAccessDeniedReason } from '../lib/userAccess.js';
-
-const matchesAutomationToken = (header: string | undefined) => {
-  if (!config.automationToken || !header?.startsWith('Bearer ')) {
-    return false;
-  }
-
-  const provided = Buffer.from(header.slice('Bearer '.length));
-  const expected = Buffer.from(config.automationToken);
-  return provided.length === expected.length && timingSafeEqual(provided, expected);
-};
+import { getAccessDeniedReason, getCurrentUserAccess } from '../lib/userAccess.js';
 
 // Um JWT só vale no tenant que o emitiu: mesmo que duas instâncias compartilhem
 // o segredo (não deveriam), o claim tenantId impede o replay entre elas.
@@ -21,11 +9,16 @@ const matchesAutomationToken = (header: string | undefined) => {
 const belongsToCurrentTenant = (user: { tenantId?: string }) =>
   user.tenantId === getTenantId();
 
+export const hasExplicitUnexpiredJwt = (user: { exp?: number }) =>
+  typeof user.exp === 'number'
+  && Number.isFinite(user.exp)
+  && user.exp > Math.floor(Date.now() / 1_000);
+
 export const registerAuth = (app: FastifyInstance) => {
   app.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
-      if (!belongsToCurrentTenant(request.user)) {
+      if (!hasExplicitUnexpiredJwt(request.user) || !belongsToCurrentTenant(request.user)) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
     } catch {
@@ -43,40 +36,19 @@ export const registerAuth = (app: FastifyInstance) => {
   app.decorate('requireCoordinator', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
-      if (!belongsToCurrentTenant(request.user)) {
+      if (!hasExplicitUnexpiredJwt(request.user) || !belongsToCurrentTenant(request.user)) {
         return reply.code(401).send({ error: 'Unauthorized' });
-      }
-      if (normalizeRole(request.user.role) !== 'COORDENADOR') {
-        return reply.code(403).send({ error: 'Forbidden' });
       }
     } catch {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
 
-    const denied = await getAccessDeniedReason(request.user.sub);
-    if (denied) {
-      return reply.code(401).send({ error: denied });
+    const currentUser = await getCurrentUserAccess(request.user.sub);
+    if (!currentUser || !currentUser.active) {
+      return reply.code(401).send({ error: 'Conta desativada. Fale com a coordenação.' });
     }
-  });
-
-  // Server-to-server access for scheduled jobs (n8n crons).
-  // Accepts either the static AUTOMATION_API_TOKEN or a coordinator JWT,
-  // so the endpoints stay usable manually from an authenticated session.
-  app.decorate('requireAutomation', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (matchesAutomationToken(request.headers.authorization)) {
-      return;
-    }
-
-    try {
-      await request.jwtVerify();
-      if (!belongsToCurrentTenant(request.user)) {
-        return reply.code(401).send({ error: 'Unauthorized' });
-      }
-      if (normalizeRole(request.user.role) !== 'COORDENADOR') {
-        return reply.code(403).send({ error: 'Forbidden' });
-      }
-    } catch {
-      return reply.code(401).send({ error: 'Unauthorized' });
+    if (normalizeRole(currentUser.role) !== 'COORDENADOR') {
+      return reply.code(403).send({ error: 'Forbidden' });
     }
   });
 };

@@ -1,0 +1,42 @@
+import type { FastifyInstance } from 'fastify';
+import { normalizeRole } from '../../lib/access.js';
+import { getTenantId } from '../../lib/tenantContext.js';
+import { getCurrentUserAccess } from '../../lib/userAccess.js';
+import { hasExplicitUnexpiredJwt } from '../../plugins/auth.js';
+import { whatsappCampaignRoutes } from './campaigns.js';
+import { whatsappInstanceRoutes } from './instance.js';
+import { publicWhatsAppMediaRoutes, whatsappMediaRoutes } from './media.js';
+import { whatsappTemplateRoutes } from './templates.js';
+import { whatsappSuppressionRoutes } from './suppressions.js';
+import { publicWhatsAppWebhookRoutes } from './webhook.js';
+
+export async function whatsappRoutes(app: FastifyInstance) {
+  await app.register(async (whatsapp) => {
+    whatsapp.addHook('preHandler', async (request) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+      }
+      if (!hasExplicitUnexpiredJwt(request.user) || request.user.tenantId !== getTenantId()) {
+        throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+      }
+      const currentUser = await getCurrentUserAccess(request.user.sub);
+      if (!currentUser || !currentUser.active) {
+        throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+      }
+      if (normalizeRole(currentUser.role) !== 'COORDENADOR') {
+        throw Object.assign(new Error('Forbidden'), { statusCode: 403 });
+      }
+    });
+
+    await whatsapp.register(whatsappInstanceRoutes);
+    await whatsapp.register(whatsappCampaignRoutes);
+    await whatsapp.register(whatsappTemplateRoutes);
+    await whatsapp.register(whatsappMediaRoutes);
+    await whatsapp.register(whatsappSuppressionRoutes);
+  }, { prefix: '/whatsapp' });
+
+  await app.register(publicWhatsAppMediaRoutes);
+  await app.register(publicWhatsAppWebhookRoutes);
+}

@@ -38,6 +38,14 @@ beforeAll(async () => {
         nested: { admintoken: 'admin-secret', password: 'password-secret' },
       });
     }
+    if (typeof request.headers.token === 'string' && request.headers.token.startsWith('nonjson-')) {
+      const [, statusText, bodyKind] = request.headers.token.split('-');
+      const body = bodyKind === 'empty' ? '' : bodyKind === 'html' ? '<html>upstream failed</html>' : 'busy';
+      return reply
+        .code(Number(statusText))
+        .type(bodyKind === 'html' ? 'text/html' : 'text/plain')
+        .send(body);
+    }
     if (request.headers.token === 'malformed-token') {
       return reply.type('application/json').send('{not-json');
     }
@@ -49,7 +57,17 @@ beforeAll(async () => {
       };
     }
     if (request.url === '/instance/create') {
-      return { instance: { id: 'instance-1', name: 'Rede Guti' }, token: 'created-token' };
+      return {
+        instance: {
+          id: 'instance-1',
+          name: 'Rede Guti',
+          token: 'nested-instance-token',
+          auth: { password: 'nested-password' },
+          metadata: { label: 'kept' },
+        },
+        token: 'created-token',
+        auth: 'top-level-auth',
+      };
     }
     return { ok: true };
   });
@@ -70,8 +88,15 @@ describe('UazapiClient credential isolation', () => {
     const instance = UazapiClient.forInstance({ baseUrl, token: 'instance-secret' });
 
     expect(await admin.createInstance({ name: 'Rede Guti' })).toEqual({
-      instance: { id: 'instance-1', name: 'Rede Guti' },
+      instance: {
+        id: 'instance-1',
+        name: 'Rede Guti',
+        token: '[REDACTED]',
+        auth: '[REDACTED]',
+        metadata: { label: 'kept' },
+      },
       token: 'created-token',
+      auth: '[REDACTED]',
     });
     expect(await instance.getInstanceStatus()).toEqual({ ok: true });
 
@@ -93,6 +118,7 @@ describe('UazapiClient credential isolation', () => {
 
     await client.connectInstance();
     await client.disconnectInstance();
+    await client.deleteInstance();
     await client.getWebhook();
     await client.setWebhook({
       enabled: true,
@@ -112,6 +138,7 @@ describe('UazapiClient credential isolation', () => {
     expect(requests.map(({ method, url, body }) => ({ method, url, body }))).toEqual([
       { method: 'POST', url: '/instance/connect', body: {} },
       { method: 'POST', url: '/instance/disconnect', body: undefined },
+      { method: 'DELETE', url: '/instance', body: undefined },
       { method: 'GET', url: '/webhook', body: undefined },
       {
         method: 'POST', url: '/webhook', body: {
@@ -188,6 +215,17 @@ describe('UazapiClient credential isolation', () => {
         expect(serialized).not.toContain('password-secret');
         expect(serialized).not.toContain('unsafe upstream detail');
       }
+    });
+  }
+
+  for (const [token, status, code, message] of [
+    ['nonjson-401-empty', 401, 'UAZAPI_UNAUTHORIZED', 'Uazapi authentication failed.'],
+    ['nonjson-429-text', 429, 'UAZAPI_RATE_LIMITED', 'Uazapi rate limit exceeded.'],
+    ['nonjson-500-html', 500, 'UAZAPI_UPSTREAM_ERROR', 'Uazapi service unavailable.'],
+  ] as const) {
+    test(`translates ${status} before parsing its ${token.split('-').at(-1)} body`, async () => {
+      const client = UazapiClient.forInstance({ baseUrl, token });
+      expect(client.getInstanceStatus()).rejects.toMatchObject({ code, status, message });
     });
   }
 

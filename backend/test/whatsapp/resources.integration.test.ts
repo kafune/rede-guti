@@ -15,12 +15,14 @@ let upstream: FastifyInstance;
 let app: FastifyInstance;
 let basePrisma: any;
 let prisma: any;
+let runtimeConfig: any;
 let setCurrentTenant: (tenant: { id: string; slug: string; name: string }) => void;
 let coordinatorToken: string;
 let leaderToken: string;
 let verifierToken: string;
 let coordinatorId: string;
 const upstreamRequests: Array<{ method: string; url: string; headers: unknown; body: unknown }> = [];
+let webhookShouldFail = false;
 
 const tenantA = { id: 'whatsapp-tenant-a', slug: 'whatsapp-a', name: 'WhatsApp A' };
 const tenantB = { id: 'whatsapp-tenant-b', slug: 'whatsapp-b', name: 'WhatsApp B' };
@@ -36,8 +38,11 @@ beforeAll(async () => {
       token: 'plain-instance-token',
     };
   });
-  upstream.post('/webhook', async (request) => {
+  upstream.post('/webhook', async (request, reply) => {
     upstreamRequests.push({ method: request.method, url: request.url, headers: request.headers, body: request.body });
+    if (webhookShouldFail) {
+      return reply.code(500).type('text/html').send('<p>unsafe webhook failure</p>');
+    }
     return { enabled: true };
   });
   upstream.get('/instance/status', async (request) => {
@@ -55,25 +60,43 @@ beforeAll(async () => {
   });
   upstream.post('/instance/connect', async (request) => {
     upstreamRequests.push({ method: request.method, url: request.url, headers: request.headers, body: request.body });
-    return { connected: false, loggedIn: false, qrcode: 'data:image/png;base64,qr' };
+    return {
+      connected: false,
+      loggedIn: false,
+      instance: {
+        id: 'remote-instance-1',
+        name: 'Rede Guti',
+        status: 'connecting',
+        qrcode: 'data:image/png;base64,official-qr',
+        paircode: 'PAIR-1234',
+        token: 'nested-connect-token',
+        auth: { password: 'nested-connect-password' },
+      },
+    };
   });
   upstream.post('/instance/disconnect', async (request) => {
     upstreamRequests.push({ method: request.method, url: request.url, headers: request.headers, body: request.body });
     return { response: 'Disconnected' };
+  });
+  upstream.delete('/instance', async (request, reply) => {
+    upstreamRequests.push({ method: request.method, url: request.url, headers: request.headers, body: request.body });
+    return reply.code(204).send();
   });
   await upstream.listen({ host: '127.0.0.1', port: 0 });
   const address = upstream.server.address();
   if (!address || typeof address === 'string') throw new Error('missing upstream address');
   process.env.UAZAPI_BASE_URL = `http://127.0.0.1:${address.port}`;
 
-  const [{ buildApp }, db, tenantContext] = await Promise.all([
+  const [{ buildApp }, db, tenantContext, configModule] = await Promise.all([
     import('../../src/app.js'),
     import('../../src/db.js'),
     import('../../src/lib/tenantContext.js'),
+    import('../../src/config.js'),
   ]);
   basePrisma = db.basePrisma;
   prisma = db.prisma;
   setCurrentTenant = tenantContext.setCurrentTenant;
+  runtimeConfig = configModule.config;
 
   await basePrisma.tenant.upsert({ where: { id: tenantA.id }, update: tenantA, create: tenantA });
   await basePrisma.tenant.upsert({ where: { id: tenantB.id }, update: tenantB, create: tenantB });
@@ -124,6 +147,26 @@ function multipartFile(filename: string, mimeType: string, bytes: Uint8Array) {
 }
 
 describe('WhatsApp instance resource', () => {
+  test('requires public webhook settings before creating any remote or local instance', async () => {
+    for (const key of ['publicApiUrl', 'uazapiWebhookSecret'] as const) {
+      const original = runtimeConfig[key];
+      const requestCount = upstreamRequests.length;
+      runtimeConfig[key] = null;
+      try {
+        const response = await app.inject({
+          method: 'POST', url: '/whatsapp/instance', headers: auth(coordinatorToken),
+          payload: { name: 'Sem webhook' },
+        });
+        expect(response.statusCode).toBe(503);
+        expect(response.json()).toEqual({ error: 'WhatsApp integration is not configured.' });
+        expect(upstreamRequests).toHaveLength(requestCount);
+        expect(await prisma.whatsAppConfig.findUnique({ where: { tenantId: tenantA.id } })).toBeNull();
+      } finally {
+        runtimeConfig[key] = original;
+      }
+    }
+  });
+
   test('allows only a coordinator to create the encrypted, webhook-configured instance', async () => {
     for (const token of [leaderToken, verifierToken]) {
       const denied = await app.inject({
@@ -192,7 +235,15 @@ describe('WhatsApp instance resource', () => {
       method: 'POST', url: '/whatsapp/instance/connect', headers: auth(coordinatorToken),
     });
     expect(connect.statusCode).toBe(200);
-    expect(connect.json()).toEqual({ connected: false, loggedIn: false, qrcode: 'data:image/png;base64,qr' });
+    expect(connect.json()).toEqual({
+      connected: false,
+      loggedIn: false,
+      qrcode: 'data:image/png;base64,official-qr',
+      paircode: 'PAIR-1234',
+      instance: { id: 'remote-instance-1', name: 'Rede Guti', status: 'connecting' },
+    });
+    expect(connect.body).not.toContain('nested-connect-token');
+    expect(connect.body).not.toContain('nested-connect-password');
     expect(upstreamRequests.at(-1)).toMatchObject({ url: '/instance/connect', body: {} });
 
     const disconnect = await app.inject({
@@ -200,6 +251,36 @@ describe('WhatsApp instance resource', () => {
     });
     expect(disconnect.statusCode).toBe(200);
     expect(disconnect.json()).toEqual({ response: 'Disconnected' });
+  });
+
+  test('compensates a webhook failure and leaves no partially configured local instance', async () => {
+    await prisma.whatsAppConfig.deleteMany();
+    const firstRequest = upstreamRequests.length;
+    webhookShouldFail = true;
+    let response;
+    try {
+      response = await app.inject({
+        method: 'POST', url: '/whatsapp/instance', headers: auth(coordinatorToken),
+        payload: { name: 'Falha webhook' },
+      });
+    } finally {
+      webhookShouldFail = false;
+    }
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).not.toContain('plain-instance-token');
+    expect(response.body).not.toContain('unsafe webhook failure');
+    expect(await prisma.whatsAppConfig.findUnique({ where: { tenantId: tenantA.id } })).toBeNull();
+    expect(upstreamRequests.slice(firstRequest).map(({ method, url, headers }) => ({
+      method,
+      url,
+      admintoken: (headers as Record<string, string>).admintoken,
+      token: (headers as Record<string, string>).token,
+    }))).toEqual([
+      { method: 'POST', url: '/instance/create', admintoken: 'admin-test-token', token: undefined },
+      { method: 'POST', url: '/webhook', admintoken: undefined, token: 'plain-instance-token' },
+      { method: 'DELETE', url: '/instance', admintoken: undefined, token: 'plain-instance-token' },
+    ]);
   });
 });
 

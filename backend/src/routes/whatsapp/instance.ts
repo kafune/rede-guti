@@ -43,12 +43,16 @@ function safeConnectResponse(value: unknown) {
   const response = record(value);
   const instance = record(response.instance);
   const jid = safeJid(response.jid);
+  const qrcode = optionalString(instance.qrcode) ?? optionalString(response.qrcode);
+  const paircode = optionalString(instance.paircode)
+    ?? optionalString(response.paircode)
+    ?? optionalString(response.pairingCode);
   return {
     ...(optionalBoolean(response.connected) === undefined ? {} : { connected: response.connected }),
     ...(optionalBoolean(response.loggedIn) === undefined ? {} : { loggedIn: response.loggedIn }),
     ...(Object.keys(jid).length === 0 ? {} : { jid }),
-    ...(optionalString(response.qrcode) === null ? {} : { qrcode: response.qrcode }),
-    ...(optionalString(response.pairingCode) === null ? {} : { pairingCode: response.pairingCode }),
+    ...(qrcode === null ? {} : { qrcode }),
+    ...(paircode === null ? {} : { paircode }),
     ...(Object.keys(instance).length === 0 ? {} : {
       instance: {
         ...(optionalString(instance.id) === null ? {} : { id: instance.id }),
@@ -59,15 +63,13 @@ function safeConnectResponse(value: unknown) {
   };
 }
 
-async function configureWebhook(client: UazapiClient) {
-  if (!config.publicApiUrl || !config.uazapiWebhookSecret) return false;
+async function configureWebhook(client: UazapiClient, publicApiUrl: string, webhookSecret: string) {
   await client.setWebhook({
     enabled: true,
-    url: `${config.publicApiUrl}/public/whatsapp/webhook?secret=${encodeURIComponent(config.uazapiWebhookSecret)}`,
+    url: `${publicApiUrl}/public/whatsapp/webhook?secret=${encodeURIComponent(webhookSecret)}`,
     events: ['messages', 'messages_update', 'sender'],
     excludeMessages: ['wasSentByApi'],
   });
-  return true;
 }
 
 export async function whatsappInstanceRoutes(app: FastifyInstance) {
@@ -114,7 +116,12 @@ export async function whatsappInstanceRoutes(app: FastifyInstance) {
   app.post('/instance', async (request, reply) => {
     const input = createSchema.safeParse(request.body);
     if (!input.success) return reply.code(400).send({ error: 'Invalid payload' });
-    if (!config.whatsappEncryptionKey || !config.uazapiBaseUrl) {
+    if (
+      !config.whatsappEncryptionKey
+      || !config.uazapiBaseUrl
+      || !config.publicApiUrl
+      || !config.uazapiWebhookSecret
+    ) {
       return reply.code(503).send({ error: 'WhatsApp integration is not configured.' });
     }
 
@@ -129,7 +136,20 @@ export async function whatsappInstanceRoutes(app: FastifyInstance) {
         return reply.code(502).send({ error: 'Uazapi returned an invalid instance response.' });
       }
 
+      const instanceClient = UazapiClient.forInstance({ baseUrl: config.uazapiBaseUrl, token });
+      try {
+        await configureWebhook(instanceClient, config.publicApiUrl, config.uazapiWebhookSecret);
+      } catch (error) {
+        try {
+          await instanceClient.deleteInstance();
+        } catch {
+          // Best effort: the original safe webhook error remains authoritative.
+        }
+        throw error;
+      }
+
       const encryptedToken = encryptSecret(token, config.whatsappEncryptionKey);
+      const webhookConfiguredAt = new Date();
       await prisma.whatsAppConfig.upsert({
         where: { tenantId: getTenantId() },
         update: {
@@ -138,7 +158,7 @@ export async function whatsappInstanceRoutes(app: FastifyInstance) {
           instanceTokenEncrypted: encryptedToken,
           phone: null,
           status,
-          webhookConfiguredAt: null,
+          webhookConfiguredAt,
         },
         create: {
           tenantId: getTenantId(),
@@ -146,16 +166,9 @@ export async function whatsappInstanceRoutes(app: FastifyInstance) {
           instanceName: name,
           instanceTokenEncrypted: encryptedToken,
           status,
+          webhookConfiguredAt,
         },
       });
-
-      const instanceClient = UazapiClient.forInstance({ baseUrl: config.uazapiBaseUrl, token });
-      if (await configureWebhook(instanceClient)) {
-        await prisma.whatsAppConfig.update({
-          where: { tenantId: getTenantId() },
-          data: { webhookConfiguredAt: new Date() },
-        });
-      }
 
       return reply.code(201).send({
         configured: true,

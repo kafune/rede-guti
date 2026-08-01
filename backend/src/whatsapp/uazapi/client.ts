@@ -95,6 +95,22 @@ const safeHttpError = (status: number) => {
   return new UazapiError('UAZAPI_REQUEST_FAILED', status, 'Uazapi request failed.');
 };
 
+function sanitizeCreateResponse(value: unknown): unknown {
+  const rootToken = value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>).token
+    : undefined;
+  const sanitized = sanitizeCredentials(value);
+  if (
+    typeof rootToken === 'string'
+    && sanitized !== null
+    && typeof sanitized === 'object'
+    && !Array.isArray(sanitized)
+  ) {
+    return { ...(sanitized as Record<string, unknown>), token: rootToken };
+  }
+  return sanitized;
+}
+
 export class UazapiClient {
   private readonly baseUrl: string;
   private readonly credential: Credential;
@@ -118,7 +134,7 @@ export class UazapiClient {
 
   private async request<T>(
     path: string,
-    init: { method?: 'GET' | 'POST'; body?: unknown; credentialResponse?: boolean } = {},
+    init: { method?: 'GET' | 'POST' | 'DELETE'; body?: unknown; preserveRootToken?: boolean } = {},
   ): Promise<T> {
     const signal = AbortSignal.timeout(this.timeoutMs);
     try {
@@ -131,6 +147,11 @@ export class UazapiClient {
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
         signal,
       });
+
+      if (!response.ok) {
+        void response.body?.cancel().catch(() => undefined);
+        throw safeHttpError(response.status);
+      }
 
       const text = await response.text();
       let parsed: unknown;
@@ -146,14 +167,9 @@ export class UazapiClient {
         }
       }
 
-      if (!response.ok) {
-        // Traverse the entire payload before discarding it so future logging or
-        // instrumentation cannot accidentally receive raw credential fields.
-        sanitizeCredentials(parsed);
-        throw safeHttpError(response.status);
-      }
-
-      return (init.credentialResponse ? parsed : sanitizeCredentials(parsed)) as T;
+      return (init.preserveRootToken
+        ? sanitizeCreateResponse(parsed)
+        : sanitizeCredentials(parsed)) as T;
     } catch (error) {
       if (error instanceof UazapiError) throw error;
       if (signal.aborted || (error instanceof Error && error.name === 'TimeoutError')) {
@@ -169,7 +185,7 @@ export class UazapiClient {
       body: input,
       // This is the sole operation whose documented success payload carries
       // the newly issued token; callers must encrypt it before persistence.
-      credentialResponse: true,
+      preserveRootToken: true,
     });
   }
 
@@ -183,6 +199,10 @@ export class UazapiClient {
 
   disconnectInstance() {
     return this.request<Record<string, unknown>>('/instance/disconnect', { method: 'POST' });
+  }
+
+  deleteInstance() {
+    return this.request<void>('/instance', { method: 'DELETE' });
   }
 
   getWebhook() {

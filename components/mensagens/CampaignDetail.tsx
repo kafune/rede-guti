@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { localDateTimeToUtc } from '../../whatsapp/date';
 import type { WhatsAppApi, WhatsAppCampaign, WhatsAppCampaignDetail } from '../../whatsapp/types';
 
-const terminalRemoteStatuses = new Set(['completed', 'complete', 'canceled', 'cancelled', 'failed', 'deleted']);
+const terminalRemoteStatuses = new Set(['done', 'completed', 'complete', 'canceled', 'cancelled', 'failed', 'deleted']);
 const hasActiveRemoteFolder = (campaign: WhatsAppCampaign) => Boolean(
   campaign.remoteFolderId && campaign.remoteFolderStatus
   && !terminalRemoteStatuses.has(campaign.remoteFolderStatus.trim().toLowerCase()),
@@ -20,12 +20,13 @@ const canEdit = (campaign: WhatsAppCampaign) => isUnstarted(campaign)
 
 export function CampaignDetail({ campaignId, api, onBack, onChanged, onRetry, retryAlreadyExists }: {
   campaignId: string; api: WhatsAppApi; onBack: () => void; onChanged: (campaign: WhatsAppCampaign) => void;
-  onRetry?: (campaignId: string) => Promise<void>; retryAlreadyExists?: boolean;
+  onRetry?: (campaignId: string, idempotencyKey: string) => Promise<void>; retryAlreadyExists?: boolean;
 }) {
   const [campaign, setCampaign] = useState<WhatsAppCampaignDetail | null>(null);
   const [editing, setEditing] = useState(false); const [name, setName] = useState('');
   const [schedule, setSchedule] = useState(''); const [error, setError] = useState<string | null>(null);
   const actionLock = useRef(false);
+  const retryCommandKey = useRef<string | null>(null);
   const [actionInFlight, setActionInFlight] = useState<'campaign' | 'retry' | null>(null);
   const load = () => api.getCampaign(campaignId).then((value) => { setCampaign(value); setName(value.name); });
   useEffect(() => { void load().catch((caught) => setError(caught instanceof Error ? caught.message : 'Erro ao carregar campanha.')); }, [api, campaignId]);
@@ -40,22 +41,24 @@ export function CampaignDetail({ campaignId, api, onBack, onChanged, onRetry, re
     setActionInFlight(null);
   };
   const run = async (action: () => Promise<WhatsAppCampaign>) => {
-    if (!beginAction('campaign')) return;
+    if (!beginAction('campaign')) return false;
     setError(null);
-    try { const changed = await action(); onChanged(changed); await load(); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'Erro ao controlar campanha.'); }
+    try { const changed = await action(); onChanged(changed); await load(); return true; }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'Erro ao controlar campanha.'); return false; }
     finally { finishAction(); }
   };
   const retry = async () => {
     if (!campaign || !beginAction('retry')) return;
     setError(null);
     try {
-      if (onRetry) await onRetry(campaign.id);
+      retryCommandKey.current ??= crypto.randomUUID();
+      if (onRetry) await onRetry(campaign.id, retryCommandKey.current);
       else {
-        const changed = await api.retryFailedRecipients(campaign.id);
+        const changed = await api.retryFailedRecipients(campaign.id, retryCommandKey.current);
         onChanged(changed);
         await load();
       }
+      retryCommandKey.current = null;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Erro ao controlar campanha.');
     } finally { finishAction(); }
@@ -75,7 +78,9 @@ export function CampaignDetail({ campaignId, api, onBack, onChanged, onRetry, re
       <button disabled={Boolean(actionInFlight)} onClick={() => void run(() => api.syncCampaign(campaign.id))} className="rounded-xl border px-4 py-2">Sincronizar</button>
     </div>
     {editing && <form className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-2" onSubmit={(event) => {
-      event.preventDefault(); void run(() => api.updateCampaign(campaign.id, { name })).then(() => setEditing(false));
+      event.preventDefault(); void run(() => api.updateCampaign(campaign.id, { name })).then((succeeded) => {
+        if (succeeded) setEditing(false);
+      });
     }}><label className="font-semibold">Novo nome<input className="mt-1 w-full rounded-xl border p-3" value={name} onChange={(event) => setName(event.target.value)} /></label>
       <button disabled={Boolean(actionInFlight)} className="self-end rounded-xl bg-blue-600 px-4 py-3 font-bold text-white">Salvar edição</button>
       <label className="font-semibold">Novo agendamento<input type="datetime-local" className="mt-1 w-full rounded-xl border p-3" value={schedule} onChange={(event) => setSchedule(event.target.value)} /></label>

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import Fastify, { type FastifyInstance } from 'fastify';
+import bcrypt from 'bcryptjs';
 import { Writable } from 'node:stream';
 import { Client } from 'pg';
 
@@ -209,10 +210,10 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
         });
       }
       const folderId = `full-flow-folder-${nextFolder++}`;
-      folderStatuses.set(folderId, 'Active');
+      folderStatuses.set(folderId, 'scheduled');
       return {
         folder_id: folderId,
-        status: 'Active',
+        status: 'scheduled',
         created_at: '2026-08-01T12:00:00.000Z',
         token: INSTANCE_TOKEN,
       };
@@ -237,11 +238,9 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
       ) {
         return reply.code(400).send({ error: 'Invalid sender/edit payload.' });
       }
-      folderStatuses.set(
-        body.folder_id,
-        body.action === 'stop' ? 'Stopped' : body.action === 'continue' ? 'Active' : 'Deleted',
-      );
-      return { success: true };
+      const status = body.action === 'stop' ? 'paused' : body.action === 'continue' ? 'scheduled' : 'deleting';
+      folderStatuses.set(body.folder_id, status);
+      return { folder_id: body.folder_id, status };
     });
     await upstream.listen({ host: '127.0.0.1', port: 0 });
     const address = upstream.server.address();
@@ -376,6 +375,45 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
     expect([
       noAuth.statusCode, wrongRole.statusCode, wrongVerifierRole.statusCode, wrongTenant.statusCode,
     ]).toEqual([401, 403, 403, 401]);
+
+    const coordinatorClaimAfterDemotion = app.jwt.sign({
+      sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id,
+    });
+    await basePrisma.user.update({
+      where: { id: coordinatorId }, data: { role: 'LIDER_REGIONAL' },
+    });
+    const demoted = await inject({
+      method: 'GET', url: '/whatsapp/templates', headers: auth(coordinatorClaimAfterDemotion),
+    });
+    expect(demoted.statusCode).toBe(403);
+    await basePrisma.user.update({
+      where: { id: coordinatorId }, data: { role: 'COORDENADOR', active: false },
+    });
+    const inactive = await inject({
+      method: 'GET', url: '/whatsapp/templates', headers: auth(coordinatorClaimAfterDemotion),
+    });
+    expect(inactive.statusCode).toBe(401);
+    await basePrisma.user.update({
+      where: { id: coordinatorId }, data: { active: true },
+    });
+    const missingUserToken = app.jwt.sign({
+      sub: 'full-flow-missing-user', role: 'COORDENADOR', tenantId: tenant.id,
+    });
+    const missing = await inject({
+      method: 'GET', url: '/whatsapp/templates', headers: auth(missingUserToken),
+    });
+    expect(missing.statusCode).toBe(401);
+
+    await basePrisma.user.update({
+      where: { id: coordinatorId }, data: { passwordHash: await bcrypt.hash('senha-segura', 4) },
+    });
+    const login = await inject({
+      method: 'POST', url: '/auth/login',
+      payload: { email: 'coord@full-flow.test', password: 'senha-segura' },
+    });
+    expect(login.statusCode).toBe(200);
+    const loginClaims = app.jwt.decode(login.json().token) as { iat: number; exp: number };
+    expect(loginClaims.exp - loginClaims.iat).toBe(8 * 60 * 60);
 
     const createdInstance = await inject({
       method: 'POST', url: '/whatsapp/instance', headers: auth(),
@@ -702,7 +740,7 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
       .map(({ method, url, body }) => ({ method, url, body }))).toEqual([
       {
         method: 'POST', url: '/sender/edit',
-        body: { folder_id: futureFolderId, action: 'delete' },
+        body: { folder_id: futureFolderId, action: 'stop' },
       },
       {
         method: 'POST', url: '/sender/advanced', body: {
@@ -713,7 +751,11 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
       },
       {
         method: 'POST', url: '/sender/edit',
-        body: { folder_id: rescheduledFolderId, action: 'delete' },
+        body: { folder_id: futureFolderId, action: 'delete' },
+      },
+      {
+        method: 'POST', url: '/sender/edit',
+        body: { folder_id: rescheduledFolderId, action: 'stop' },
       },
       {
         method: 'POST', url: '/sender/advanced', body: {
@@ -721,6 +763,10 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
           scheduled_for: 4076062200000,
           messages: [{ number: supporterPhone, type: 'text', text: 'Texto editado para Maria' }],
         },
+      },
+      {
+        method: 'POST', url: '/sender/edit',
+        body: { folder_id: rescheduledFolderId, action: 'delete' },
       },
     ]);
 
@@ -736,10 +782,11 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
       method: 'POST', url: `/whatsapp/campaigns/${immediateCampaignId}/resume`, headers: auth(),
     });
     expect(resumed.statusCode).toBe(200);
-    expect([paused.json().campaign.status, resumed.json().campaign.status]).toEqual(['PAUSED', 'SENDING']);
+    expect([paused.json().campaign.status, resumed.json().campaign.status]).toEqual(['PAUSED', 'SCHEDULED']);
     expect(await prisma.whatsAppCampaign.findUniqueOrThrow({
       where: { id: immediateCampaignId },
-    })).toMatchObject({ status: 'SENDING', pausedAt: null });
+    })).toMatchObject({ status: 'SCHEDULED', pausedAt: null });
+    folderStatuses.set(immediateFolderId, 'sending');
     folderMessages.set(immediateFolderId, [{
       messageid: 'full-flow-outbound-message',
       chatid: `${supporterPhone}@s.whatsapp.net`, sender: supporterPhone, status: 'Sent',
@@ -761,12 +808,22 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
       method: 'POST', url: `/whatsapp/campaigns/${futureCampaignId}/cancel`, headers: auth(),
     });
     expect(canceled.statusCode).toBe(200);
-    expect(canceled.json().campaign.status).toBe('CANCELED');
+    expect(canceled.json().campaign.status).toBe('CANCELING');
+    const cancelingStored = await prisma.whatsAppCampaign.findUniqueOrThrow({
+      where: { id: futureCampaignId }, include: { recipients: true },
+    });
+    expect(cancelingStored).toMatchObject({ status: 'CANCELING', canceledAt: null });
+    expect(cancelingStored.recipients).toHaveLength(1);
+    expect(cancelingStored.recipients[0]).toMatchObject({ status: 'QUEUED', canceledAt: null });
+    folderStatuses.delete(editedFolderId);
+    const confirmedCancellation = await inject({
+      method: 'POST', url: `/whatsapp/campaigns/${futureCampaignId}/sync`, headers: auth(),
+    });
+    expect(confirmedCancellation.statusCode).toBe(200);
     const canceledStored = await prisma.whatsAppCampaign.findUniqueOrThrow({
       where: { id: futureCampaignId }, include: { recipients: true },
     });
     expect(canceledStored).toMatchObject({ status: 'CANCELED', canceledAt: expect.any(Date) });
-    expect(canceledStored.recipients).toHaveLength(1);
     expect(canceledStored.recipients[0]).toMatchObject({
       status: 'CANCELED', canceledAt: expect.any(Date),
     });
@@ -791,8 +848,8 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
 
     const deliveryPayload = {
       event: 'messages_update', eventId: 'full-flow-delivery-event', data: {
-        messageid: 'full-flow-outbound-message', sender: supporterPhone,
-        status: 'Delivered', timestamp: '2026-08-01T12:11:00.000Z',
+        messageid: 'full-flow-outbound-message', sender_pn: supporterPhone,
+        status: 'Delivered', messageTimestamp: '2026-08-01T12:11:00.000Z',
       },
     };
     const delivery = await webhook(deliveryPayload, true);
@@ -802,8 +859,8 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
 
     const readPayload = {
       event: 'messages_update', eventId: 'full-flow-read-event', data: {
-        messageid: 'full-flow-outbound-message', sender: supporterPhone,
-        status: 'Read', timestamp: '2026-08-01T12:12:00.000Z',
+        messageid: 'full-flow-outbound-message', sender_pn: supporterPhone,
+        status: 'Read', messageTimestamp: '2026-08-01T12:12:00.000Z',
       },
     };
     expect((await webhook(readPayload)).json()).toMatchObject({ processed: true, duplicate: false });
@@ -811,9 +868,9 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
 
     const replyPayload = {
       event: 'messages', eventId: 'full-flow-reply-event', data: {
-        messageid: 'full-flow-reply-message', sender: supporterPhone, fromMe: false,
-        text: 'Recebido', quoted: { messageid: 'full-flow-outbound-message' },
-        timestamp: '2026-08-01T12:13:00.000Z',
+        messageid: 'full-flow-reply-message', sender_pn: supporterPhone, fromMe: false,
+        text: 'Recebido', quoted: 'full-flow-outbound-message',
+        messageTimestamp: '2026-08-01T12:13:00.000Z',
       },
     };
     expect((await webhook(replyPayload)).json()).toMatchObject({ processed: true, duplicate: false });
@@ -821,9 +878,9 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
 
     const exitPayload = {
       event: 'messages', eventId: 'full-flow-exit-event', data: {
-        messageid: 'full-flow-exit-message', sender: supporterPhone, fromMe: false,
-        text: 'SAIR', quoted: { messageid: 'full-flow-outbound-message' },
-        timestamp: '2026-08-01T12:14:00.000Z',
+        messageid: 'full-flow-exit-message', sender_pn: supporterPhone, fromMe: false,
+        text: 'SAIR', quoted: 'full-flow-outbound-message',
+        messageTimestamp: '2026-08-01T12:14:00.000Z',
       },
     };
     expect((await webhook(exitPayload)).json()).toMatchObject({ processed: true, duplicate: false });
@@ -835,7 +892,7 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
     expect(webhookCampaign).toMatchObject({
       sentCount: 1, deliveredCount: 1, readCount: 1, replyCount: 1, optOutCount: 1,
     });
-    expect(await prisma.whatsAppInteraction.count({ where: { campaignId: immediateCampaignId } })).toBe(4);
+    expect(await prisma.whatsAppInteraction.count({ where: { campaignId: immediateCampaignId } })).toBe(2);
     expect(await prisma.whatsAppSuppression.findUnique({
       where: { tenantId_phoneNormalized: { tenantId: tenant.id, phoneNormalized: supporterPhone } },
     })).toMatchObject({ active: true, reason: 'SAIR', source: 'WEBHOOK' });

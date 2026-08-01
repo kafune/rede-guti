@@ -64,10 +64,21 @@ describe('CampaignHistory', () => {
     expect(api.listCampaigns).toHaveBeenCalledTimes(1);
   });
 
+  it('reports a failed manual active sync without leaking an unhandled rejection', async () => {
+    const user = userEvent.setup();
+    const api = apiFor([campaign('SENDING')]);
+    api.syncCampaigns = vi.fn().mockRejectedValue(new Error('Falha ao sincronizar agora'));
+    render(<CampaignHistory api={api} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Sincronizar ativas' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Falha ao sincronizar agora');
+  });
+
   it.each([
-    ['SENDING', { remoteFolderStatus: 'Active' }, ['Pausar', 'Cancelar'], ['Retomar', 'Editar', 'Reenviar falhas']],
-    ['PAUSED', { remoteFolderStatus: 'Paused' }, ['Retomar', 'Cancelar'], ['Pausar', 'Editar', 'Reenviar falhas']],
-    ['SCHEDULED', { remoteFolderStatus: 'Active', sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0 }, ['Pausar', 'Cancelar', 'Editar'], ['Retomar', 'Reenviar falhas']],
+    ['SENDING', { remoteFolderStatus: 'sending' }, ['Pausar', 'Cancelar'], ['Retomar', 'Editar', 'Reenviar falhas']],
+    ['PAUSED', { remoteFolderStatus: 'paused' }, ['Retomar', 'Cancelar'], ['Pausar', 'Editar', 'Reenviar falhas']],
+    ['SCHEDULED', { remoteFolderStatus: 'scheduled', sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0 }, ['Pausar', 'Cancelar', 'Editar'], ['Retomar', 'Reenviar falhas']],
     ['DRAFT', { remoteFolderId: null, remoteFolderStatus: null, sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0 }, ['Editar'], ['Pausar', 'Retomar', 'Cancelar', 'Reenviar falhas']],
     ['FAILED', { failedCount: 2 }, ['Reenviar falhas'], ['Pausar', 'Retomar', 'Cancelar', 'Editar']],
     ['COMPLETED', {}, [], ['Pausar', 'Retomar', 'Cancelar', 'Editar', 'Reenviar falhas']],
@@ -84,7 +95,7 @@ describe('CampaignHistory', () => {
   it('only offers rescheduling inside the edit form for an unstarted campaign', async () => {
     const user = userEvent.setup();
     const item = campaign('SCHEDULED', {
-      remoteFolderStatus: 'Active', sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0,
+      remoteFolderStatus: 'scheduled', sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0,
     });
     const api = apiFor([item]);
     render(<CampaignHistory api={api} />);
@@ -147,6 +158,10 @@ describe('CampaignHistory', () => {
     act(() => { retryButton.click(); retryButton.click(); });
 
     expect(api.retryFailedRecipients).toHaveBeenCalledTimes(1);
+    expect(api.retryFailedRecipients).toHaveBeenCalledWith(
+      original.id,
+      expect.stringMatching(/^[0-9a-f-]{36}$/i),
+    );
     expect(retryButton).toBeDisabled();
     expect(retryButton).toHaveTextContent('Reenviando falhas');
     expect(screen.getByRole('button', { name: 'Sincronizar' })).toBeDisabled();
@@ -162,5 +177,61 @@ describe('CampaignHistory', () => {
       .getByRole('button', { name: 'Ver detalhes' }));
     expect(await screen.findByRole('heading', { name: original.name })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reenviar falhas' })).not.toBeInTheDocument();
+  });
+
+  it('reuses the retry command UUID after a failed request', async () => {
+    const user = userEvent.setup();
+    const original = campaign('FAILED', {
+      id: 'campaign-retry-key-original', name: 'Retry key original', failedCount: 1,
+    });
+    const child = campaign('QUEUED', {
+      id: 'campaign-retry-key-child', name: 'Retry key child', failedCount: 0,
+      audienceFilter: { type: 'RETRY', retryOfCampaignId: original.id },
+    });
+    const api = apiFor([original]);
+    api.listCampaigns = vi.fn().mockResolvedValueOnce([original]).mockResolvedValue([original, child]);
+    api.getCampaign = vi.fn().mockImplementation(async (id: string) => ({
+      ...(id === child.id ? child : original), recipients: [],
+    }));
+    api.retryFailedRecipients = vi.fn()
+      .mockRejectedValueOnce(new Error('Resposta perdida no retry'))
+      .mockResolvedValue(child);
+    render(<CampaignHistory api={api} />);
+    await user.click(within(await screen.findByRole('article', { name: original.name }))
+      .getByRole('button', { name: 'Ver detalhes' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Reenviar falhas' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Resposta perdida no retry');
+    await user.click(screen.getByRole('button', { name: 'Reenviar falhas' }));
+    expect(await screen.findByRole('heading', { name: child.name })).toBeInTheDocument();
+
+    expect(api.retryFailedRecipients).toHaveBeenCalledTimes(2);
+    expect((api.retryFailedRecipients as any).mock.calls[0][1])
+      .toBe((api.retryFailedRecipients as any).mock.calls[1][1]);
+  });
+
+  it('keeps the edit dialog open when saving fails and closes it only after success', async () => {
+    const user = userEvent.setup();
+    const item = campaign('SCHEDULED', {
+      remoteFolderStatus: 'scheduled', sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0,
+    });
+    const api = apiFor([item]);
+    api.updateCampaign = vi.fn()
+      .mockRejectedValueOnce(new Error('Falha ao editar'))
+      .mockResolvedValueOnce({ ...item, name: 'Nome corrigido' });
+    render(<CampaignHistory api={api} />);
+    await user.click(within(await screen.findByRole('article', { name: item.name }))
+      .getByRole('button', { name: 'Ver detalhes' }));
+    await user.click(await screen.findByRole('button', { name: 'Editar' }));
+    await user.clear(screen.getByLabelText('Novo nome'));
+    await user.type(screen.getByLabelText('Novo nome'), 'Nome corrigido');
+
+    await user.click(screen.getByRole('button', { name: 'Salvar edição' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Falha ao editar');
+    expect(screen.getByRole('button', { name: 'Salvar edição' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Salvar edição' }));
+    expect(await screen.findByRole('button', { name: 'Editar' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Salvar edição' })).not.toBeInTheDocument();
   });
 });

@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { prisma } from '../../db.js';
+import { prisma, withAdvisoryLock } from '../../db.js';
 import { getTenantId } from '../../lib/tenantContext.js';
 import { normalizeBrazilianPhone } from '../../whatsapp/domain/phone.js';
+import {
+  CampaignSuppressionReconciliationError,
+  reconcileSuppressedPhone,
+} from '../../whatsapp/services/campaign-service.js';
 
 const id = z.string().trim().min(1).max(200);
 const paramsSchema = z.object({ id }).strict();
@@ -24,28 +28,35 @@ export async function whatsappSuppressionRoutes(app: FastifyInstance) {
     if (!input.success) return reply.code(400).send({ error: 'Invalid payload' });
     const phone = normalizeBrazilianPhone(input.data.phone);
     if (!phone.valid) return reply.code(400).send({ error: 'Invalid Brazilian phone.' });
-    const now = new Date();
-    const suppression = await prisma.whatsAppSuppression.upsert({
-      where: {
-        tenantId_phoneNormalized: {
-          tenantId: getTenantId(), phoneNormalized: phone.normalized,
+    const tenantId = getTenantId();
+    return withAdvisoryLock(`whatsapp:recipient:${tenantId}:${phone.normalized}`, async () => {
+      const now = new Date();
+      const suppression = await prisma.whatsAppSuppression.upsert({
+        where: {
+          tenantId_phoneNormalized: {
+            tenantId, phoneNormalized: phone.normalized,
+          },
         },
-      },
-      create: {
-        tenantId: getTenantId(), phoneNormalized: phone.normalized, active: true,
-        reason: input.data.reason, source: 'MANUAL', createdById: request.user.sub,
-        firstOptOutAt: now, lastOptOutAt: now,
-      },
-      update: {
-        active: true, reason: input.data.reason, source: 'MANUAL', createdById: request.user.sub,
-        lastOptOutAt: now, reauthorizedAt: null, reauthorizedById: null,
-      },
+        create: {
+          tenantId, phoneNormalized: phone.normalized, active: true,
+          reason: input.data.reason, source: 'MANUAL', createdById: request.user.sub,
+          firstOptOutAt: now, lastOptOutAt: now,
+        },
+        update: {
+          active: true, reason: input.data.reason, source: 'MANUAL', createdById: request.user.sub,
+          lastOptOutAt: now, reauthorizedAt: null, reauthorizedById: null,
+        },
+      });
+      try {
+        await reconcileSuppressedPhone(phone.normalized, now);
+      } catch (error) {
+        if (error instanceof CampaignSuppressionReconciliationError) {
+          return reply.code(error.statusCode).send({ error: error.message });
+        }
+        throw error;
+      }
+      return reply.code(201).send({ suppression });
     });
-    await prisma.whatsAppRecipient.updateMany({
-      where: { phoneNormalized: phone.normalized, status: { in: ['PENDING', 'QUEUED'] } },
-      data: { status: 'CANCELED', canceledAt: now },
-    });
-    return reply.code(201).send({ suppression });
   });
 
   app.post('/suppressions/:id/reauthorize', async (request, reply) => {

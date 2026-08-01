@@ -26,6 +26,7 @@ enum WhatsAppCampaignStatus {
   SENDING
   PAUSED
   COMPLETED
+  CANCELING
   CANCELED
   FAILED
 }
@@ -417,6 +418,8 @@ model WhatsAppCampaign {
   remoteFolderId        String?                  @map("remote_folder_id")
   remoteFolderStatus    String?                  @map("remote_folder_status")
   remoteFolderCreatedAt DateTime?                @map("remote_folder_created_at")
+  idempotencyKey        String?                  @map("idempotency_key")
+  retryOfCampaignId     String?                  @map("retry_of_campaign_id")
   totalRecipients       Int                      @default(0) @map("total_recipients")
   validRecipients       Int                      @default(0) @map("valid_recipients")
   excludedRecipients    Int                      @default(0) @map("excluded_recipients")
@@ -442,7 +445,11 @@ model WhatsAppCampaign {
   createdBy    User                  @relation("WhatsAppCampaignAuthor", fields: [createdById], references: [id])
   recipients   WhatsAppRecipient[]
   interactions WhatsAppInteraction[]
+  retryOf      WhatsAppCampaign?     @relation("WhatsAppCampaignRetries", fields: [retryOfCampaignId], references: [id], onDelete: SetNull)
+  retries      WhatsAppCampaign[]    @relation("WhatsAppCampaignRetries")
 
+  @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, retryOfCampaignId])
   @@index([tenantId, status])
   @@index([createdById])
   @@index([scheduledAt])
@@ -450,31 +457,32 @@ model WhatsAppCampaign {
 }
 
 model WhatsAppRecipient {
-  id                  String                  @id @default(cuid())
-  tenantId            String                  @map("tenant_id")
-  campaignId          String                  @map("campaign_id")
-  origin              WhatsAppRecipientOrigin
-  sourceId            String?                 @map("source_id")
-  sourceName          String?                 @map("source_name")
-  personName          String                  @map("person_name")
-  phoneOriginal       String                  @map("phone_original")
-  phoneNormalized     String?                 @map("phone_normalized")
-  personalizedContent Json                    @map("personalized_content")
-  isValid             Boolean                 @default(true) @map("is_valid")
-  exclusionReason     String?                 @map("exclusion_reason")
-  status              WhatsAppRecipientStatus @default(PENDING)
-  externalMessageIds  String[]                @default([]) @map("external_message_ids")
-  externalChatId      String?                 @map("external_chat_id")
-  error               String?
-  queuedAt            DateTime?               @map("queued_at")
-  sentAt              DateTime?               @map("sent_at")
-  deliveredAt         DateTime?               @map("delivered_at")
-  readAt              DateTime?               @map("read_at")
-  playedAt            DateTime?               @map("played_at")
-  failedAt            DateTime?               @map("failed_at")
-  canceledAt          DateTime?               @map("canceled_at")
-  createdAt           DateTime                @default(now()) @map("created_at")
-  updatedAt           DateTime                @updatedAt @map("updated_at")
+  id                       String                  @id @default(cuid())
+  tenantId                 String                  @map("tenant_id")
+  campaignId               String                  @map("campaign_id")
+  origin                   WhatsAppRecipientOrigin
+  sourceId                 String?                 @map("source_id")
+  sourceName               String?                 @map("source_name")
+  personName               String                  @map("person_name")
+  phoneOriginal            String                  @map("phone_original")
+  phoneNormalized          String?                 @map("phone_normalized")
+  personalizedContent      Json                    @map("personalized_content")
+  isValid                  Boolean                 @default(true) @map("is_valid")
+  exclusionReason          String?                 @map("exclusion_reason")
+  status                   WhatsAppRecipientStatus @default(PENDING)
+  externalMessageIds       String[]                @default([]) @map("external_message_ids")
+  processedWebhookEventIds String[]                @default([]) @map("processed_webhook_event_ids")
+  externalChatId           String?                 @map("external_chat_id")
+  error                    String?
+  queuedAt                 DateTime?               @map("queued_at")
+  sentAt                   DateTime?               @map("sent_at")
+  deliveredAt              DateTime?               @map("delivered_at")
+  readAt                   DateTime?               @map("read_at")
+  playedAt                 DateTime?               @map("played_at")
+  failedAt                 DateTime?               @map("failed_at")
+  canceledAt               DateTime?               @map("canceled_at")
+  createdAt                DateTime                @default(now()) @map("created_at")
+  updatedAt                DateTime                @updatedAt @map("updated_at")
 
   tenant       Tenant                @relation(fields: [tenantId], references: [id])
   campaign     WhatsAppCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)

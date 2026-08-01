@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { config } from '../../config.js';
-import { prisma } from '../../db.js';
+import { prisma, withAdvisoryLock } from '../../db.js';
 import { getTenantId } from '../../lib/tenantContext.js';
 import { encryptSecret } from '../../whatsapp/domain/crypto.js';
 import {
@@ -22,6 +22,14 @@ const record = (value: unknown): RemoteRecord =>
 const optionalString = (value: unknown) => typeof value === 'string' && value ? value : null;
 const optionalBoolean = (value: unknown) => typeof value === 'boolean' ? value : undefined;
 
+class InstanceConflictError extends Error {
+  readonly statusCode = 409;
+}
+
+class InvalidInstanceResponseError extends Error {
+  readonly statusCode = 502;
+}
+
 function safeJid(value: unknown) {
   const jid = record(value);
   return Object.fromEntries(['user', 'agent', 'device', 'server']
@@ -30,6 +38,9 @@ function safeJid(value: unknown) {
 }
 
 function sendRouteError(reply: FastifyReply, error: unknown) {
+  if (error instanceof InstanceConflictError || error instanceof InvalidInstanceResponseError) {
+    return reply.code(error.statusCode).send({ error: error.message });
+  }
   if (error instanceof UazapiError) {
     return reply.code(error.status).send({ error: error.message, code: error.code });
   }
@@ -126,56 +137,59 @@ export async function whatsappInstanceRoutes(app: FastifyInstance) {
     }
 
     try {
-      const created = await getAdminUazapiClient().createInstance({ name: input.data.name });
-      const instance = record(created.instance);
-      const token = optionalString(created.token);
-      const instanceId = optionalString(instance.id);
-      const name = optionalString(instance.name) ?? optionalString(created.name) ?? input.data.name;
-      const status = optionalString(instance.status) ?? 'disconnected';
-      if (!token || !instanceId) {
-        return reply.code(502).send({ error: 'Uazapi returned an invalid instance response.' });
-      }
-
-      const instanceClient = UazapiClient.forInstance({ baseUrl: config.uazapiBaseUrl, token });
-      try {
-        await configureWebhook(instanceClient, config.publicApiUrl, config.uazapiWebhookSecret);
-      } catch (error) {
-        try {
-          await instanceClient.deleteInstance();
-        } catch {
-          // Best effort: the original safe webhook error remains authoritative.
+      const tenantId = getTenantId();
+      return await withAdvisoryLock(`whatsapp:instance:${tenantId}`, async () => {
+        const existing = await prisma.whatsAppConfig.findUnique({ where: { tenantId } });
+        if (existing !== null) {
+          throw new InstanceConflictError('WhatsApp instance is already configured.');
         }
-        throw error;
-      }
 
-      const encryptedToken = encryptSecret(token, config.whatsappEncryptionKey);
-      const webhookConfiguredAt = new Date();
-      await prisma.whatsAppConfig.upsert({
-        where: { tenantId: getTenantId() },
-        update: {
-          instanceId,
-          instanceName: name,
-          instanceTokenEncrypted: encryptedToken,
-          phone: null,
-          status,
-          webhookConfiguredAt,
-        },
-        create: {
-          tenantId: getTenantId(),
-          instanceId,
-          instanceName: name,
-          instanceTokenEncrypted: encryptedToken,
-          status,
-          webhookConfiguredAt,
-        },
-      });
+        let instanceClient: UazapiClient | null = null;
+        try {
+          const created = await getAdminUazapiClient().createInstance({ name: input.data.name });
+          const instance = record(created.instance);
+          const token = optionalString(created.token);
+          const instanceId = optionalString(instance.id);
+          const name = optionalString(instance.name) ?? optionalString(created.name) ?? input.data.name;
+          const status = optionalString(instance.status) ?? 'disconnected';
+          if (token !== null) {
+            instanceClient = UazapiClient.forInstance({ baseUrl: config.uazapiBaseUrl!, token });
+          }
+          if (!token || !instanceId) {
+            throw new InvalidInstanceResponseError('Uazapi returned an invalid instance response.');
+          }
 
-      return reply.code(201).send({
-        configured: true,
-        instanceId,
-        name,
-        status,
-        connected: created.connected === true,
+          await configureWebhook(instanceClient!, config.publicApiUrl!, config.uazapiWebhookSecret!);
+          const encryptedToken = encryptSecret(token, config.whatsappEncryptionKey!);
+          const webhookConfiguredAt = new Date();
+          await prisma.whatsAppConfig.create({
+            data: {
+              tenantId,
+              instanceId,
+              instanceName: name,
+              instanceTokenEncrypted: encryptedToken,
+              status,
+              webhookConfiguredAt,
+            },
+          });
+
+          return reply.code(201).send({
+            configured: true,
+            instanceId,
+            name,
+            status,
+            connected: created.connected === true,
+          });
+        } catch (error) {
+          if (instanceClient !== null) {
+            try {
+              await instanceClient.deleteInstance();
+            } catch {
+              // Best effort: preserve the original safe provisioning failure.
+            }
+          }
+          throw error;
+        }
       });
     } catch (error) {
       return sendRouteError(reply, error);

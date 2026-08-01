@@ -157,8 +157,8 @@ export async function incrementLeaderIndication(
   const points = POINT_VALUES[eventType];
   const now = new Date();
 
-  // Snapshot weeklyIndications before mutation so we can detect the
-  // cross-the-threshold transition for the weekly_goal_reached webhook.
+  // Snapshot weeklyIndications before mutation so the weekly goal ledger
+  // marker is created exactly once when the counter crosses the threshold.
   const before = await prisma.leaderStats.findUnique({
     where: { userId },
     select: { weeklyIndications: true },
@@ -297,7 +297,7 @@ export async function incrementLeaderPresent(
  * Overwrites counters and score; does NOT touch the ledger.
  * Reassigns rankingPosition in score-descending order.
  *
- * Use after bulk imports or as a nightly cron.
+ * Run explicitly after bulk imports or from the coordinator recalculation route.
  */
 export async function recalculateRanking(): Promise<number> {
   const users = await prisma.user.findMany({ select: { id: true } });

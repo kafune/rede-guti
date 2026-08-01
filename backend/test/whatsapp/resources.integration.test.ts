@@ -282,6 +282,64 @@ describe('WhatsApp instance resource', () => {
       { method: 'DELETE', url: '/instance', admintoken: undefined, token: 'plain-instance-token' },
     ]);
   });
+
+  test('compensates when local persistence fails after external create and webhook setup', async () => {
+    const firstRequest = upstreamRequests.length;
+    await basePrisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION reject_whatsapp_config_insert() RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'deterministic config persistence failure';
+      END;
+      $$ LANGUAGE plpgsql
+    `);
+    await basePrisma.$executeRawUnsafe(`
+      CREATE TRIGGER reject_whatsapp_config_insert_trigger
+      BEFORE INSERT ON whatsapp_configs
+      FOR EACH ROW EXECUTE FUNCTION reject_whatsapp_config_insert()
+    `);
+    let response;
+    try {
+      response = await app.inject({
+        method: 'POST', url: '/whatsapp/instance', headers: auth(coordinatorToken),
+        payload: { name: 'Falha de persistência' },
+      });
+    } finally {
+      await basePrisma.$executeRawUnsafe(
+        'DROP TRIGGER reject_whatsapp_config_insert_trigger ON whatsapp_configs',
+      );
+      await basePrisma.$executeRawUnsafe('DROP FUNCTION reject_whatsapp_config_insert()');
+    }
+
+    expect(response.statusCode).toBe(503);
+    expect(await prisma.whatsAppConfig.findUnique({ where: { tenantId: tenantA.id } })).toBeNull();
+    expect(upstreamRequests.slice(firstRequest).map(({ method, url }) => ({ method, url }))).toEqual([
+      { method: 'POST', url: '/instance/create' },
+      { method: 'POST', url: '/webhook' },
+      { method: 'DELETE', url: '/instance' },
+    ]);
+  });
+
+  test('serializes concurrent provisioning and returns conflict without another external instance', async () => {
+    const firstRequest = upstreamRequests.length;
+    const invoke = () => app.inject({
+      method: 'POST', url: '/whatsapp/instance', headers: auth(coordinatorToken),
+      payload: { name: 'Instância concorrente' },
+    });
+
+    const concurrent = await Promise.all([invoke(), invoke()]);
+
+    expect(concurrent.map(({ statusCode }) => statusCode).sort()).toEqual([201, 409]);
+    expect(upstreamRequests.slice(firstRequest).map(({ url }) => url)).toEqual([
+      '/instance/create', '/webhook',
+    ]);
+    expect(await prisma.whatsAppConfig.count()).toBe(1);
+
+    const beforeConflict = upstreamRequests.length;
+    const conflict = await invoke();
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json()).toEqual({ error: 'WhatsApp instance is already configured.' });
+    expect(upstreamRequests).toHaveLength(beforeConflict);
+  });
 });
 
 describe('WhatsApp template resource', () => {

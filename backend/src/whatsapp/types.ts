@@ -72,6 +72,7 @@ export type WhatsAppCampaignStatus =
   | 'SENDING'
   | 'PAUSED'
   | 'COMPLETED'
+  | 'CANCELING'
   | 'CANCELED'
   | 'FAILED';
 

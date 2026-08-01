@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { FEATURES } from '../../features';
 import { whatsappApi } from '../../whatsapp/api';
 import { localDateTimeToUtc } from '../../whatsapp/date';
@@ -48,6 +48,7 @@ function NewCampaign({ api, churchFieldEnabled, onCreated }: {
   const [consent, setConsent] = useState(false); const [testPhone, setTestPhone] = useState('');
   const [testName, setTestName] = useState('Teste'); const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const createCommandKey = useRef<string | null>(null);
 
   const generatePreview = async () => {
     setBusy(true); setError(null);
@@ -63,10 +64,12 @@ function NewCampaign({ api, churchFieldEnabled, onCreated }: {
     setBusy(true); setError(null);
     try {
       const scheduledAt = localDateTimeToUtc(schedule);
+      createCommandKey.current ??= crypto.randomUUID();
       await api.createCampaign(compact({
         name: name.trim(), category, audienceFilter: requestAudience(audience, churchFieldEnabled), content,
         consentimentoConfirmado: true as const, scheduledAt,
-      }));
+      }), createCommandKey.current);
+      createCommandKey.current = null;
       onCreated();
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Não foi possível criar a campanha.'); }
     finally { setBusy(false); }
@@ -99,7 +102,7 @@ function NewCampaign({ api, churchFieldEnabled, onCreated }: {
       <fieldset className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-3"><legend className="px-2 font-black">Envio de teste</legend>
         <label className="font-semibold">Telefone de teste<input className="mt-1 w-full rounded-xl border p-3" value={testPhone} onChange={(event) => setTestPhone(event.target.value)} /></label>
         <label className="font-semibold">Nome de teste<input className="mt-1 w-full rounded-xl border p-3" value={testName} onChange={(event) => setTestName(event.target.value)} /></label>
-        <button disabled={!testPhone.trim()} onClick={() => {
+        <button disabled={!testPhone.trim() || !testName.trim()} onClick={() => {
           setNotice(null); setError(null); void api.sendTestCampaign({ phone: testPhone, name: testName, category, content })
             .then(() => setNotice('Mensagem de teste enviada.')).catch((caught) => setError(caught instanceof Error ? caught.message : 'Erro no teste.'));
         }} className="self-end rounded-xl border px-4 py-3 font-bold">Enviar teste</button>

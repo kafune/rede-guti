@@ -21,6 +21,7 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
   process.env.JWT_SECRET = 'lifecycle-test-secret';
   process.env.WHATSAPP_ENCRYPTION_KEY = '44'.repeat(32);
   process.env.PUBLIC_API_URL = 'https://api.example.test';
+  process.env.UAZAPI_WEBHOOK_SECRET = 'lifecycle-webhook-secret';
 
   let upstream: FastifyInstance;
   let app: FastifyInstance;
@@ -33,6 +34,16 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
   const retryCoordinatorId = 'lifecycle-retry-coordinator';
   const requests: Array<{ method: string; url: string; body: any }> = [];
   let nextFolder = 1;
+  let failNextAdvanced = false;
+  let failStopFolder: string | null = null;
+  let raceAfterEdit: { folderId: string; campaignId: string; status: 'COMPLETED' | 'CANCELED' } | null = null;
+  let messagesBarrier: {
+    folderId: string;
+    entered: Promise<void>;
+    markEntered: () => void;
+    released: Promise<void>;
+    release: () => void;
+  } | null = null;
 
   const content = {
     primary: { type: 'text', text: 'Olá, {{primeiro_nome}}' },
@@ -40,13 +51,20 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
   };
 
   const folderStatuses = new Map<string, string>([
-    ['folder-sync', 'Completed'],
-    ['folder-canceled-terminal', 'Active'],
-    ['folder-completed-terminal', 'Active'],
+    ['folder-sync', 'done'],
+    ['folder-canceled-terminal', 'sending'],
+    ['folder-completed-terminal', 'sending'],
   ]);
+  const folderMessages = new Map<string, unknown[]>();
+
+  function deferred() {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => { resolve = done; });
+    return { promise, resolve };
+  }
 
   function messagesFor(folderId: string, offset: number) {
-    if (folderId !== 'folder-sync') return [];
+    if (folderId !== 'folder-sync') return offset === 0 ? folderMessages.get(folderId) ?? [] : [];
     if (offset === 0) {
       return [
         {
@@ -81,17 +99,44 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
     upstream.post('/sender/listmessages', async (request) => {
       requests.push({ method: request.method, url: request.url, body: request.body });
       const body = request.body as { folder_id: string; offset?: number };
-      return { messages: messagesFor(body.folder_id, body.offset ?? 0), total: body.folder_id === 'folder-sync' ? 1001 : 0 };
+      if (messagesBarrier?.folderId === body.folder_id && (body.offset ?? 0) === 0) {
+        messagesBarrier.markEntered();
+        await messagesBarrier.released;
+      }
+      const messages = messagesFor(body.folder_id, body.offset ?? 0);
+      return { messages, total: body.folder_id === 'folder-sync' ? 1001 : messages.length };
     });
-    upstream.post('/sender/edit', async (request) => {
+    upstream.post('/sender/edit', async (request, reply) => {
       requests.push({ method: request.method, url: request.url, body: request.body });
-      return { success: true };
+      const body = request.body as { folder_id: string; action: 'stop' | 'continue' | 'delete' };
+      if (body.action === 'stop' && body.folder_id === failStopFolder) {
+        failStopFolder = null;
+        return reply.code(500).send({ error: 'stop failed' });
+      }
+      const status = body.action === 'stop' ? 'paused' : body.action === 'continue' ? 'scheduled' : 'deleting';
+      folderStatuses.set(body.folder_id, status);
+      if (raceAfterEdit?.folderId === body.folder_id) {
+        await basePrisma.whatsAppCampaign.update({
+          where: { id: raceAfterEdit.campaignId },
+          data: {
+            status: raceAfterEdit.status,
+            ...(raceAfterEdit.status === 'COMPLETED' ? { completedAt: new Date() } : { canceledAt: new Date() }),
+          },
+        });
+        folderStatuses.set(body.folder_id, raceAfterEdit.status === 'COMPLETED' ? 'done' : 'deleting');
+        raceAfterEdit = null;
+      }
+      return reply.send({ folder_id: body.folder_id, status });
     });
-    upstream.post('/sender/advanced', async (request) => {
+    upstream.post('/sender/advanced', async (request, reply) => {
       requests.push({ method: request.method, url: request.url, body: request.body });
+      if (failNextAdvanced) {
+        failNextAdvanced = false;
+        return reply.code(500).send({ error: 'replacement failed' });
+      }
       const folderId = `folder-new-${nextFolder++}`;
-      folderStatuses.set(folderId, 'Active');
-      return { folder_id: folderId, status: 'Active', created_at: '2026-08-01T12:00:00.000Z' };
+      folderStatuses.set(folderId, 'scheduled');
+      return { folder_id: folderId, status: 'scheduled', created_at: '2026-08-01T12:00:00.000Z' };
     });
     await upstream.listen({ host: '127.0.0.1', port: 0 });
     const address = upstream.server.address();
@@ -146,6 +191,7 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
     remoteFolderId?: string;
     scheduledAt?: Date;
     name?: string;
+    content?: typeof content | { primary: { type: 'image'; mediaId: string }; sequence: [] };
   }) {
     return basePrisma.whatsAppCampaign.create({ data: {
       id: input.id,
@@ -154,7 +200,7 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       name: input.name ?? input.id,
       category: 'UTILITY',
       audienceFilter: { type: 'SUPPORTERS', selectedIds: [] },
-      content,
+      content: input.content ?? content,
       consentAt: new Date('2026-08-01T08:00:00.000Z'),
       scheduledAt: input.scheduledAt,
       status: input.status ?? 'QUEUED',
@@ -200,7 +246,7 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       });
       expect(response.statusCode).toBe(200);
       expect(response.json().campaign).toMatchObject({
-        id: 'campaign-sync', status: 'COMPLETED', remoteFolderStatus: 'Completed',
+        id: 'campaign-sync', status: 'COMPLETED', remoteFolderStatus: 'done',
         queuedCount: 2, sentCount: 2, deliveredCount: 1, readCount: 1, playedCount: 0,
       });
 
@@ -221,12 +267,12 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
         { folder_id: 'folder-sync', limit: 1000, offset: 1000 },
       ]);
 
-      folderStatuses.set('folder-sync', 'Active');
+      folderStatuses.set('folder-sync', 'sending');
       const delayedFolder = await app.inject({
         method: 'POST', url: '/whatsapp/campaigns/campaign-sync/sync', headers: auth(),
       });
       expect(delayedFolder.json().campaign).toMatchObject({
-        status: 'COMPLETED', remoteFolderStatus: 'Completed', sentCount: 2, readCount: 1,
+        status: 'COMPLETED', remoteFolderStatus: 'done', sentCount: 2, readCount: 1,
       });
     });
 
@@ -234,7 +280,7 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       await createCampaign({ id: 'campaign-canceled-terminal', status: 'CANCELED', remoteFolderId: 'folder-canceled-terminal' });
       await createCampaign({ id: 'campaign-completed-terminal', status: 'COMPLETED', remoteFolderId: 'folder-completed-terminal' });
       await createCampaign({ id: 'campaign-active-batch', status: 'QUEUED', remoteFolderId: 'folder-active-batch' });
-      folderStatuses.set('folder-active-batch', 'Active');
+      folderStatuses.set('folder-active-batch', 'sending');
       const beforeMessages = requests.filter(({ url }) => url === '/sender/listmessages').length;
 
       const response = await app.inject({ method: 'POST', url: '/whatsapp/campaigns/sync', headers: auth() });
@@ -244,10 +290,154 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       expect((await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-canceled-terminal' } })).status).toBe('CANCELED');
       expect((await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-completed-terminal' } })).status).toBe('COMPLETED');
     });
+
+    test('does not regress a READ webhook that lands while remote sync is waiting', async () => {
+      await createCampaign({ id: 'campaign-sync-race', status: 'SENDING', remoteFolderId: 'folder-sync-race' });
+      await createRecipient({
+        id: 'recipient-sync-race', campaignId: 'campaign-sync-race', phone: '5511988888888',
+        status: 'QUEUED', externalMessageIds: ['message-sync-race'],
+      });
+      folderStatuses.set('folder-sync-race', 'sending');
+      folderMessages.set('folder-sync-race', [{
+        messageid: 'message-sync-race', chatid: '5511988888888@s.whatsapp.net',
+        sender: '5511988888888', status: 'Sent', timestamp: '2026-08-01T10:04:00.000Z',
+      }]);
+      const entered = deferred();
+      const released = deferred();
+      messagesBarrier = {
+        folderId: 'folder-sync-race', entered: entered.promise, markEntered: entered.resolve,
+        released: released.promise, release: released.resolve,
+      };
+
+      const syncing = app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-sync-race/sync', headers: auth(),
+      });
+      await messagesBarrier.entered;
+      const webhook = await app.inject({
+        method: 'POST', url: '/public/whatsapp/webhook?secret=lifecycle-webhook-secret',
+        payload: {
+          event: 'messages_update',
+          data: {
+            messageid: 'message-sync-race', chatid: '5511988888888@s.whatsapp.net',
+            sender_pn: '5511988888888', status: 'Read', wasSentByApi: true,
+            messageTimestamp: 1785578700,
+          },
+        },
+      });
+      expect(webhook.statusCode).toBe(202);
+      messagesBarrier.release();
+      const response = await syncing;
+      messagesBarrier = null;
+
+      expect(response.statusCode).toBe(200);
+      expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'recipient-sync-race' } })).status)
+        .toBe('READ');
+      expect((await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-sync-race' } })).readCount)
+        .toBeGreaterThanOrEqual(1);
+    });
+
+    test('preserves a concurrent completion, terminal folder metadata, and counter maxima during sync', async () => {
+      await createCampaign({
+        id: 'campaign-sync-complete-race', status: 'SENDING',
+        remoteFolderId: 'folder-sync-complete-race',
+      });
+      await createRecipient({
+        id: 'recipient-sync-complete-race', campaignId: 'campaign-sync-complete-race',
+        phone: '5511988888877', status: 'QUEUED',
+      });
+      folderStatuses.set('folder-sync-complete-race', 'sending');
+      folderMessages.set('folder-sync-complete-race', [{
+        messageid: 'message-sync-complete-race', chatid: '5511988888877@s.whatsapp.net',
+        sender: '5511988888877', status: 'Sent', timestamp: '2026-08-01T10:04:00.000Z',
+      }]);
+      const entered = deferred();
+      const released = deferred();
+      messagesBarrier = {
+        folderId: 'folder-sync-complete-race', entered: entered.promise, markEntered: entered.resolve,
+        released: released.promise, release: released.resolve,
+      };
+
+      const syncing = app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-sync-complete-race/sync', headers: auth(),
+      });
+      await messagesBarrier.entered;
+      const completedAt = new Date('2026-08-01T10:10:00.000Z');
+      await basePrisma.whatsAppCampaign.update({
+        where: { id: 'campaign-sync-complete-race' },
+        data: {
+          status: 'COMPLETED', remoteFolderStatus: 'done', completedAt,
+          queuedCount: 9, sentCount: 8, failedCount: 7, deliveredCount: 6,
+          readCount: 5, playedCount: 4,
+        },
+      });
+      messagesBarrier.release();
+      const response = await syncing;
+      messagesBarrier = null;
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().campaign).toMatchObject({
+        status: 'COMPLETED', remoteFolderStatus: 'done',
+        queuedCount: 9, sentCount: 8, failedCount: 7, deliveredCount: 6,
+        readCount: 5, playedCount: 4, completedAt: completedAt.toISOString(),
+      });
+    });
+
+    test('preserves concurrent cancellation and its deleting folder metadata during stale sync', async () => {
+      await createCampaign({
+        id: 'campaign-sync-cancel-race', status: 'SENDING',
+        remoteFolderId: 'folder-sync-cancel-race',
+      });
+      await createRecipient({
+        id: 'recipient-sync-cancel-race', campaignId: 'campaign-sync-cancel-race',
+        phone: '5511988888866', status: 'QUEUED',
+      });
+      folderStatuses.set('folder-sync-cancel-race', 'sending');
+      folderMessages.set('folder-sync-cancel-race', [{
+        messageid: 'message-sync-cancel-race', chatid: '5511988888866@s.whatsapp.net',
+        sender: '5511988888866', status: 'Sent', timestamp: '2026-08-01T10:04:00.000Z',
+      }]);
+      const entered = deferred();
+      const released = deferred();
+      messagesBarrier = {
+        folderId: 'folder-sync-cancel-race', entered: entered.promise, markEntered: entered.resolve,
+        released: released.promise, release: released.resolve,
+      };
+
+      const syncing = app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-sync-cancel-race/sync', headers: auth(),
+      });
+      await messagesBarrier.entered;
+      const canceling = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-sync-cancel-race/cancel', headers: auth(),
+      });
+      expect(canceling.json().campaign).toMatchObject({
+        status: 'CANCELING', remoteFolderStatus: 'deleting',
+      });
+      messagesBarrier.release();
+      const response = await syncing;
+      messagesBarrier = null;
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().campaign).toMatchObject({
+        status: 'CANCELING', remoteFolderStatus: 'deleting',
+      });
+      expect((await prisma.whatsAppRecipient.findUnique({
+        where: { id: 'recipient-sync-cancel-race' },
+      })).status).toBe('SENT');
+
+      folderStatuses.delete('folder-sync-cancel-race');
+      const confirmed = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-sync-cancel-race/sync', headers: auth(),
+      });
+      expect(confirmed.json().campaign.status).toBe('CANCELED');
+      expect((await prisma.whatsAppRecipient.findUnique({
+        where: { id: 'recipient-sync-cancel-race' },
+      })).status).toBe('SENT');
+    });
   });
 
   describe('campaign controls', () => {
-    test('maps pause, resume and cancel to stop, continue and delete and keeps cancellation local', async () => {
+    test('uses official pause/resume states and confirms deleting cancellation only after the folder disappears', async () => {
       for (const [id, status, folder] of [
         ['campaign-pause', 'SENDING', 'folder-pause'],
         ['campaign-resume', 'PAUSED', 'folder-resume'],
@@ -262,13 +452,24 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       const cancel = await app.inject({ method: 'POST', url: '/whatsapp/campaigns/campaign-cancel/cancel', headers: auth() });
       expect([pause.statusCode, resume.statusCode, cancel.statusCode]).toEqual([200, 200, 200]);
       expect([pause.json().campaign.status, resume.json().campaign.status, cancel.json().campaign.status]).toEqual([
-        'PAUSED', 'SENDING', 'CANCELED',
+        'PAUSED', 'SCHEDULED', 'CANCELING',
       ]);
       expect(requests.filter(({ url }) => url === '/sender/edit').slice(-3).map(({ body }) => body)).toEqual([
         { folder_id: 'folder-pause', action: 'stop' },
         { folder_id: 'folder-resume', action: 'continue' },
         { folder_id: 'folder-cancel', action: 'delete' },
       ]);
+      expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'recipient-cancel' } })).status).toBe('QUEUED');
+
+      const deleting = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-cancel/sync', headers: auth(),
+      });
+      expect(deleting.json().campaign.status).toBe('CANCELING');
+      folderStatuses.delete('folder-cancel');
+      const confirmed = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-cancel/sync', headers: auth(),
+      });
+      expect(confirmed.json().campaign.status).toBe('CANCELED');
       expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'recipient-cancel' } })).status).toBe('CANCELED');
     });
 
@@ -284,7 +485,28 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       expect((await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-terminal-control' } })).status).toBe('COMPLETED');
     });
 
-    test('reschedules and edits only unstarted campaigns by deleting and recreating their folder', async () => {
+    test('rejects edit and reschedule while asynchronous cancellation is in progress', async () => {
+      await createCampaign({
+        id: 'campaign-canceling-edit', status: 'CANCELING',
+        remoteFolderId: 'folder-canceling-edit', scheduledAt: new Date('2099-01-02T10:00:00.000Z'),
+      });
+      const beforeRemote = requests.length;
+      const edit = await app.inject({
+        method: 'PATCH', url: '/whatsapp/campaigns/campaign-canceling-edit', headers: auth(),
+        payload: { name: 'Não deve editar' },
+      });
+      const reschedule = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-canceling-edit/reschedule', headers: auth(),
+        payload: { scheduledAt: '2099-01-03T10:00:00.000Z' },
+      });
+
+      expect([edit.statusCode, reschedule.statusCode]).toEqual([409, 409]);
+      expect(requests).toHaveLength(beforeRemote);
+      expect(await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-canceling-edit' } }))
+        .toMatchObject({ status: 'CANCELING', remoteFolderId: 'folder-canceling-edit' });
+    });
+
+    test('reschedules and edits only unstarted campaigns by stopping, replacing, consolidating and then deleting old', async () => {
       await createCampaign({ id: 'campaign-reschedule', status: 'SCHEDULED', remoteFolderId: 'folder-reschedule', scheduledAt: new Date('2099-01-02T10:00:00.000Z') });
       await createRecipient({ id: 'recipient-reschedule', campaignId: 'campaign-reschedule', phone: '5511955555555', name: 'Maria Silva' });
       const reschedule = await app.inject({
@@ -296,9 +518,11 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
         id: 'campaign-reschedule', status: 'SCHEDULED', remoteFolderId: 'folder-new-1',
         scheduledAt: '2099-02-03T12:30:00.000Z',
       });
-      expect(requests.filter(({ url }) => url === '/sender/edit').at(-1)?.body).toEqual({
-        folder_id: 'folder-reschedule', action: 'delete',
-      });
+      expect(requests.slice(-3).map(({ url, body }) => ({ url, body }))).toEqual([
+        { url: '/sender/edit', body: { folder_id: 'folder-reschedule', action: 'stop' } },
+        { url: '/sender/advanced', body: expect.any(Object) },
+        { url: '/sender/edit', body: { folder_id: 'folder-reschedule', action: 'delete' } },
+      ]);
       expect(requests.filter(({ url }) => url === '/sender/advanced').at(-1)?.body).toMatchObject({
         info: 'campaign-reschedule', scheduled_for: 4073805000000,
         messages: [{ number: '5511955555555', type: 'text', text: 'Olá, Maria' }],
@@ -316,9 +540,11 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
         name: 'Campanha editada', remoteFolderId: 'folder-new-2',
         content: { primary: { type: 'text', text: 'Novo texto para {{primeiro_nome}}' }, sequence: [] },
       });
-      expect(requests.filter(({ url }) => url === '/sender/edit').at(-1)?.body).toEqual({
-        folder_id: 'folder-new-1', action: 'delete',
-      });
+      expect(requests.slice(-3).map(({ url, body }) => ({ url, body }))).toEqual([
+        { url: '/sender/edit', body: { folder_id: 'folder-new-1', action: 'stop' } },
+        { url: '/sender/advanced', body: expect.any(Object) },
+        { url: '/sender/edit', body: { folder_id: 'folder-new-1', action: 'delete' } },
+      ]);
       expect(requests.filter(({ url }) => url === '/sender/advanced').at(-1)?.body).toMatchObject({
         info: 'Campanha editada',
         messages: [{ number: '5511955555555', type: 'text', text: 'Novo texto para Maria' }],
@@ -336,6 +562,104 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       expect(requests).toHaveLength(beforeRemote);
     });
 
+    test('resumes the old stopped folder when replacement creation fails', async () => {
+      await createCampaign({
+        id: 'campaign-replace-remote-fail', status: 'SCHEDULED',
+        remoteFolderId: 'folder-replace-remote-fail', scheduledAt: new Date('2099-01-02T10:00:00.000Z'),
+      });
+      await createRecipient({
+        id: 'recipient-replace-remote-fail', campaignId: 'campaign-replace-remote-fail',
+        phone: '5511911111111',
+      });
+      folderStatuses.set('folder-replace-remote-fail', 'scheduled');
+      failNextAdvanced = true;
+      const response = await app.inject({
+        method: 'PATCH', url: '/whatsapp/campaigns/campaign-replace-remote-fail', headers: auth(),
+        payload: { name: 'Não consolidada' },
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(requests.filter(({ url }) => url === '/sender/edit').slice(-2).map(({ body }) => body)).toEqual([
+        { folder_id: 'folder-replace-remote-fail', action: 'stop' },
+        { folder_id: 'folder-replace-remote-fail', action: 'continue' },
+      ]);
+      expect(await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-replace-remote-fail' } })).toMatchObject({
+        name: 'campaign-replace-remote-fail', remoteFolderId: 'folder-replace-remote-fail', status: 'SCHEDULED',
+      });
+      expect(folderStatuses.get('folder-replace-remote-fail')).toBe('scheduled');
+    });
+
+    test('deletes the replacement and resumes old when local consolidation fails', async () => {
+      await createCampaign({
+        id: 'campaign-replace-local-fail', status: 'SCHEDULED',
+        remoteFolderId: 'folder-replace-local-fail', scheduledAt: new Date('2099-01-02T10:00:00.000Z'),
+      });
+      await createRecipient({
+        id: 'recipient-replace-local-fail', campaignId: 'campaign-replace-local-fail',
+        phone: '5511911111122',
+      });
+      folderStatuses.set('folder-replace-local-fail', 'scheduled');
+      await basePrisma.$executeRawUnsafe(`
+        CREATE OR REPLACE FUNCTION reject_replacement_consolidation() RETURNS trigger AS $$
+        BEGIN
+          IF OLD.id = 'campaign-replace-local-fail' AND NEW.remote_folder_id <> OLD.remote_folder_id THEN
+            RAISE EXCEPTION 'deterministic consolidation failure';
+          END IF;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql
+      `);
+      await basePrisma.$executeRawUnsafe(`
+        CREATE TRIGGER reject_replacement_consolidation_trigger
+        BEFORE UPDATE ON whatsapp_campaigns
+        FOR EACH ROW EXECUTE FUNCTION reject_replacement_consolidation()
+      `);
+
+      let response;
+      try {
+        response = await app.inject({
+          method: 'PATCH', url: '/whatsapp/campaigns/campaign-replace-local-fail', headers: auth(),
+          payload: { name: 'Não persistida' },
+        });
+      } finally {
+        await basePrisma.$executeRawUnsafe(
+          'DROP TRIGGER reject_replacement_consolidation_trigger ON whatsapp_campaigns',
+        );
+        await basePrisma.$executeRawUnsafe('DROP FUNCTION reject_replacement_consolidation()');
+      }
+
+      expect(response.statusCode).toBe(503);
+      const replacementId = requests.filter(({ url }) => url === '/sender/advanced').at(-1)?.body;
+      expect(replacementId).toBeDefined();
+      expect(requests.filter(({ url }) => url === '/sender/edit').slice(-3).map(({ body }) => body)).toEqual([
+        { folder_id: 'folder-replace-local-fail', action: 'stop' },
+        { folder_id: expect.stringMatching(/^folder-new-/), action: 'delete' },
+        { folder_id: 'folder-replace-local-fail', action: 'continue' },
+      ]);
+      expect(await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-replace-local-fail' } })).toMatchObject({
+        name: 'campaign-replace-local-fail', remoteFolderId: 'folder-replace-local-fail', status: 'SCHEDULED',
+      });
+      expect([...folderStatuses].filter(([, status]) => ['scheduled', 'sending', 'paused'].includes(status))
+        .map(([id]) => id)).toContain('folder-replace-local-fail');
+    });
+
+    test('reconciles instead of overwriting a concurrent terminal transition after remote pause', async () => {
+      await createCampaign({ id: 'campaign-pause-race', status: 'SENDING', remoteFolderId: 'folder-pause-race' });
+      folderStatuses.set('folder-pause-race', 'sending');
+      raceAfterEdit = {
+        folderId: 'folder-pause-race', campaignId: 'campaign-pause-race', status: 'COMPLETED',
+      };
+
+      const response = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-pause-race/pause', headers: auth(),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().campaign.status).toBe('COMPLETED');
+      expect((await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-pause-race' } })).status)
+        .toBe('COMPLETED');
+    });
+
     test('retries failed recipients as a new audit campaign and leaves the terminal original immutable', async () => {
       await createCampaign({ id: 'campaign-retry', status: 'FAILED', remoteFolderId: 'folder-failed' });
       await createRecipient({ id: 'recipient-retry-failed', campaignId: 'campaign-retry', phone: '5511933333333', status: 'FAILED', name: 'Falhou' });
@@ -348,8 +672,9 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       });
       expect(response.statusCode).toBe(200);
       expect(response.json().campaign).toMatchObject({
-        name: 'campaign-retry (retry)', status: 'QUEUED', remoteFolderId: 'folder-new-3',
+        name: 'campaign-retry (retry)', status: 'QUEUED', remoteFolderId: expect.stringMatching(/^folder-new-/),
         createdById: retryCoordinatorId,
+        retryOfCampaignId: 'campaign-retry',
         audienceFilter: { type: 'RETRY', retryOfCampaignId: 'campaign-retry' },
         totalRecipients: 1, validRecipients: 1, queuedCount: 1, failedCount: 0,
       });
@@ -373,6 +698,259 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
         phoneNormalized: '5511933333333', personName: 'Falhou', status: 'QUEUED',
         externalMessageIds: [],
       });
+    });
+
+    test('serializes concurrent retries of one parent and returns the same child', async () => {
+      await createCampaign({ id: 'campaign-retry-concurrent', status: 'FAILED' });
+      await createRecipient({
+        id: 'recipient-retry-concurrent', campaignId: 'campaign-retry-concurrent',
+        phone: '5511911110001', status: 'FAILED', name: 'Concorrente',
+      });
+      const beforeAdvanced = requests.filter(({ url }) => url === '/sender/advanced').length;
+      const invoke = () => app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-retry-concurrent/retry-failed',
+        headers: {
+          authorization: `Bearer ${retryCoordinatorToken}`,
+          'idempotency-key': 'retry-concurrent-idempotency-key',
+        },
+      });
+
+      const responses = await Promise.all([invoke(), invoke()]);
+
+      expect(responses.map(({ statusCode }) => statusCode)).toEqual([200, 200]);
+      expect(responses[0].json().campaign.id).toBe(responses[1].json().campaign.id);
+      expect(responses[0].json().campaign).toMatchObject({
+        retryOfCampaignId: 'campaign-retry-concurrent',
+        idempotencyKey: 'retry-concurrent-idempotency-key',
+      });
+      expect(requests.filter(({ url }) => url === '/sender/advanced')).toHaveLength(beforeAdvanced + 1);
+      expect(await prisma.whatsAppCampaign.count({
+        where: { retryOfCampaignId: 'campaign-retry-concurrent' },
+      })).toBe(1);
+    });
+
+    test('preflights configuration before creating a retry audit', async () => {
+      await createCampaign({ id: 'campaign-retry-preflight', status: 'FAILED' });
+      await createRecipient({
+        id: 'recipient-retry-preflight', campaignId: 'campaign-retry-preflight',
+        phone: '5511911110002', status: 'FAILED', name: 'Preflight',
+      });
+      const storedConfig = await basePrisma.whatsAppConfig.findUniqueOrThrow({
+        where: { tenantId: tenant.id },
+      });
+      await basePrisma.whatsAppConfig.delete({ where: { tenantId: tenant.id } });
+      let response;
+      try {
+        response = await app.inject({
+          method: 'POST', url: '/whatsapp/campaigns/campaign-retry-preflight/retry-failed',
+          headers: { authorization: `Bearer ${retryCoordinatorToken}` },
+        });
+      } finally {
+        await basePrisma.whatsAppConfig.create({ data: storedConfig });
+      }
+
+      expect(response.statusCode).toBe(503);
+      expect(await prisma.whatsAppCampaign.count({
+        where: { name: 'campaign-retry-preflight (retry)' },
+      })).toBe(0);
+    });
+
+    test('preflights frozen media before creating a retry audit', async () => {
+      await createCampaign({
+        id: 'campaign-retry-media-preflight', status: 'FAILED',
+        content: { primary: { type: 'image', mediaId: 'missing-retry-media' }, sequence: [] },
+      });
+      await createRecipient({
+        id: 'recipient-retry-media-preflight', campaignId: 'campaign-retry-media-preflight',
+        phone: '5511911110092', status: 'FAILED', name: 'Media preflight',
+      });
+      const beforeAdvanced = requests.filter(({ url }) => url === '/sender/advanced').length;
+
+      const response = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-retry-media-preflight/retry-failed',
+        headers: { authorization: `Bearer ${retryCoordinatorToken}` },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ error: 'Campaign media is no longer available.' });
+      expect(await prisma.whatsAppCampaign.count({
+        where: { retryOfCampaignId: 'campaign-retry-media-preflight' },
+      })).toBe(0);
+      expect(requests.filter(({ url }) => url === '/sender/advanced')).toHaveLength(beforeAdvanced);
+    });
+
+    test('marks the child failed if local consolidation fails after remote acceptance', async () => {
+      await createCampaign({ id: 'campaign-retry-local-fail', status: 'FAILED' });
+      await createRecipient({
+        id: 'recipient-retry-local-fail', campaignId: 'campaign-retry-local-fail',
+        phone: '5511911110003', status: 'FAILED', name: 'Local fail',
+      });
+      await basePrisma.$executeRawUnsafe(`
+        CREATE OR REPLACE FUNCTION reject_retry_queue_consolidation() RETURNS trigger AS $$
+        BEGIN
+          IF NEW.name = 'campaign-retry-local-fail (retry)' AND NEW.status = 'QUEUED' THEN
+            RAISE EXCEPTION 'deterministic retry consolidation failure';
+          END IF;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql
+      `);
+      await basePrisma.$executeRawUnsafe(`
+        CREATE TRIGGER reject_retry_queue_consolidation_trigger
+        BEFORE UPDATE ON whatsapp_campaigns
+        FOR EACH ROW EXECUTE FUNCTION reject_retry_queue_consolidation()
+      `);
+      let response;
+      try {
+        response = await app.inject({
+          method: 'POST', url: '/whatsapp/campaigns/campaign-retry-local-fail/retry-failed',
+          headers: { authorization: `Bearer ${retryCoordinatorToken}` },
+        });
+      } finally {
+        await basePrisma.$executeRawUnsafe(
+          'DROP TRIGGER reject_retry_queue_consolidation_trigger ON whatsapp_campaigns',
+        );
+        await basePrisma.$executeRawUnsafe('DROP FUNCTION reject_retry_queue_consolidation()');
+      }
+
+      expect(response.statusCode).toBe(503);
+      const child = await prisma.whatsAppCampaign.findFirstOrThrow({
+        where: { retryOfCampaignId: 'campaign-retry-local-fail' },
+        include: { recipients: true },
+      });
+      expect(child).toMatchObject({ status: 'FAILED', failedCount: 1 });
+      expect(child.recipients).toHaveLength(1);
+      expect(child.recipients[0].status).toBe('FAILED');
+    });
+
+    test('allows a terminal failed retry child to be retried as a new parent', async () => {
+      await createCampaign({ id: 'campaign-retry-remote-fail', status: 'FAILED' });
+      await createRecipient({
+        id: 'recipient-retry-remote-fail', campaignId: 'campaign-retry-remote-fail',
+        phone: '5511911110004', status: 'FAILED', name: 'Remote fail',
+      });
+      failNextAdvanced = true;
+      const failedResponse = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-retry-remote-fail/retry-failed',
+        headers: {
+          authorization: `Bearer ${retryCoordinatorToken}`,
+          'idempotency-key': 'retry-failed-child-key',
+        },
+      });
+      expect(failedResponse.statusCode).toBe(502);
+      const failedChild = await prisma.whatsAppCampaign.findFirstOrThrow({
+        where: { retryOfCampaignId: 'campaign-retry-remote-fail' },
+      });
+      expect(failedChild).toMatchObject({ status: 'FAILED', idempotencyKey: 'retry-failed-child-key' });
+
+      const retried = await app.inject({
+        method: 'POST', url: `/whatsapp/campaigns/${failedChild.id}/retry-failed`,
+        headers: {
+          authorization: `Bearer ${retryCoordinatorToken}`,
+          'idempotency-key': 'retry-grandchild-key',
+        },
+      });
+      expect(retried.statusCode).toBe(200);
+      expect(retried.json().campaign).toMatchObject({
+        status: 'QUEUED', retryOfCampaignId: failedChild.id, idempotencyKey: 'retry-grandchild-key',
+      });
+    });
+  });
+
+  describe('remote suppression reconciliation', () => {
+    test('rebuilds a mixed queued folder without the suppressed or already sent contacts', async () => {
+      const suppressedPhone = '5511991111001';
+      const remainingPhone = '5511991111002';
+      const sentPhone = '5511991111003';
+      await createCampaign({ id: 'campaign-suppression-mixed', status: 'QUEUED', remoteFolderId: 'folder-suppression-mixed' });
+      await createRecipient({ id: 'suppression-mixed-target', campaignId: 'campaign-suppression-mixed', phone: suppressedPhone, status: 'QUEUED' });
+      await createRecipient({ id: 'suppression-mixed-remaining', campaignId: 'campaign-suppression-mixed', phone: remainingPhone, status: 'PENDING' });
+      await createRecipient({ id: 'suppression-mixed-sent', campaignId: 'campaign-suppression-mixed', phone: sentPhone, status: 'SENT' });
+      folderStatuses.set('folder-suppression-mixed', 'sending');
+      const before = requests.length;
+
+      const response = await app.inject({
+        method: 'POST', url: '/whatsapp/suppressions', headers: auth(),
+        payload: { phone: suppressedPhone, reason: 'Pedido manual' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(requests.slice(before).map(({ url, body }) => ({ url, body }))).toEqual([
+        { url: '/sender/edit', body: { folder_id: 'folder-suppression-mixed', action: 'stop' } },
+        { url: '/sender/advanced', body: expect.objectContaining({
+          messages: [{ number: remainingPhone, type: 'text', text: 'Olá, suppression-mixed-remaining' }],
+        }) },
+        { url: '/sender/edit', body: { folder_id: 'folder-suppression-mixed', action: 'delete' } },
+      ]);
+      expect((await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-suppression-mixed' } })).remoteFolderId)
+        .toMatch(/^folder-new-/);
+      expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'suppression-mixed-target' } })).status)
+        .toBe('CANCELED');
+      expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'suppression-mixed-remaining' } })).status)
+        .toBe('PENDING');
+      expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'suppression-mixed-sent' } })).status)
+        .toBe('SENT');
+    });
+
+    test('waits for remote deletion confirmation when no non-suppressed pending recipient remains', async () => {
+      const suppressedPhone = '5511992222001';
+      await createCampaign({ id: 'campaign-suppression-empty', status: 'QUEUED', remoteFolderId: 'folder-suppression-empty' });
+      await createRecipient({ id: 'suppression-empty-target', campaignId: 'campaign-suppression-empty', phone: suppressedPhone, status: 'QUEUED' });
+      await createRecipient({ id: 'suppression-empty-sent', campaignId: 'campaign-suppression-empty', phone: '5511992222002', status: 'READ' });
+      folderStatuses.set('folder-suppression-empty', 'sending');
+      const advancedBefore = requests.filter(({ url }) => url === '/sender/advanced').length;
+
+      const response = await app.inject({
+        method: 'POST', url: '/whatsapp/suppressions', headers: auth(),
+        payload: { phone: suppressedPhone, reason: 'Pedido manual' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(requests.filter(({ url }) => url === '/sender/advanced')).toHaveLength(advancedBefore);
+      expect(requests.filter(({ url }) => url === '/sender/edit').slice(-2).map(({ body }) => body)).toEqual([
+        { folder_id: 'folder-suppression-empty', action: 'stop' },
+        { folder_id: 'folder-suppression-empty', action: 'delete' },
+      ]);
+      expect(await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-suppression-empty' } })).toMatchObject({
+        status: 'CANCELING', remoteFolderId: 'folder-suppression-empty', remoteFolderStatus: 'deleting',
+      });
+      expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'suppression-empty-target' } })).status)
+        .toBe('CANCELED');
+      expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'suppression-empty-sent' } })).status)
+        .toBe('READ');
+
+      folderStatuses.delete('folder-suppression-empty');
+      const confirmed = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-suppression-empty/sync', headers: auth(),
+      });
+      expect(confirmed.json().campaign.status).toBe('CANCELED');
+    });
+
+    test('records a reconciliable error and does not claim local cancellation when remote stop fails', async () => {
+      const suppressedPhone = '5511993333001';
+      await createCampaign({ id: 'campaign-suppression-stop-fail', status: 'QUEUED', remoteFolderId: 'folder-suppression-stop-fail' });
+      await createRecipient({ id: 'suppression-stop-fail-target', campaignId: 'campaign-suppression-stop-fail', phone: suppressedPhone, status: 'QUEUED' });
+      folderStatuses.set('folder-suppression-stop-fail', 'sending');
+      failStopFolder = 'folder-suppression-stop-fail';
+
+      const response = await app.inject({
+        method: 'POST', url: '/whatsapp/suppressions', headers: auth(),
+        payload: { phone: suppressedPhone, reason: 'Pedido manual' },
+      });
+
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toEqual({
+        error: 'Suppression recorded; remote campaign reconciliation is pending.',
+      });
+      expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'suppression-stop-fail-target' } })).status)
+        .toBe('QUEUED');
+      expect(await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-suppression-stop-fail' } })).toMatchObject({
+        remoteFolderId: 'folder-suppression-stop-fail',
+        lastError: 'Suppression recorded; remote campaign reconciliation is pending.',
+      });
+      expect(await prisma.whatsAppSuppression.findUnique({
+        where: { tenantId_phoneNormalized: { tenantId: tenant.id, phoneNormalized: suppressedPhone } },
+      })).toMatchObject({ active: true });
     });
   });
 }

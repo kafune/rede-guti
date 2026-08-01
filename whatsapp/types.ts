@@ -67,7 +67,7 @@ export interface AudiencePreview {
 }
 
 export type WhatsAppCampaignStatus =
-  | 'DRAFT' | 'SCHEDULED' | 'QUEUED' | 'SENDING' | 'PAUSED' | 'COMPLETED' | 'CANCELED' | 'FAILED';
+  | 'DRAFT' | 'SCHEDULED' | 'QUEUED' | 'SENDING' | 'PAUSED' | 'COMPLETED' | 'CANCELING' | 'CANCELED' | 'FAILED';
 export type WhatsAppRecipientStatus =
   | 'PENDING' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'PLAYED' | 'FAILED' | 'CANCELED';
 
@@ -85,6 +85,8 @@ export interface WhatsAppCampaign {
   remoteFolderId: string | null;
   remoteFolderStatus: string | null;
   remoteFolderCreatedAt: string | null;
+  idempotencyKey?: string | null;
+  retryOfCampaignId?: string | null;
   totalRecipients: number;
   validRecipients: number;
   excludedRecipients: number;
@@ -232,7 +234,7 @@ export interface WhatsAppApi {
   deleteTemplate(id: string): Promise<void>;
   previewCampaign(input: PreviewCampaignInput): Promise<AudiencePreview>;
   sendTestCampaign(input: TestCampaignInput): Promise<{ sent: true }>;
-  createCampaign(input: CreateCampaignInput): Promise<WhatsAppCampaign>;
+  createCampaign(input: CreateCampaignInput, idempotencyKey: string): Promise<WhatsAppCampaign>;
   listCampaigns(): Promise<WhatsAppCampaign[]>;
   getCampaign(id: string): Promise<WhatsAppCampaignDetail>;
   syncCampaigns(): Promise<{ synced: number; campaignIds: string[] }>;
@@ -242,7 +244,7 @@ export interface WhatsAppApi {
   cancelCampaign(id: string): Promise<WhatsAppCampaign>;
   rescheduleCampaign(id: string, scheduledAt: string): Promise<WhatsAppCampaign>;
   updateCampaign(id: string, input: { name?: string; content?: WhatsAppCampaignContent }): Promise<WhatsAppCampaign>;
-  retryFailedRecipients(id: string): Promise<WhatsAppCampaign>;
+  retryFailedRecipients(id: string, idempotencyKey: string): Promise<WhatsAppCampaign>;
   listSuppressions(): Promise<WhatsAppSuppression[]>;
   createSuppression(input: { phone: string; reason: string }): Promise<WhatsAppSuppression>;
   reauthorizeSuppression(id: string): Promise<WhatsAppSuppression>;

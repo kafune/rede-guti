@@ -217,7 +217,7 @@ export class UazapiClient {
     return this.request<Record<string, unknown>>('/sender/advanced', { method: 'POST', body: input });
   }
 
-  listFolders(status?: 'Active' | 'Archived') {
+  listFolders(status?: 'scheduled' | 'sending' | 'paused' | 'done' | 'deleting') {
     const query = status ? `?status=${encodeURIComponent(status)}` : '';
     return this.request<unknown[]>(`/sender/listfolders${query}`);
   }

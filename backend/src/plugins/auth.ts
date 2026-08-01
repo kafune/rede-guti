@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { normalizeRole } from '../lib/access.js';
 import { getTenantId } from '../lib/tenantContext.js';
-import { getAccessDeniedReason } from '../lib/userAccess.js';
+import { getAccessDeniedReason, getCurrentUserAccess } from '../lib/userAccess.js';
 
 // Um JWT só vale no tenant que o emitiu: mesmo que duas instâncias compartilhem
 // o segredo (não deveriam), o claim tenantId impede o replay entre elas.
@@ -34,16 +34,16 @@ export const registerAuth = (app: FastifyInstance) => {
       if (!belongsToCurrentTenant(request.user)) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
-      if (normalizeRole(request.user.role) !== 'COORDENADOR') {
-        return reply.code(403).send({ error: 'Forbidden' });
-      }
     } catch {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
 
-    const denied = await getAccessDeniedReason(request.user.sub);
-    if (denied) {
-      return reply.code(401).send({ error: denied });
+    const currentUser = await getCurrentUserAccess(request.user.sub);
+    if (!currentUser || !currentUser.active) {
+      return reply.code(401).send({ error: 'Conta desativada. Fale com a coordenação.' });
+    }
+    if (normalizeRole(currentUser.role) !== 'COORDENADOR') {
+      return reply.code(403).send({ error: 'Forbidden' });
     }
   });
 };

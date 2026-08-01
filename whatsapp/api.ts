@@ -50,8 +50,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 const body = (value: unknown): Pick<RequestInit, 'body'> => ({ body: JSON.stringify(value) });
-const campaignAction = async (id: string, action: 'pause' | 'resume' | 'cancel' | 'sync' | 'retry-failed') =>
-  (await request<{ campaign: WhatsAppCampaign }>(`/whatsapp/campaigns/${id}/${action}`, { method: 'POST' })).campaign;
+const campaignAction = async (
+  id: string,
+  action: 'pause' | 'resume' | 'cancel' | 'sync' | 'retry-failed',
+  idempotencyKey?: string,
+) => (await request<{ campaign: WhatsAppCampaign }>(`/whatsapp/campaigns/${id}/${action}`, {
+  method: 'POST',
+  ...(idempotencyKey === undefined ? {} : { headers: { 'Idempotency-Key': idempotencyKey } }),
+})).campaign;
 
 export const whatsappApi: WhatsAppApi = {
   getInstance: () => request<WhatsAppInstance>('/whatsapp/instance'),
@@ -77,8 +83,10 @@ export const whatsappApi: WhatsAppApi = {
     request<AudiencePreview>('/whatsapp/campaigns/preview', { method: 'POST', ...body(input) }),
   sendTestCampaign: (input: TestCampaignInput) =>
     request<{ sent: true }>('/whatsapp/campaigns/test', { method: 'POST', ...body(input) }),
-  createCampaign: async (input: CreateCampaignInput) =>
-    (await request<{ campaign: WhatsAppCampaign }>('/whatsapp/campaigns', { method: 'POST', ...body(input) })).campaign,
+  createCampaign: async (input: CreateCampaignInput, idempotencyKey: string) =>
+    (await request<{ campaign: WhatsAppCampaign }>('/whatsapp/campaigns', {
+      method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, ...body(input),
+    })).campaign,
   listCampaigns: async () => (await request<{ campaigns: WhatsAppCampaign[] }>('/whatsapp/campaigns')).campaigns,
   getCampaign: async (id) =>
     (await request<{ campaign: WhatsAppCampaignDetail }>(`/whatsapp/campaigns/${id}`)).campaign,
@@ -93,7 +101,7 @@ export const whatsappApi: WhatsAppApi = {
     })).campaign,
   updateCampaign: async (id, input: { name?: string; content?: WhatsAppCampaignContent }) =>
     (await request<{ campaign: WhatsAppCampaign }>(`/whatsapp/campaigns/${id}`, { method: 'PATCH', ...body(input) })).campaign,
-  retryFailedRecipients: (id) => campaignAction(id, 'retry-failed'),
+  retryFailedRecipients: (id, idempotencyKey) => campaignAction(id, 'retry-failed', idempotencyKey),
   listSuppressions: async () => (await request<{ suppressions: WhatsAppSuppression[] }>('/whatsapp/suppressions')).suppressions,
   createSuppression: async (input) =>
     (await request<{ suppression: WhatsAppSuppression }>('/whatsapp/suppressions', { method: 'POST', ...body(input) })).suppression,

@@ -71,6 +71,17 @@ describe('TemplatesPanel', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Modelo atualizado');
   });
 
+  it('sends null when an existing template purpose is cleared', async () => {
+    const api = apiForTemplates();
+    render(<TemplatesPanel api={api} content={content} category="UTILITY" onLoad={vi.fn()} />);
+    const user = await openPanel();
+    await user.click(screen.getByRole('button', { name: 'Editar Boas-vindas' }));
+    await user.clear(screen.getByLabelText('Finalidade do modelo'));
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+
+    expect(api.updateTemplate).toHaveBeenCalledWith('template-1', expect.objectContaining({ purpose: null }));
+  });
+
   it('loads and favorites a template with visible confirmation', async () => {
     const api = apiForTemplates();
     const onLoad = vi.fn();

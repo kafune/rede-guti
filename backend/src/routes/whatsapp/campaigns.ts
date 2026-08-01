@@ -26,6 +26,7 @@ import type { WhatsAppCampaignContent } from '../../whatsapp/types.js';
 import { UazapiError } from '../../whatsapp/uazapi/client.js';
 
 const id = z.string().trim().min(1).max(200);
+const idempotencyKeySchema = z.string().trim().min(1).max(200);
 const ids = z.array(id).max(10_000).optional();
 const text = z.string().trim().min(1).max(10_000);
 const optionalText = z.string().trim().min(1).max(10_000).optional();
@@ -153,6 +154,12 @@ function sendCampaignError(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
+function idempotencyKey(request: { headers: Record<string, unknown> }) {
+  const value = request.headers['idempotency-key'];
+  if (value === undefined) return { success: true as const, data: undefined };
+  return idempotencyKeySchema.safeParse(value);
+}
+
 export async function whatsappCampaignRoutes(app: FastifyInstance) {
   app.post('/campaigns/preview', async (request, reply) => {
     const input = previewSchema.safeParse(request.body);
@@ -183,13 +190,14 @@ export async function whatsappCampaignRoutes(app: FastifyInstance) {
 
   app.post('/campaigns', async (request, reply) => {
     const input = createSchema.safeParse(request.body);
-    if (!input.success) return reply.code(400).send({ error: 'Invalid payload' });
+    const commandKey = idempotencyKey(request);
+    if (!input.success || !commandKey.success) return reply.code(400).send({ error: 'Invalid payload' });
     try {
       const campaign = await createCampaign({
         ...input.data,
         audienceFilter: input.data.audienceFilter as AudienceFilter,
         content: input.data.content as WhatsAppCampaignContent,
-      }, request.user.sub);
+      }, request.user.sub, commandKey.data);
       return reply.code(201).send({ campaign });
     } catch (error) {
       return sendCampaignError(reply, error);
@@ -257,9 +265,10 @@ export async function whatsappCampaignRoutes(app: FastifyInstance) {
 
   app.post('/campaigns/:id/retry-failed', async (request, reply) => {
     const params = paramsSchema.safeParse(request.params);
-    if (!params.success) return reply.code(400).send({ error: 'Invalid id' });
+    const commandKey = idempotencyKey(request);
+    if (!params.success || !commandKey.success) return reply.code(400).send({ error: 'Invalid id' });
     try {
-      return { campaign: await retryFailedRecipients(params.data.id, request.user.sub) };
+      return { campaign: await retryFailedRecipients(params.data.id, request.user.sub, commandKey.data) };
     } catch (error) {
       return sendCampaignError(reply, error);
     }

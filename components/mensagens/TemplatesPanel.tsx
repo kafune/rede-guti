@@ -38,12 +38,12 @@ export function TemplatesPanel({ api, content, category, onLoad }: {
     event.preventDefault();
     if (!editor || !editor.name.trim() || !editorValid) return;
     const payload = {
-      name: editor.name.trim(), category: editor.category,
-      purpose: editor.purpose.trim() || undefined, content: editor.content,
+      name: editor.name.trim(), category: editor.category, content: editor.content,
     };
+    const purpose = editor.purpose.trim();
     const saved = editor.id
-      ? await run(() => api.updateTemplate(editor.id!, payload), 'Modelo atualizado.')
-      : await run(() => api.createTemplate(payload), 'Modelo criado.');
+      ? await run(() => api.updateTemplate(editor.id!, { ...payload, purpose: purpose || null }), 'Modelo atualizado.')
+      : await run(() => api.createTemplate({ ...payload, ...(purpose ? { purpose } : {}) }), 'Modelo criado.');
     if (saved) setEditor(null);
   };
 

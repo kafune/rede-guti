@@ -22,9 +22,10 @@ const CAMPAIGN_STATUS_ORDER: Record<WhatsAppCampaignStatus, number> = {
   QUEUED: 2,
   SENDING: 3,
   PAUSED: 3,
-  COMPLETED: 4,
-  CANCELED: 4,
-  FAILED: 4,
+  CANCELING: 4,
+  COMPLETED: 5,
+  CANCELED: 5,
+  FAILED: 5,
 };
 const COUNTERS = ['queued', 'sent', 'failed', 'delivered', 'read', 'played', 'replies', 'optOuts'] as const;
 
@@ -34,6 +35,8 @@ function advanceCampaignStatus(
 ): WhatsAppCampaignStatus {
   if (incoming === undefined || TERMINAL_CAMPAIGN_STATUSES.has(current)) return current;
   if (TERMINAL_CAMPAIGN_STATUSES.has(incoming)) return incoming;
+  if (current === 'CANCELING') return current;
+  if (incoming === 'CANCELING') return 'CANCELING';
   if (current === 'PAUSED' && incoming === 'SENDING') return 'SENDING';
   if (incoming === 'PAUSED' && current !== 'DRAFT') return 'PAUSED';
   return CAMPAIGN_STATUS_ORDER[incoming] > CAMPAIGN_STATUS_ORDER[current] ? incoming : current;

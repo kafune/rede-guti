@@ -25,7 +25,7 @@ function campaign(overrides: Partial<WhatsAppCampaign> = {}): WhatsAppCampaign {
     id: 'campaign-1', tenantId: 'tenant-1', createdById: 'coordinator-1', name: 'Campanha',
     status: 'COMPLETED', category: 'UTILITY', audienceFilter: { type: 'SUPPORTERS' }, content,
     consentAt: '2026-08-01T10:00:00.000Z', scheduledAt: null, remoteFolderId: 'folder-1',
-    remoteFolderStatus: 'Completed', remoteFolderCreatedAt: '2026-08-01T10:00:00.000Z',
+    remoteFolderStatus: 'done', remoteFolderCreatedAt: '2026-08-01T10:00:00.000Z',
     totalRecipients: 8, validRecipients: 4, excludedRecipients: 4, queuedCount: 4, sentCount: 4,
     failedCount: 0, deliveredCount: 3, readCount: 2, playedCount: 1, replyCount: 1,
     optOutCount: 1, lastError: null, queuedAt: '2026-08-01T10:00:00.000Z', startedAt: null,
@@ -176,6 +176,24 @@ describe('MensagensPanel', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Mensagem de teste enviada');
   });
 
+  it('requires both a non-empty test phone and test name before enabling test send', async () => {
+    const user = userEvent.setup();
+    render(<MensagensPanel api={fakeApi()} />);
+    await user.click(screen.getByRole('tab', { name: 'Nova campanha' }));
+    await user.click(screen.getByRole('button', { name: 'Continuar para conteúdo' }));
+    await user.type(screen.getByLabelText('Mensagem principal'), 'Olá');
+    await user.click(screen.getByRole('button', { name: 'Gerar prévia' }));
+
+    const send = screen.getByRole('button', { name: 'Enviar teste' });
+    expect(send).toBeDisabled();
+    await user.type(screen.getByLabelText('Telefone de teste'), '11987654321');
+    expect(send).toBeEnabled();
+    await user.clear(screen.getByLabelText('Nome de teste'));
+    expect(send).toBeDisabled();
+    await user.type(screen.getByLabelText('Nome de teste'), '   ');
+    expect(send).toBeDisabled();
+  });
+
   it('requires explicit consent and converts a local schedule once before create', async () => {
     const user = userEvent.setup();
     const createCampaign = vi.fn().mockResolvedValue(campaign());
@@ -192,10 +210,35 @@ describe('MensagensPanel', () => {
     await user.click(screen.getByLabelText('Confirmo que há consentimento para este envio'));
     await user.click(screen.getByRole('button', { name: 'Criar campanha' }));
 
-    expect(createCampaign).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'Mobilização', consentimentoConfirmado: true,
-      scheduledAt: new Date('2026-08-02T09:30').toISOString(),
-    }));
+    expect(createCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Mobilização', consentimentoConfirmado: true,
+        scheduledAt: new Date('2026-08-02T09:30').toISOString(),
+      }),
+      expect.stringMatching(/^[0-9a-f-]{36}$/i),
+    );
+  });
+
+  it('reuses the same campaign command UUID after a failed request', async () => {
+    const user = userEvent.setup();
+    const createCampaign = vi.fn()
+      .mockRejectedValueOnce(new Error('Resposta perdida'))
+      .mockResolvedValue(campaign());
+    render(<MensagensPanel api={fakeApi({ createCampaign })} />);
+    await user.click(screen.getByRole('tab', { name: 'Nova campanha' }));
+    await user.click(screen.getByRole('button', { name: 'Continuar para conteúdo' }));
+    await user.type(screen.getByLabelText('Mensagem principal'), 'Olá');
+    await user.click(screen.getByRole('button', { name: 'Gerar prévia' }));
+    await user.click(screen.getByRole('button', { name: 'Continuar para confirmação' }));
+    await user.type(screen.getByLabelText('Nome da campanha'), 'Comando reutilizado');
+    await user.click(screen.getByLabelText('Confirmo que há consentimento para este envio'));
+
+    await user.click(screen.getByRole('button', { name: 'Criar campanha' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Resposta perdida');
+    await user.click(screen.getByRole('button', { name: 'Criar campanha' }));
+
+    expect(createCampaign).toHaveBeenCalledTimes(2);
+    expect(createCampaign.mock.calls[0][1]).toBe(createCampaign.mock.calls[1][1]);
   });
 
   it('switches across all four functional tabs', async () => {

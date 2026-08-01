@@ -1,14 +1,16 @@
 import { createHash } from 'node:crypto';
-import { prisma } from '../../db.js';
+import { prisma, withAdvisoryLock } from '../../db.js';
 import { getTenantId } from '../../lib/tenantContext.js';
 import { normalizeBrazilianPhone } from '../domain/phone.js';
+import { sanitizeCredentials } from '../domain/crypto.js';
 import type { WhatsAppRecipientStatus } from '../types.js';
+import { reconcileSuppressedPhone } from './campaign-service.js';
 
 type JsonRecord = Record<string, unknown>;
 type TransactionClient = Pick<
   typeof prisma,
   'whatsAppRecipient' | 'whatsAppCampaign' | 'whatsAppInteraction' | 'whatsAppSuppression'
->;
+> & { $executeRawUnsafe: typeof prisma.$executeRawUnsafe };
 
 const record = (value: unknown): JsonRecord =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
@@ -32,6 +34,41 @@ function normalizeWebhookPhone(...values: unknown[]): string | null {
     if (normalized.valid) return normalized.normalized;
   }
   return null;
+}
+
+function boundedString(value: unknown, max = 4_096) {
+  if (typeof value === 'string') return value.trim() ? value.slice(0, max) : null;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value).slice(0, max);
+  return null;
+}
+
+function storedWebhookPayload(input: {
+  eventType: string;
+  messageId: string | null;
+  status: string | null;
+  senderPn: string | null;
+  sender: string | null;
+  chatId: string | null;
+  text: string | null;
+  quotedId: string | null;
+  messageTimestamp: unknown;
+  fromMe: boolean;
+}) {
+  const message = Object.fromEntries(Object.entries({
+    id: boundedString(input.messageId, 500),
+    status: boundedString(input.status, 100),
+    senderPn: boundedString(input.senderPn, 200),
+    sender: boundedString(input.sender, 200),
+    chatId: boundedString(input.chatId, 200),
+    text: boundedString(input.text),
+    quotedId: boundedString(input.quotedId, 500),
+    messageTimestamp: boundedString(input.messageTimestamp, 100),
+    fromMe: input.fromMe,
+  }).filter(([, value]) => value !== null));
+  return sanitizeCredentials({
+    eventType: boundedString(input.eventType, 200) ?? 'unknown',
+    message,
+  });
 }
 
 function webhookDate(value: unknown): Date {
@@ -127,14 +164,25 @@ async function advanceRecipientAtomically(
   recipientId: string,
   status: WhatsAppRecipientStatus,
   occurredAt: Date,
+  externalId: string,
 ) {
+  const claimed = await tx.whatsAppRecipient.updateMany({
+    where: {
+      id: recipientId,
+      tenantId,
+      NOT: { processedWebhookEventIds: { has: externalId } },
+    },
+    data: { processedWebhookEventIds: { push: externalId } },
+  });
+  if (claimed.count === 0) return false;
   const lower = LOWER_RECIPIENT_STATES[status];
-  if (lower.length === 0) return;
+  if (lower.length === 0) return true;
   const field = statusDateField(status);
   await tx.whatsAppRecipient.updateMany({
     where: { id: recipientId, tenantId, status: { in: lower } },
     data: { status, ...(field === undefined ? {} : { [field]: occurredAt }) },
   });
+  return true;
 }
 
 async function refreshCampaignMetricsInTransaction(
@@ -154,17 +202,18 @@ async function refreshCampaignMetricsInTransaction(
   const delivered = recipients.filter(({ status }) => ['DELIVERED', 'READ', 'PLAYED'].includes(status)).length;
   const read = recipients.filter(({ status }) => ['READ', 'PLAYED'].includes(status)).length;
   const played = recipients.filter(({ status }) => status === 'PLAYED').length;
-  await tx.whatsAppCampaign.updateMany({
-    where: { id: campaignId, tenantId },
-    data: {
-      queuedCount: Math.max(campaign.queuedCount, queued),
-      sentCount: Math.max(campaign.sentCount, sent),
-      failedCount: Math.max(campaign.failedCount, failed),
-      deliveredCount: Math.max(campaign.deliveredCount, delivered),
-      readCount: Math.max(campaign.readCount, read),
-      playedCount: Math.max(campaign.playedCount, played),
-    },
-  });
+  await tx.$executeRawUnsafe(`
+    UPDATE "whatsapp_campaigns"
+    SET
+      "queued_count" = GREATEST("queued_count", $1),
+      "sent_count" = GREATEST("sent_count", $2),
+      "failed_count" = GREATEST("failed_count", $3),
+      "delivered_count" = GREATEST("delivered_count", $4),
+      "read_count" = GREATEST("read_count", $5),
+      "played_count" = GREATEST("played_count", $6),
+      "updated_at" = NOW()
+    WHERE "id" = $7 AND "tenant_id" = $8
+  `, queued, sent, failed, delivered, read, played, campaignId, tenantId);
 }
 
 function isUniqueViolation(error: unknown) {
@@ -185,7 +234,8 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
       ? record(root.message)
       : root;
   const context = record(data.context);
-  const quoted = record(data.quoted ?? context.quoted);
+  const quotedValue = data.quoted ?? context.quoted;
+  const quoted = record(quotedValue);
   const eventType = firstString(root.event, root.eventType, root.type, data.event) ?? 'unknown';
   const messageId = firstString(data.messageid, data.messageId, data.message_id, data.id);
   const rawStatus = firstString(data.status, data.messageStatus, root.status);
@@ -193,53 +243,86 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
   const explicitId = firstString(root.eventId, root.event_id, root.webhookId, root.webhook_id, root.id);
   const externalId = explicitId ?? stableFallbackId(eventType, messageId, rawStatus?.toLowerCase() ?? null);
   const phone = normalizeWebhookPhone(
-    data.sender, data.from, data.phone, data.number, data.chatid, data.chatId,
+    data.sender_pn, data.senderPn, data.sender, data.from, data.phone, data.number, data.chatid, data.chatId,
   );
   const text = firstString(data.text, data.body, data.content, record(data.message).text);
   const quotedId = firstString(
+    typeof quotedValue === 'string' ? quotedValue : null,
     data.quotedMessageId, data.quoted_message_id, quoted.messageid, quoted.messageId,
     context.quotedMessageId, context.stanzaId,
   );
-  const occurredAt = webhookDate(data.timestamp ?? data.created_at ?? root.timestamp);
+  const rawMessageTimestamp = data.messageTimestamp ?? data.timestamp ?? data.created_at ?? root.timestamp;
+  const occurredAt = webhookDate(rawMessageTimestamp);
   const fromMe = data.fromMe === true || data.from_me === true || data.wasSentByApi === true;
   const inbound = !fromMe && (text !== null || quotedId !== null || status === null);
   const optOut = inbound && isOptOut(text);
   const tenantId = getTenantId();
+  const payloadForStorage = storedWebhookPayload({
+    eventType,
+    messageId,
+    status: rawStatus,
+    senderPn: firstString(data.sender_pn, data.senderPn),
+    sender: firstString(data.sender, data.from),
+    chatId: firstString(data.chatid, data.chatId),
+    text,
+    quotedId,
+    messageTimestamp: rawMessageTimestamp,
+    fromMe,
+  });
 
-  try {
-    return await prisma.$transaction(async (tx) => {
+  const process = async () => {
+    try {
+      const result = await prisma.$transaction(async (tx) => {
       // Tenant predicates are explicit throughout this transaction. This keeps
       // isolation independent of whether Prisma propagates client extensions
       // to an interactive transaction client in a future adapter release.
-      const duplicate = await tx.whatsAppInteraction.findFirst({
-        where: { tenantId, externalId },
-      });
-      if (duplicate !== null) return { accepted: true, processed: false, duplicate: true };
-
       const recipient = inbound
         ? await recipientForInbound(tx, tenantId, quotedId, phone)
         : await recipientByMessageId(tx, tenantId, messageId);
+
+      if (!inbound && status !== null) {
+        if (recipient === null) return { accepted: true, processed: false, duplicate: false };
+        const claimed = await advanceRecipientAtomically(
+          tx, tenantId, recipient.id, status, occurredAt, externalId,
+        );
+        if (!claimed) return { accepted: true, processed: false, duplicate: true };
+        await refreshCampaignMetricsInTransaction(tx, tenantId, recipient.campaignId);
+        return { accepted: true, processed: true, duplicate: false };
+      }
+
       if (recipient === null && !optOut) {
         return { accepted: true, processed: false, duplicate: false };
       }
 
-      await tx.whatsAppInteraction.create({
-        data: {
-          tenantId,
-          campaignId: recipient?.campaignId ?? null,
-          recipientId: recipient?.id ?? null,
-          externalId,
-          eventType,
-          direction: inbound ? 'INBOUND' : 'OUTBOUND',
-          status: 'RECEIVED',
-          phoneNormalized: phone,
-          payload: payload as any,
-          occurredAt,
-        },
-      });
-
-      if (recipient !== null && status !== null && !inbound) {
-        await advanceRecipientAtomically(tx, tenantId, recipient.id, status, occurredAt);
+      const persistInteraction = recipient !== null || optOut;
+      if (persistInteraction) {
+        const duplicate = await tx.whatsAppInteraction.findFirst({
+          where: { tenantId, externalId },
+        });
+        if (duplicate !== null && duplicate.status !== 'FAILED') {
+          return { accepted: true, processed: false, duplicate: true };
+        }
+        if (duplicate === null) {
+          await tx.whatsAppInteraction.create({
+            data: {
+              tenantId,
+              campaignId: recipient?.campaignId,
+              recipientId: recipient?.id,
+              externalId,
+              eventType,
+              direction: 'INBOUND',
+              status: 'RECEIVED',
+              phoneNormalized: phone,
+              payload: payloadForStorage as any,
+              occurredAt,
+            },
+          });
+        } else {
+          await tx.whatsAppInteraction.updateMany({
+            where: { tenantId, externalId, status: 'FAILED' },
+            data: { status: 'RECEIVED', error: null, payload: payloadForStorage as any, occurredAt },
+          });
+        }
       }
 
       if (inbound && recipient !== null && !optOut) {
@@ -260,10 +343,6 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
             reauthorizedAt: null, reauthorizedById: null,
           },
         });
-        await tx.whatsAppRecipient.updateMany({
-          where: { tenantId, phoneNormalized: phone, status: { in: ['PENDING', 'QUEUED'] } },
-          data: { status: 'CANCELED', canceledAt: occurredAt },
-        });
         if (recipient !== null) {
           await tx.whatsAppCampaign.updateMany({
             where: { id: recipient.campaignId, tenantId }, data: { optOutCount: { increment: 1 } },
@@ -271,17 +350,39 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
         }
       }
 
-      await tx.whatsAppInteraction.updateMany({
-        where: { tenantId, externalId },
-        data: { status: 'PROCESSED', processedAt: new Date() },
-      });
+      if (persistInteraction) {
+        await tx.whatsAppInteraction.updateMany({
+          where: { tenantId, externalId },
+          data: { status: 'PROCESSED', processedAt: new Date() },
+        });
+      }
       if (recipient !== null) {
         await refreshCampaignMetricsInTransaction(tx, tenantId, recipient.campaignId);
       }
       return { accepted: true, processed: true, duplicate: false };
-    }) as WebhookProcessResult;
-  } catch (error) {
-    if (isUniqueViolation(error)) return { accepted: true, processed: false, duplicate: true };
-    throw error;
+      }) as WebhookProcessResult;
+      if (result.processed && optOut && phone !== null) {
+        try {
+          await reconcileSuppressedPhone(phone, occurredAt);
+        } catch (error) {
+          await prisma.whatsAppInteraction.updateMany({
+            where: { tenantId, externalId },
+            data: {
+              status: 'FAILED',
+              error: error instanceof Error ? error.message.slice(0, 1_000) : 'Suppression reconciliation failed.',
+            },
+          });
+          throw error;
+        }
+      }
+      return result;
+    } catch (error) {
+      if (isUniqueViolation(error)) return { accepted: true, processed: false, duplicate: true } as const;
+      throw error;
+    }
+  };
+  if (optOut && phone !== null) {
+    return withAdvisoryLock(`whatsapp:recipient:${tenantId}:${phone}`, process);
   }
+  return process();
 }

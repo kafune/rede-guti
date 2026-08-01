@@ -57,7 +57,15 @@ beforeAll(async () => {
     if (upstreamFailure) {
       return reply.code(500).send({ error: 'token=plain-instance-token; banco interno indisponível' });
     }
-    return { folder_id: 'folder-campaign-1', status: 'Active', created_at: '2026-08-01T12:00:00Z', token: 'remote-secret' };
+    return { folder_id: 'folder-campaign-1', status: 'scheduled', created_at: '2026-08-01T12:00:00Z', token: 'remote-secret' };
+  });
+  upstream.post('/sender/edit', async (request) => {
+    requests.push({ url: request.url, headers: request.headers, body: request.body });
+    const body = request.body as { folder_id: string; action: 'stop' | 'continue' | 'delete' };
+    return {
+      folder_id: body.folder_id,
+      status: body.action === 'stop' ? 'paused' : body.action === 'continue' ? 'scheduled' : 'deleting',
+    };
   });
   await upstream.listen({ host: '127.0.0.1', port: 0 });
   const address = upstream.server.address();
@@ -74,6 +82,19 @@ beforeAll(async () => {
   prisma = db.prisma;
   await basePrisma.tenant.createMany({ data: [tenantA, tenantB], skipDuplicates: true });
   tenantContext.setCurrentTenant(tenantA);
+
+  const testTenants = { in: [tenantA.id, tenantB.id] };
+  await basePrisma.whatsAppInteraction.deleteMany({ where: { tenantId: testTenants } });
+  await basePrisma.whatsAppRecipient.deleteMany({ where: { tenantId: testTenants } });
+  await basePrisma.whatsAppCampaign.deleteMany({ where: { tenantId: testTenants } });
+  await basePrisma.whatsAppSuppression.deleteMany({ where: { tenantId: testTenants } });
+  await basePrisma.whatsAppConfig.deleteMany({ where: { tenantId: testTenants } });
+  await basePrisma.whatsAppMedia.deleteMany({ where: { tenantId: testTenants } });
+  await basePrisma.whatsAppTemplate.deleteMany({ where: { tenantId: testTenants } });
+  await basePrisma.indication.deleteMany({ where: { tenantId: testTenants } });
+  await basePrisma.church.deleteMany({ where: { tenantId: testTenants } });
+  await basePrisma.municipality.deleteMany({ where: { tenantId: testTenants } });
+  await basePrisma.user.deleteMany({ where: { tenantId: testTenants } });
 
   await basePrisma.user.createMany({ data: [
     { id: 'campaign-coordinator', tenantId: tenantA.id, email: 'coord@campaign.test', name: 'Coordenador', passwordHash: 'unused', role: 'COORDENADOR', active: true },
@@ -116,6 +137,13 @@ beforeAll(async () => {
     create: {
       tenantId: tenantA.id, instanceId: 'instance-campaign', instanceName: 'Campanhas', status: 'connected',
       instanceTokenEncrypted: crypto.encryptSecret('plain-instance-token', process.env.WHATSAPP_ENCRYPTION_KEY!),
+    },
+  });
+  await basePrisma.whatsAppMedia.create({
+    data: {
+      id: 'image-1', tenantId: tenantA.id, uploadedById: 'campaign-coordinator',
+      filename: 'campanha.png', mimeType: 'image/png', sizeBytes: 3,
+      bytes: new Uint8Array([1, 2, 3]), publicToken: 'campaign-media-opaque-public-token',
     },
   });
 
@@ -179,7 +207,7 @@ describe('campaign preview and test send', () => {
         messages: [
           { number: '5521998765432', type: 'text', text: 'Olá, João' },
           {
-            number: '5521998765432', type: 'image', file: 'https://api.example.test/public/whatsapp/media/image-1',
+            number: '5521998765432', type: 'image', file: 'https://api.example.test/public/whatsapp/media/campaign-media-opaque-public-token',
             text: 'Imagem para João Teste',
           },
         ],
@@ -223,7 +251,7 @@ describe('campaign creation', () => {
     expect(response.statusCode).toBe(201);
     expect(response.json().campaign).toMatchObject({
       name: 'Campanha agendada', status: 'SCHEDULED', remoteFolderId: 'folder-campaign-1',
-      remoteFolderStatus: 'Active', totalRecipients: 4, validRecipients: 1, excludedRecipients: 3,
+      remoteFolderStatus: 'scheduled', totalRecipients: 4, validRecipients: 1, excludedRecipients: 3,
       queuedCount: 1,
     });
 
@@ -238,7 +266,7 @@ describe('campaign creation', () => {
         messages: [
           { number: '5511987654321', type: 'text', text: 'Olá, Maria' },
           {
-            number: '5511987654321', type: 'image', file: 'https://api.example.test/public/whatsapp/media/image-1',
+            number: '5511987654321', type: 'image', file: 'https://api.example.test/public/whatsapp/media/campaign-media-opaque-public-token',
             text: 'Imagem para Maria Congelada\n\nPara não receber mais mensagens, responda SAIR.',
           },
         ],
@@ -342,16 +370,136 @@ describe('campaign creation', () => {
     expect(response.json().campaign.status).toBe('QUEUED');
   });
 
-  test('preserves campaign and recipients as failed with a sanitized message when Uazapi fails', async () => {
-    upstreamFailure = true;
+  test('returns one campaign and dispatches once for concurrent requests with the same idempotency key', async () => {
+    const beforeRequests = requests.length;
+    const idempotencyKey = 'campaign-create-concurrent-key';
+    const request = () => app.inject({
+      method: 'POST', url: '/whatsapp/campaigns',
+      headers: { ...auth(coordinatorToken), 'idempotency-key': idempotencyKey },
+      payload: {
+        name: 'Campanha idempotente', category: 'UTILITY', audienceFilter, content: campaignContent,
+        consentimentoConfirmado: true,
+      },
+    });
+
+    const responses = await Promise.all([request(), request()]);
+
+    expect(responses.map(({ statusCode }) => statusCode)).toEqual([201, 201]);
+    expect(responses[0].json().campaign.id).toBe(responses[1].json().campaign.id);
+    expect(responses[0].json().campaign.idempotencyKey).toBe(idempotencyKey);
+    expect(requests).toHaveLength(beforeRequests + 1);
+    expect(await prisma.whatsAppCampaign.count({ where: { idempotencyKey } })).toBe(1);
+  });
+
+  test('revalidates suppression after preview and does not dispatch a newly suppressed recipient', async () => {
+    const campaignName = 'Campanha com supressão concorrente';
+    const beforeRequests = requests.length;
+    await basePrisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION test_suppress_after_campaign_preview() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.name = '${campaignName}' THEN
+          INSERT INTO whatsapp_suppressions
+            (id, tenant_id, phone_normalized, active, reason, source, first_opt_out_at,
+             last_opt_out_at, created_at, updated_at)
+          VALUES
+            ('campaign-suppression-race', NEW.tenant_id, '5511987654321', true,
+             'Supressão concorrente', 'MANUAL', NOW(), NOW(), NOW(), NOW())
+          ON CONFLICT (tenant_id, phone_normalized)
+          DO UPDATE SET active = true, updated_at = NOW();
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql
+    `);
+    await basePrisma.$executeRawUnsafe(`
+      CREATE TRIGGER test_suppress_after_campaign_preview_trigger
+      AFTER INSERT ON whatsapp_campaigns
+      FOR EACH ROW EXECUTE FUNCTION test_suppress_after_campaign_preview()
+    `);
+
     let response;
     try {
       response = await app.inject({
         method: 'POST', url: '/whatsapp/campaigns', headers: auth(coordinatorToken),
         payload: {
-          name: 'Campanha com falha', category: 'UTILITY', audienceFilter, content: campaignContent,
+          name: campaignName, category: 'UTILITY', audienceFilter, content: campaignContent,
           consentimentoConfirmado: true,
         },
+      });
+    } finally {
+      await basePrisma.$executeRawUnsafe(
+        'DROP TRIGGER test_suppress_after_campaign_preview_trigger ON whatsapp_campaigns',
+      );
+      await basePrisma.$executeRawUnsafe('DROP FUNCTION test_suppress_after_campaign_preview()');
+      await basePrisma.whatsAppSuppression.deleteMany({
+        where: { tenantId: tenantA.id, phoneNormalized: '5511987654321' },
+      });
+    }
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().campaign).toMatchObject({ status: 'CANCELED', queuedCount: 0 });
+    expect(response.json().campaign.remoteFolderId).toBeNull();
+    expect(requests).toHaveLength(beforeRequests);
+    const recipients = await prisma.whatsAppRecipient.findMany({
+      where: { campaignId: response.json().campaign.id },
+    });
+    expect(recipients.find(({ isValid }: any) => isValid)).toMatchObject({ status: 'CANCELED' });
+  });
+
+  test('rejects a zero-valid audience before campaign persistence or upstream dispatch', async () => {
+    const beforeRequests = requests.length;
+    const beforeCampaigns = await prisma.whatsAppCampaign.count();
+    const beforeRecipients = await prisma.whatsAppRecipient.count();
+    const response = await app.inject({
+      method: 'POST', url: '/whatsapp/campaigns', headers: auth(coordinatorToken),
+      payload: {
+        name: 'Campanha sem destinatários válidos', category: 'UTILITY',
+        audienceFilter: { type: 'SUPPORTERS', selectedIds: ['campaign-supporter-bad'] },
+        content: campaignContent, consentimentoConfirmado: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'Campaign requires at least one valid recipient.' });
+    expect(requests).toHaveLength(beforeRequests);
+    expect(await prisma.whatsAppCampaign.count()).toBe(beforeCampaigns);
+    expect(await prisma.whatsAppRecipient.count()).toBe(beforeRecipients);
+  });
+
+  test('rejects campaign media that is not stored before persistence or upstream dispatch', async () => {
+    const beforeRequests = requests.length;
+    const beforeCampaigns = await prisma.whatsAppCampaign.count();
+    const response = await app.inject({
+      method: 'POST', url: '/whatsapp/campaigns', headers: auth(coordinatorToken),
+      payload: {
+        name: 'Campanha com mídia ausente', category: 'UTILITY', audienceFilter,
+        content: {
+          primary: { type: 'image', mediaId: 'missing-campaign-media', caption: 'Arquivo ausente' },
+          sequence: [],
+        },
+        consentimentoConfirmado: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'Campaign media is no longer available.' });
+    expect(requests).toHaveLength(beforeRequests);
+    expect(await prisma.whatsAppCampaign.count()).toBe(beforeCampaigns);
+  });
+
+  test('preserves campaign and recipients as failed with a sanitized message when Uazapi fails', async () => {
+    upstreamFailure = true;
+    const idempotencyKey = 'campaign-upstream-failure-key';
+    const payload = {
+      name: 'Campanha com falha', category: 'UTILITY', audienceFilter, content: campaignContent,
+      consentimentoConfirmado: true,
+    };
+    let response;
+    try {
+      response = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns',
+        headers: { ...auth(coordinatorToken), 'idempotency-key': idempotencyKey },
+        payload,
       });
     } finally {
       upstreamFailure = false;
@@ -369,10 +517,26 @@ describe('campaign creation', () => {
     expect(campaign.recipients.map((recipient: any) => recipient.status)).toEqual([
       'FAILED', 'PENDING', 'PENDING', 'PENDING',
     ]);
+
+    const requestsAfterFailure = requests.length;
+    const replay = await app.inject({
+      method: 'POST', url: '/whatsapp/campaigns',
+      headers: { ...auth(coordinatorToken), 'idempotency-key': idempotencyKey },
+      payload,
+    });
+    expect(replay.statusCode).toBe(502);
+    expect(replay.json()).toEqual({ error: 'Uazapi service unavailable.' });
+    expect(requests).toHaveLength(requestsAfterFailure);
+    expect(await prisma.whatsAppCampaign.count({ where: { idempotencyKey } })).toBe(1);
   });
 
-  test('does not mark audit rows failed or resend when local persistence fails after Uazapi accepted', async () => {
+  test('compensates the remote folder and records a failed audit when local persistence fails after acceptance', async () => {
     const beforeRequests = requests.length;
+    const idempotencyKey = 'campaign-indeterminate-failure-key';
+    const payload = {
+      name: 'Campanha aceita com estado local incerto', category: 'UTILITY',
+      audienceFilter, content: campaignContent, consentimentoConfirmado: true,
+    };
     await basePrisma.$executeRawUnsafe(`
       CREATE OR REPLACE FUNCTION test_reject_recipient_queue() RETURNS trigger AS $$
       BEGIN
@@ -392,11 +556,9 @@ describe('campaign creation', () => {
     let response;
     try {
       response = await app.inject({
-        method: 'POST', url: '/whatsapp/campaigns', headers: auth(coordinatorToken),
-        payload: {
-          name: 'Campanha aceita com estado local incerto', category: 'UTILITY',
-          audienceFilter, content: campaignContent, consentimentoConfirmado: true,
-        },
+        method: 'POST', url: '/whatsapp/campaigns',
+        headers: { ...auth(coordinatorToken), 'idempotency-key': idempotencyKey },
+        payload,
       });
     } finally {
       await basePrisma.$executeRawUnsafe(
@@ -409,14 +571,33 @@ describe('campaign creation', () => {
     expect(response.json()).toEqual({
       error: 'Uazapi accepted the campaign, but local state could not be confirmed. Do not retry automatically.',
     });
-    expect(requests).toHaveLength(beforeRequests + 1);
-    expect(requests.at(-1)?.url).toBe('/sender/advanced');
+    expect(requests.slice(beforeRequests).map(({ url, body }) => ({ url, body }))).toEqual([
+      { url: '/sender/advanced', body: expect.any(Object) },
+      { url: '/sender/edit', body: { folder_id: 'folder-campaign-1', action: 'stop' } },
+      { url: '/sender/edit', body: { folder_id: 'folder-campaign-1', action: 'delete' } },
+    ]);
     const campaign = await prisma.whatsAppCampaign.findFirst({
       where: { name: 'Campanha aceita com estado local incerto' },
       include: { recipients: true },
     });
-    expect(campaign.status).not.toBe('FAILED');
-    expect(campaign.recipients.every((recipient: any) => recipient.status !== 'FAILED')).toBe(true);
+    expect(campaign).toMatchObject({
+      status: 'FAILED', remoteFolderId: 'folder-campaign-1', remoteFolderStatus: 'deleting',
+      lastError: 'Uazapi accepted the campaign, but local state could not be confirmed. Do not retry automatically.',
+    });
+    expect(campaign.recipients.filter((recipient: any) => recipient.isValid)
+      .every((recipient: any) => recipient.status === 'FAILED')).toBe(true);
+
+    const requestsAfterCompensation = requests.length;
+    const replay = await app.inject({
+      method: 'POST', url: '/whatsapp/campaigns',
+      headers: { ...auth(coordinatorToken), 'idempotency-key': idempotencyKey },
+      payload,
+    });
+    expect(replay.statusCode).toBe(503);
+    expect(replay.json()).toEqual({
+      error: 'Uazapi accepted the campaign, but local state could not be confirmed. Do not retry automatically.',
+    });
+    expect(requests).toHaveLength(requestsAfterCompensation);
   });
 
   test('rejects 1,001 valid unique phones with 400 but keeps excluded rows outside that limit', async () => {

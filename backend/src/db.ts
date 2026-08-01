@@ -12,7 +12,38 @@ if (!connectionString) {
 }
 
 const pool = new Pool({ connectionString });
+// Session advisory locks must not consume the Prisma adapter pool: a waiting
+// lock holder then executes Prisma work and needs that pool to stay available.
+const advisoryLockPool = new Pool({ connectionString, max: 5, allowExitOnIdle: true });
 const adapter = new PrismaPg(pool);
+
+export async function withAdvisoryLocks<T>(keys: string[], action: () => Promise<T>): Promise<T> {
+  const client = await advisoryLockPool.connect();
+  const locked: string[] = [];
+  const ordered = [...new Set(keys)].sort();
+  try {
+    for (const key of ordered) {
+      await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [key]);
+      locked.push(key);
+    }
+    return await action();
+  } finally {
+    let releaseError: Error | undefined;
+    for (const key of locked.reverse()) {
+      try {
+        await client.query('SELECT pg_advisory_unlock(hashtextextended($1, 0))', [key]);
+      } catch {
+        releaseError = new Error('Unable to release PostgreSQL advisory lock.');
+        break;
+      }
+    }
+    client.release(releaseError);
+  }
+}
+
+export async function withAdvisoryLock<T>(key: string, action: () => Promise<T>): Promise<T> {
+  return withAdvisoryLocks([key], action);
+}
 
 // Cliente SEM escopo de tenant. Uso restrito ao bootstrap (resolver o tenant
 // pelo slug) e a scripts administrativos que operam entre tenants

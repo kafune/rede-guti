@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { FastifyInstance } from 'fastify';
 import { Writable } from 'node:stream';
-import { Client } from 'pg';
 
 if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
   test('runs the webhook and suppression integration scenario in an isolated process', () => {
@@ -201,58 +200,80 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
       expect(logs).toContain('CUSTOM_REDACTED');
     });
 
-    test('deduplicates explicit and stable fallback ids while delivery states only advance', async () => {
+    test('advances official status events idempotently without creating interaction rows', async () => {
+      const interactionsBefore = await prisma.whatsAppInteraction.count();
       const delivered = {
         event: 'messages_update', eventId: 'delivery-event-explicit', data: {
-          messageid: 'outbound-quoted', chatid: `${mainPhone}@s.whatsapp.net`, sender: mainPhone,
-          status: 'Delivered', timestamp: '2026-08-01T10:00:00.000Z',
+          messageid: 'outbound-quoted', chatid: '123456789@lid', sender: '123456789@lid',
+          sender_pn: mainPhone, status: 'Delivered', messageTimestamp: 1785578400,
+          timestamp: '2020-01-01T00:00:00.000Z', token: 'must-not-persist',
         },
       };
       const first = await webhook(delivered);
       const duplicate = await webhook(delivered);
       expect(first.statusCode).toBe(202);
+      expect(first.json()).toEqual({ accepted: true, processed: true, duplicate: false });
       expect(duplicate.json()).toEqual({ accepted: true, processed: false, duplicate: true });
-      expect(await prisma.whatsAppInteraction.count({ where: { externalId: 'delivery-event-explicit' } })).toBe(1);
+      expect(await prisma.whatsAppInteraction.count()).toBe(interactionsBefore);
 
       const readWithoutEventId = {
         event: 'messages_update', data: {
-          messageid: 'outbound-quoted', sender: mainPhone, status: 'Read',
-          timestamp: '2026-08-01T10:01:00.000Z',
+          messageid: 'outbound-quoted', sender_pn: mainPhone, status: 'Read',
+          messageTimestamp: '2026-08-01T10:01:00.000Z',
         },
       };
       await webhook(readWithoutEventId);
       await webhook(readWithoutEventId);
       await webhook({ event: 'messages_update', data: {
-        messageid: 'outbound-quoted', sender: mainPhone, status: 'Delivered',
-        timestamp: '2026-08-01T10:02:00.000Z',
+        messageid: 'outbound-quoted', sender_pn: mainPhone, status: 'Delivered',
+        messageTimestamp: '2026-08-01T10:02:00.000Z',
       } });
       await webhook({ event: 'messages_update', data: {
-        messageid: 'outbound-quoted', sender: mainPhone, status: 'Played',
-        timestamp: '2026-08-01T10:03:00.000Z',
+        messageid: 'outbound-quoted', sender_pn: mainPhone, status: 'Played',
+        messageTimestamp: '2026-08-01T10:03:00.000Z',
       } });
 
       const recipient = await prisma.whatsAppRecipient.findUnique({ where: { id: 'webhook-recipient-quoted' } });
       expect(recipient).toMatchObject({ status: 'PLAYED' });
+      expect(recipient.processedWebhookEventIds).toContain('delivery-event-explicit');
+      expect(recipient.processedWebhookEventIds).toHaveLength(4);
       expect(recipient.deliveredAt.toISOString()).toBe('2026-08-01T10:00:00.000Z');
       expect(recipient.readAt.toISOString()).toBe('2026-08-01T10:01:00.000Z');
       expect(recipient.playedAt.toISOString()).toBe('2026-08-01T10:03:00.000Z');
       const campaign = await prisma.whatsAppCampaign.findUnique({ where: { id: 'webhook-campaign-quoted' } });
       expect(campaign).toMatchObject({ sentCount: 1, deliveredCount: 1, readCount: 1, playedCount: 1 });
-      expect(await prisma.whatsAppInteraction.count({ where: { recipientId: 'webhook-recipient-quoted' } })).toBe(4);
+      expect(await prisma.whatsAppInteraction.count()).toBe(interactionsBefore);
     });
 
     test('associates inbound replies by quoted id first, then recent sent phone, and ignores standalone messages', async () => {
       const quoted = await webhook({ event: 'messages', eventId: 'reply-quoted-event', data: {
-        messageid: 'reply-quoted-message', sender: mainPhone, fromMe: false, text: 'Tenho interesse',
-        quoted: { messageid: 'outbound-quoted' }, timestamp: new Date().toISOString(),
+        messageid: 'reply-quoted-message', sender: '123456789@lid', sender_pn: mainPhone,
+        fromMe: false, text: 'Tenho interesse', quoted: 'outbound-quoted',
+        messageTimestamp: 1785579300, timestamp: '2020-01-01T00:00:00.000Z',
+        token: 'top-level-token-sentinel',
+        metadata: { authorization: 'Bearer nested-secret', safe: 'ignored-not-allow-listed' },
       } });
       expect(quoted.statusCode).toBe(202);
       expect(quoted.json()).toEqual({ accepted: true, processed: true, duplicate: false });
-      expect(await prisma.whatsAppInteraction.findUnique({
+      const quotedInteraction = await prisma.whatsAppInteraction.findUnique({
         where: { tenantId_externalId: { tenantId: tenant.id, externalId: 'reply-quoted-event' } },
-      })).toMatchObject({
+      });
+      expect(quotedInteraction).toMatchObject({
         campaignId: 'webhook-campaign-quoted', recipientId: 'webhook-recipient-quoted', direction: 'INBOUND', status: 'PROCESSED',
       });
+      expect(quotedInteraction.occurredAt.toISOString()).toBe('2026-08-01T10:15:00.000Z');
+      expect(quotedInteraction.payload).toEqual({
+        eventType: 'messages',
+        message: {
+          id: 'reply-quoted-message', senderPn: mainPhone, sender: '123456789@lid',
+          text: 'Tenho interesse', quotedId: 'outbound-quoted',
+          messageTimestamp: '1785579300', fromMe: false,
+        },
+      });
+      const storedPayload = JSON.stringify(quotedInteraction.payload);
+      expect(storedPayload).not.toContain('top-level-token-sentinel');
+      expect(storedPayload).not.toContain('nested-secret');
+      expect(storedPayload).not.toMatch(/token|authorization|secret/i);
 
       await webhook({ event: 'messages', eventId: 'reply-fallback-event', data: {
         messageid: 'reply-fallback-message', sender: mainPhone, fromMe: false, text: 'Sem citação',
@@ -273,6 +294,33 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
       expect(await prisma.whatsAppInteraction.count()).toBe(before);
     });
 
+    test('persists and deduplicates a standalone opt-out without inventing a campaign association', async () => {
+      const standalonePhone = '5511912345678';
+      const payload = {
+        event: 'messages', eventId: 'standalone-optout-event', data: {
+          messageid: 'standalone-optout-message', sender_pn: standalonePhone,
+          fromMe: false, text: 'SAIR', messageTimestamp: '2026-08-01T10:30:00.000Z',
+        },
+      };
+
+      const first = await webhook(payload);
+      const duplicate = await webhook(payload);
+
+      expect(first.json()).toEqual({ accepted: true, processed: true, duplicate: false });
+      expect(duplicate.json()).toEqual({ accepted: true, processed: false, duplicate: true });
+      expect(await prisma.whatsAppInteraction.findUnique({
+        where: {
+          tenantId_externalId: { tenantId: tenant.id, externalId: 'standalone-optout-event' },
+        },
+      })).toMatchObject({
+        campaignId: null, recipientId: null, phoneNormalized: standalonePhone,
+        direction: 'INBOUND', status: 'PROCESSED',
+      });
+      expect(await prisma.whatsAppSuppression.findUnique({
+        where: { tenantId_phoneNormalized: { tenantId: tenant.id, phoneNormalized: standalonePhone } },
+      })).toMatchObject({ active: true, reason: 'SAIR', source: 'WEBHOOK' });
+    });
+
     test('SAIR activates one suppression and cancels only pending or queued recipients of that phone in this tenant', async () => {
       await createCampaign('webhook-optout-pending', coordinatorId);
       await createCampaign('webhook-optout-queued', coordinatorId);
@@ -287,8 +335,9 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
       });
 
       const optOut = { event: 'messages', eventId: 'optout-event', data: {
-        messageid: 'optout-message', sender: mainPhone, fromMe: false, text: '  sair!  ',
-        timestamp: new Date().toISOString(),
+        messageid: 'optout-message', sender: '987654321@lid', sender_pn: mainPhone,
+        fromMe: false, text: '  sair!  ', quoted: 'outbound-newer',
+        messageTimestamp: new Date().toISOString(),
       } };
       const response = await webhook(optOut);
       await webhook(optOut);
@@ -306,96 +355,23 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
       expect((await basePrisma.whatsAppRecipient.findUnique({ where: { id: 'optout-other-tenant' } })).status).toBe('QUEUED');
     });
 
-    test('atomically keeps READ over concurrent DELIVERED and never overwrites a completed SAIR cancellation', async () => {
-      const lockNamespace = 424242;
-      const blocker = new Client({ connectionString: process.env.DATABASE_URL });
-      await blocker.connect();
-      const waitForBlockedTransaction = async (lockKey: number) => {
-        const deadline = Date.now() + 5_000;
-        while (Date.now() < deadline) {
-          const rows = await basePrisma.$queryRawUnsafe<Array<{ waiting: number }>>(`
-            SELECT count(*)::int AS waiting
-            FROM pg_locks
-            WHERE locktype = 'advisory'
-              AND classid = ${lockNamespace}
-              AND objid = ${lockKey}
-              AND granted = false
-          `);
-          if (rows[0]?.waiting === 1) return;
-          await new Promise<void>((resolve) => setImmediate(resolve));
-        }
-        throw new Error(`Timed out waiting for advisory lock ${lockKey}`);
-      };
-      await basePrisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS test_delay_webhook_delivery_trigger ON whatsapp_interactions');
-      await basePrisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS test_delay_webhook_delivery()');
-      await basePrisma.$executeRawUnsafe(`
-        CREATE FUNCTION test_delay_webhook_delivery() RETURNS trigger AS $$
-        BEGIN
-          IF NEW.external_id = 'concurrent-delivered' THEN
-            PERFORM pg_advisory_xact_lock(${lockNamespace}, 1);
-          ELSIF NEW.external_id = 'delivery-after-optout' THEN
-            PERFORM pg_advisory_xact_lock(${lockNamespace}, 2);
-          END IF;
-          RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql
-      `);
-      await basePrisma.$executeRawUnsafe(`
-        CREATE TRIGGER test_delay_webhook_delivery_trigger
-        BEFORE INSERT ON whatsapp_interactions
-        FOR EACH ROW EXECUTE FUNCTION test_delay_webhook_delivery()
-      `);
-      try {
-        const concurrentPhone = '5511961111111';
-        await createCampaign('webhook-concurrent-campaign', coordinatorId, 'SENDING');
-        await createRecipient({
-          id: 'webhook-concurrent-recipient', campaignId: 'webhook-concurrent-campaign',
-          phone: concurrentPhone, status: 'SENT', externalMessageIds: ['concurrent-outbound'],
-          sentAt: new Date(Date.now() - 60_000),
-        });
-        await blocker.query(`SELECT pg_advisory_lock(${lockNamespace}, 1)`);
-        const staleDelivered = webhook({ event: 'messages_update', eventId: 'concurrent-delivered', data: {
-          messageid: 'concurrent-outbound', sender: concurrentPhone, status: 'Delivered',
-        } });
-        await waitForBlockedTransaction(1);
-        const freshRead = webhook({ event: 'messages_update', eventId: 'concurrent-read', data: {
-          messageid: 'concurrent-outbound', sender: concurrentPhone, status: 'Read',
-        } });
-        await freshRead;
-        await blocker.query(`SELECT pg_advisory_unlock(${lockNamespace}, 1)`);
-        await Promise.all([staleDelivered, freshRead]);
-        expect(await prisma.whatsAppRecipient.findUnique({
-          where: { id: 'webhook-concurrent-recipient' },
-        })).toMatchObject({ status: 'READ' });
-
-        const canceledPhone = '5511962222222';
-        await createCampaign('webhook-canceled-campaign', coordinatorId, 'QUEUED');
-        await createRecipient({
-          id: 'webhook-canceled-recipient', campaignId: 'webhook-canceled-campaign',
-          phone: canceledPhone, status: 'QUEUED', externalMessageIds: ['canceled-outbound'],
-        });
-        await blocker.query(`SELECT pg_advisory_lock(${lockNamespace}, 2)`);
-        const staleAfterOptOut = webhook({
-          event: 'messages_update', eventId: 'delivery-after-optout', data: {
-            messageid: 'canceled-outbound', sender: canceledPhone, status: 'Delivered',
-          },
-        });
-        await waitForBlockedTransaction(2);
-        const optOut = webhook({ event: 'messages', eventId: 'concurrent-optout', data: {
-          messageid: 'concurrent-optout-message', sender: canceledPhone, fromMe: false, text: 'SAIR.',
-        } });
-        await optOut;
-        await blocker.query(`SELECT pg_advisory_unlock(${lockNamespace}, 2)`);
-        await Promise.all([staleAfterOptOut, optOut]);
-        expect(await prisma.whatsAppRecipient.findUnique({
-          where: { id: 'webhook-canceled-recipient' },
-        })).toMatchObject({ status: 'CANCELED' });
-      } finally {
-        await blocker.query('SELECT pg_advisory_unlock_all()');
-        await blocker.end();
-        await basePrisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS test_delay_webhook_delivery_trigger ON whatsapp_interactions');
-        await basePrisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS test_delay_webhook_delivery()');
-      }
+    test('never lets a later stale delivery overwrite a completed SAIR cancellation', async () => {
+      const canceledPhone = '5511962222222';
+      await createCampaign('webhook-canceled-campaign', coordinatorId, 'QUEUED');
+      await createRecipient({
+        id: 'webhook-canceled-recipient', campaignId: 'webhook-canceled-campaign',
+        phone: canceledPhone, status: 'QUEUED', externalMessageIds: ['canceled-outbound'],
+      });
+      await webhook({ event: 'messages', eventId: 'completed-optout', data: {
+        messageid: 'completed-optout-message', sender_pn: canceledPhone,
+        sender: '555@lid', fromMe: false, text: 'SAIR.', quoted: 'canceled-outbound',
+      } });
+      await webhook({ event: 'messages_update', eventId: 'delivery-after-optout', data: {
+        messageid: 'canceled-outbound', sender_pn: canceledPhone, status: 'Delivered',
+      } });
+      expect(await prisma.whatsAppRecipient.findUnique({
+        where: { id: 'webhook-canceled-recipient' },
+      })).toMatchObject({ status: 'CANCELED' });
     });
 
     test('rolls back marker and effects together so a failed event can retry exactly once', async () => {

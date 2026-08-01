@@ -131,7 +131,7 @@ describe('UazapiClient credential isolation', () => {
       delayMax: 15,
       messages: [{ number: '5511987654321', type: 'text', text: 'Olá' }],
     });
-    await client.listFolders('Active');
+    await client.listFolders('sending');
     await client.listMessages({ folder_id: 'folder-1', messageStatus: 'Sent', limit: 50, offset: 5 });
     await client.editFolder({ folder_id: 'folder-1', action: 'stop' });
 
@@ -155,7 +155,7 @@ describe('UazapiClient credential isolation', () => {
           messages: [{ number: '5511987654321', type: 'text', text: 'Olá' }],
         },
       },
-      { method: 'GET', url: '/sender/listfolders?status=Active', body: undefined },
+      { method: 'GET', url: '/sender/listfolders?status=sending', body: undefined },
       {
         method: 'POST', url: '/sender/listmessages', body: {
           folder_id: 'folder-1', messageStatus: 'Sent', limit: 50, offset: 5,

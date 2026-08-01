@@ -136,9 +136,9 @@ cd /home/paiva/rede-guti-regional
 docker compose -p rede-regional -f docker-compose.regional.yml build api
 docker compose -p rede-regional -f docker-compose.regional.yml up -d db-regional
 # Banco novo ou existente: migration obrigatória antes de expor a nova API
-docker compose -p rede-regional -f docker-compose.regional.yml run --rm api bun run prisma:deploy
+docker compose -p rede-regional -f docker-compose.regional.yml run --rm api npm run prisma:deploy
 docker compose -p rede-regional -f docker-compose.regional.yml up -d api frontend
-docker compose -p rede-regional -f docker-compose.regional.yml exec -T api bun run seed
+docker compose -p rede-regional -f docker-compose.regional.yml exec -T api npm run seed
 ```
 
 Nenhum dado da instância 1 é copiado — o isolamento é total por construção.

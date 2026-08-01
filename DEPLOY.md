@@ -58,7 +58,7 @@
   ```bash
   docker-compose build api
   docker-compose up -d db
-  docker-compose run --rm api bun run prisma:deploy
+  docker-compose run --rm api npm run prisma:deploy
   docker-compose up -d api frontend
   ```
   - A migration deve terminar com sucesso **antes** de expor a nova API. Não
@@ -67,7 +67,7 @@
 
 - **Database seed**
   ```bash
-  docker-compose exec api bun run seed
+  docker-compose exec api npm run seed
   ```
   - Scripts rely on `prisma.config.ts` and need `tsx` in the runtime image.
   - Confirm `DATABASE_URL` inside container: `docker-compose exec api sh -c 'echo $DATABASE_URL'`.

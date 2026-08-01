@@ -20,8 +20,8 @@
 3. Install dependencies:
    `npm install`
 4. Run migrations and seed users:
-   `bun run prisma:deploy`
-   `bun run seed`
+   `npm run prisma:deploy`
+   `npm run seed`
 5. Start the API:
    `npm run dev`
 
@@ -32,7 +32,7 @@ The API will start at `http://localhost:4000`.
 1. Create `backend/.env` from the example and set `JWT_SECRET` + admin credentials.
 2. Run:
    `docker compose up -d db`
-   `docker compose run --rm api bun run prisma:deploy`
+   `docker compose run --rm api npm run prisma:deploy`
    `docker compose up -d api frontend`
 
 Migrations are always applied before the new API process is exposed.

@@ -64,6 +64,8 @@ export class CampaignSuppressionReconciliationError extends Error {
 }
 
 const configurationError = () => new Error('WhatsApp integration is not configured.');
+const campaignOperationLock = (campaignId: string) =>
+  `whatsapp:campaign:${getTenantId()}:${campaignId}`;
 
 function campaignContent(input: Pick<CreateCampaignInput, 'category' | 'content'>): WhatsAppCampaignContent {
   return input.category === 'MARKETING' ? applyMarketingFooter(input.content) : input.content;
@@ -318,7 +320,7 @@ async function listAllFolderMessages(client: Awaited<ReturnType<typeof getConfig
   return messages;
 }
 
-export async function syncCampaign(campaignId: string, folders?: unknown[]) {
+async function syncCampaignUnlocked(campaignId: string, folders?: unknown[]) {
   const campaign = await requireCampaign(campaignId);
   if (!campaign.remoteFolderId) return refreshCampaignMetrics(campaign.id);
   const client = await getConfiguredUazapiClient();
@@ -355,7 +357,9 @@ export async function syncCampaign(campaignId: string, folders?: unknown[]) {
     values.push({
       id: stringValue(message.messageid) ?? stringValue(message.messageId) ?? stringValue(message.id),
       status,
-      occurredAt: messageTimestamp(message.timestamp ?? message.created_at ?? message.updated_at),
+      occurredAt: messageTimestamp(
+        message.messageTimestamp ?? message.timestamp ?? message.created_at ?? message.updated_at,
+      ),
       chatId: stringValue(message.chatid) ?? stringValue(message.chatId),
     });
     byPhone.set(phone, values);
@@ -373,10 +377,7 @@ export async function syncCampaign(campaignId: string, folders?: unknown[]) {
         transitionAt = message.occurredAt;
       }
     }
-    const externalMessageIds = [...new Set([
-      ...recipient.externalMessageIds,
-      ...matched.map(({ id }) => id).filter((id): id is string => id !== null),
-    ])];
+    const matchedMessageIds = matched.map(({ id }) => id).filter((id): id is string => id !== null);
     const field = statusDateField(next);
     if (next !== recipient.status) {
       await prisma.whatsAppRecipient.updateMany({
@@ -387,13 +388,21 @@ export async function syncCampaign(campaignId: string, folders?: unknown[]) {
         },
       });
     }
-    await prisma.whatsAppRecipient.updateMany({
-      where: { id: recipient.id },
-      data: {
-        externalMessageIds,
-        externalChatId: matched.find(({ chatId }) => chatId)?.chatId ?? recipient.externalChatId,
-      },
-    });
+    const chatId = matched.find(({ chatId: value }) => value)?.chatId ?? null;
+    await prisma.$executeRawUnsafe(`
+      UPDATE "whatsapp_recipients"
+      SET
+        "external_message_ids" = ARRAY(
+          SELECT "message_id"
+          FROM unnest("external_message_ids" || $1::TEXT[])
+            WITH ORDINALITY AS "combined"("message_id", "position")
+          GROUP BY "message_id"
+          ORDER BY MIN("position")
+        ),
+        "external_chat_id" = COALESCE($2::TEXT, "external_chat_id"),
+        "updated_at" = NOW()
+      WHERE "id" = $3 AND "tenant_id" = $4
+    `, matchedMessageIds, chatId, recipient.id, getTenantId());
   }
   const fresh = await prisma.whatsAppRecipient.findMany({ where: { campaignId } });
   const hasSent = fresh.some(({ status }) => sentOrBeyond.has(status));
@@ -411,6 +420,13 @@ export async function syncCampaign(campaignId: string, folders?: unknown[]) {
     status: campaign.status as WhatsAppCampaignStatus,
     remoteFolderId: campaign.remoteFolderId,
   });
+}
+
+export async function syncCampaign(campaignId: string, folders?: unknown[]) {
+  return withAdvisoryLock(
+    campaignOperationLock(campaignId),
+    () => syncCampaignUnlocked(campaignId, folders),
+  );
 }
 
 export async function syncActiveCampaigns() {
@@ -463,27 +479,33 @@ async function consolidateControl(
       ...data,
     },
   });
-  if (changed.count === 0) return syncCampaign(campaign.id);
+  if (changed.count === 0) return syncCampaignUnlocked(campaign.id);
   return prisma.whatsAppCampaign.findUniqueOrThrow({ where: { id: campaign.id } });
 }
 
 export async function pauseCampaign(campaignId: string) {
-  const { campaign, remote } = await editRemoteFolder(campaignId, 'stop');
-  const status = campaignStatusFromRemote(remote.status, false) ?? 'PAUSED';
-  return consolidateControl(campaign, status === 'PAUSED' ? status : 'PAUSED', remote.status, {
-    pausedAt: new Date(),
+  return withAdvisoryLock(campaignOperationLock(campaignId), async () => {
+    const { campaign, remote } = await editRemoteFolder(campaignId, 'stop');
+    const status = campaignStatusFromRemote(remote.status, false) ?? 'PAUSED';
+    return consolidateControl(campaign, status === 'PAUSED' ? status : 'PAUSED', remote.status, {
+      pausedAt: new Date(),
+    });
   });
 }
 
 export async function resumeCampaign(campaignId: string) {
-  const { campaign, remote } = await editRemoteFolder(campaignId, 'continue');
-  const status = campaignStatusFromRemote(remote.status, false) ?? 'SENDING';
-  return consolidateControl(campaign, status, remote.status, { pausedAt: null });
+  return withAdvisoryLock(campaignOperationLock(campaignId), async () => {
+    const { campaign, remote } = await editRemoteFolder(campaignId, 'continue');
+    const status = campaignStatusFromRemote(remote.status, false) ?? 'SENDING';
+    return consolidateControl(campaign, status, remote.status, { pausedAt: null });
+  });
 }
 
 export async function cancelCampaign(campaignId: string) {
-  const { campaign, remote } = await editRemoteFolder(campaignId, 'delete');
-  return consolidateControl(campaign, 'CANCELING', remote.status ?? 'deleting', {});
+  return withAdvisoryLock(campaignOperationLock(campaignId), async () => {
+    const { campaign, remote } = await editRemoteFolder(campaignId, 'delete');
+    return consolidateControl(campaign, 'CANCELING', remote.status ?? 'deleting', {});
+  });
 }
 
 async function assertUnstarted(campaign: Awaited<ReturnType<typeof requireCampaign>>) {
@@ -584,17 +606,19 @@ async function replaceCampaignFolder(
 }
 
 export async function rescheduleCampaign(campaignId: string, scheduledAtValue: string) {
-  const campaign = await requireCampaign(campaignId);
-  await assertUnstarted(campaign);
-  const scheduledAt = new Date(scheduledAtValue);
-  if (!Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
-    throw new CampaignValidationError('Scheduled time must be in the future.');
-  }
-  return replaceCampaignFolder(campaign, {
-    name: campaign.name,
-    content: campaign.content as unknown as WhatsAppCampaignContent,
-    scheduledAt,
-    campaignData: { scheduledAt },
+  return withAdvisoryLock(campaignOperationLock(campaignId), async () => {
+    const campaign = await requireCampaign(campaignId);
+    await assertUnstarted(campaign);
+    const scheduledAt = new Date(scheduledAtValue);
+    if (!Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+      throw new CampaignValidationError('Scheduled time must be in the future.');
+    }
+    return replaceCampaignFolder(campaign, {
+      name: campaign.name,
+      content: campaign.content as unknown as WhatsAppCampaignContent,
+      scheduledAt,
+      campaignData: { scheduledAt },
+    });
   });
 }
 
@@ -602,14 +626,16 @@ export async function editUnstartedCampaign(
   campaignId: string,
   input: { name?: string; content?: WhatsAppCampaignContent },
 ) {
-  const campaign = await requireCampaign(campaignId);
-  await assertUnstarted(campaign);
-  const name = input.name ?? campaign.name;
-  const content = campaignContent({ category: campaign.category, content: input.content ?? campaign.content as unknown as WhatsAppCampaignContent });
-  const scheduledAt = campaign.scheduledAt ?? new Date();
-  return replaceCampaignFolder(campaign, {
-    name, content, scheduledAt,
-    campaignData: { name, content: content as any },
+  return withAdvisoryLock(campaignOperationLock(campaignId), async () => {
+    const campaign = await requireCampaign(campaignId);
+    await assertUnstarted(campaign);
+    const name = input.name ?? campaign.name;
+    const content = campaignContent({ category: campaign.category, content: input.content ?? campaign.content as unknown as WhatsAppCampaignContent });
+    const scheduledAt = campaign.scheduledAt ?? new Date();
+    return replaceCampaignFolder(campaign, {
+      name, content, scheduledAt,
+      campaignData: { name, content: content as any },
+    });
   });
 }
 
@@ -630,52 +656,125 @@ export async function reconcileSuppressedPhone(phoneNormalized: string, occurred
         some: { phoneNormalized, status: { in: ['PENDING', 'QUEUED'] } },
       },
     },
-    include: { recipients: true },
+    select: { id: true },
     orderBy: { id: 'asc' },
   });
+  const reconciledCampaignIds: string[] = [];
 
-  for (const campaign of affected) {
-    const target = campaign.recipients.filter(({ phoneNormalized: phone, status }) =>
-      phone === phoneNormalized && ['PENDING', 'QUEUED'].includes(status));
-    if (target.length === 0) continue;
-    if (!campaign.remoteFolderId) {
-      await prisma.whatsAppRecipient.updateMany({
+  for (const { id: campaignId } of affected) {
+    await withAdvisoryLock(campaignOperationLock(campaignId), async () => {
+      const campaign = await prisma.whatsAppCampaign.findFirst({
         where: {
-          tenantId: getTenantId(), campaignId: campaign.id, phoneNormalized,
-          status: { in: ['PENDING', 'QUEUED'] },
+          id: campaignId,
+          status: { in: ['SCHEDULED', 'QUEUED', 'SENDING', 'PAUSED'] },
         },
-        data: { status: 'CANCELED', canceledAt: occurredAt },
+        include: { recipients: true },
       });
-      await refreshCampaignMetrics(campaign.id);
-      continue;
-    }
+      if (campaign === null) return;
+      const target = campaign.recipients.filter(({ phoneNormalized: phone, status }) =>
+        phone === phoneNormalized && ['PENDING', 'QUEUED'].includes(status));
+      if (target.length === 0) return;
+      reconciledCampaignIds.push(campaign.id);
+      if (!campaign.remoteFolderId) {
+        await prisma.whatsAppRecipient.updateMany({
+          where: {
+            tenantId: getTenantId(), campaignId: campaign.id, phoneNormalized,
+            status: { in: ['PENDING', 'QUEUED'] },
+          },
+          data: { status: 'CANCELED', canceledAt: occurredAt },
+        });
+        await refreshCampaignMetrics(campaign.id);
+        return;
+      }
 
-    const client = await getConfiguredUazapiClient();
-    const oldFolderId = campaign.remoteFolderId;
-    try {
-      await client.editFolder({ folder_id: oldFolderId, action: 'stop' });
-    } catch {
-      await recordSuppressionReconciliationFailure(campaign.id);
-      throw suppressionReconciliationError();
-    }
-
-    const pending = campaign.recipients.filter(({ isValid, status, phoneNormalized: phone }) =>
-      isValid && phone !== null && ['PENDING', 'QUEUED'].includes(status));
-    const activeSuppressions = pending.length === 0 ? [] : await prisma.whatsAppSuppression.findMany({
-      where: {
-        active: true,
-        phoneNormalized: { in: [...new Set(pending.map(({ phoneNormalized: phone }) => phone!))] },
-      },
-      select: { phoneNormalized: true },
-    });
-    const suppressedPhones = new Set(activeSuppressions.map(({ phoneNormalized: phone }) => phone));
-    const remaining = pending.filter(({ phoneNormalized: phone }) => !suppressedPhones.has(phone!));
-    const removed = pending.filter(({ phoneNormalized: phone }) => suppressedPhones.has(phone!));
-
-    if (remaining.length === 0) {
+      const client = await getConfiguredUazapiClient();
+      const oldFolderId = campaign.remoteFolderId;
       try {
-        await client.editFolder({ folder_id: oldFolderId, action: 'delete' });
+        await client.editFolder({ folder_id: oldFolderId, action: 'stop' });
+      } catch {
+        await recordSuppressionReconciliationFailure(campaign.id);
+        throw suppressionReconciliationError();
+      }
+
+      const pending = campaign.recipients.filter(({ isValid, status, phoneNormalized: phone }) =>
+        isValid && phone !== null && ['PENDING', 'QUEUED'].includes(status));
+      const activeSuppressions = pending.length === 0 ? [] : await prisma.whatsAppSuppression.findMany({
+        where: {
+          active: true,
+          phoneNormalized: { in: [...new Set(pending.map(({ phoneNormalized: phone }) => phone!))] },
+        },
+        select: { phoneNormalized: true },
+      });
+      const suppressedPhones = new Set(activeSuppressions.map(({ phoneNormalized: phone }) => phone));
+      const remaining = pending.filter(({ phoneNormalized: phone }) => !suppressedPhones.has(phone!));
+      const removed = pending.filter(({ phoneNormalized: phone }) => suppressedPhones.has(phone!));
+
+      if (remaining.length === 0) {
+        try {
+          await client.editFolder({ folder_id: oldFolderId, action: 'delete' });
+          await prisma.$transaction(async (tx) => {
+            await tx.whatsAppRecipient.updateMany({
+              where: {
+                tenantId: getTenantId(), campaignId: campaign.id,
+                id: { in: removed.map(({ id }) => id) }, status: { in: ['PENDING', 'QUEUED'] },
+              },
+              data: { status: 'CANCELED', canceledAt: occurredAt },
+            });
+            const consolidated = await tx.whatsAppCampaign.updateMany({
+              where: {
+                id: campaign.id, tenantId: getTenantId(), status: campaign.status,
+                remoteFolderId: oldFolderId,
+              },
+              data: {
+                status: 'CANCELING',
+                remoteFolderStatus: 'deleting',
+                lastError: null,
+              },
+            });
+            if (consolidated.count !== 1) throw new Error('Suppression terminalization CAS missed.');
+          });
+        } catch {
+          await recordSuppressionReconciliationFailure(campaign.id);
+          throw suppressionReconciliationError();
+        }
+        await refreshCampaignMetrics(campaign.id);
+        return;
+      }
+
+      let replacement: ReturnType<typeof remoteFolder> | null = null;
+      try {
+        const mediaUrl = await mediaUrlFactory(campaign.content as unknown as WhatsAppCampaignContent);
+        replacement = remoteFolder(await client.sendAdvanced({
+          delayMin: config.whatsappDelayMin,
+          delayMax: config.whatsappDelayMax,
+          info: `${campaign.name} (suppression rebuild)`,
+          scheduled_for: campaign.scheduledAt?.getTime() ?? Date.now(),
+          messages: remaining.flatMap((recipient) =>
+            allItems(recipient.personalizedContent as unknown as WhatsAppCampaignContent).map((item) =>
+              buildUazapiMessage(item, { number: recipient.phoneNormalized!, mediaUrl }))),
+        }));
+        let replacementStatus = campaignStatusFromRemote(replacement.status, false) ?? 'SCHEDULED';
+        if (campaign.status === 'PAUSED') {
+          const paused = folderRecord(await client.editFolder({ folder_id: replacement.id, action: 'stop' }));
+          replacement = { ...replacement, status: paused.status ?? 'paused' };
+          replacementStatus = 'PAUSED';
+        }
+        const queuedAt = new Date();
         await prisma.$transaction(async (tx) => {
+          const consolidated = await tx.whatsAppCampaign.updateMany({
+            where: {
+              id: campaign.id, tenantId: getTenantId(), status: campaign.status,
+              remoteFolderId: oldFolderId,
+            },
+            data: {
+              status: replacementStatus,
+              remoteFolderId: replacement!.id,
+              remoteFolderStatus: replacement!.status,
+              remoteFolderCreatedAt: replacement!.createdAt,
+              lastError: null,
+            },
+          });
+          if (consolidated.count !== 1) throw new Error('Suppression replacement CAS missed.');
           await tx.whatsAppRecipient.updateMany({
             where: {
               tenantId: getTenantId(), campaignId: campaign.id,
@@ -683,80 +782,30 @@ export async function reconcileSuppressedPhone(phoneNormalized: string, occurred
             },
             data: { status: 'CANCELED', canceledAt: occurredAt },
           });
-          const consolidated = await tx.whatsAppCampaign.updateMany({
+          await tx.whatsAppRecipient.updateMany({
             where: {
-              id: campaign.id, tenantId: getTenantId(), status: campaign.status,
-              remoteFolderId: oldFolderId,
+              tenantId: getTenantId(), campaignId: campaign.id,
+              id: { in: remaining.map(({ id }) => id) }, status: { in: ['PENDING', 'QUEUED'] },
             },
             data: {
-              status: 'CANCELING',
-              remoteFolderStatus: 'deleting',
-              lastError: null,
+              status: 'QUEUED', queuedAt, externalMessageIds: [], processedWebhookEventIds: [],
+              externalChatId: null, error: null, failedAt: null,
             },
           });
-          if (consolidated.count !== 1) throw new Error('Suppression terminalization CAS missed.');
         });
       } catch {
+        if (replacement !== null) {
+          try { await client.editFolder({ folder_id: replacement.id, action: 'delete' }); } catch { /* best effort */ }
+        }
         await recordSuppressionReconciliationFailure(campaign.id);
         throw suppressionReconciliationError();
       }
+      try { await client.editFolder({ folder_id: oldFolderId, action: 'delete' }); } catch { /* best effort */ }
       await refreshCampaignMetrics(campaign.id);
-      continue;
-    }
-
-    let replacement: ReturnType<typeof remoteFolder> | null = null;
-    try {
-      const mediaUrl = await mediaUrlFactory(campaign.content as unknown as WhatsAppCampaignContent);
-      replacement = remoteFolder(await client.sendAdvanced({
-        delayMin: config.whatsappDelayMin,
-        delayMax: config.whatsappDelayMax,
-        info: `${campaign.name} (suppression rebuild)`,
-        scheduled_for: campaign.scheduledAt?.getTime() ?? Date.now(),
-        messages: remaining.flatMap((recipient) =>
-          allItems(recipient.personalizedContent as unknown as WhatsAppCampaignContent).map((item) =>
-            buildUazapiMessage(item, { number: recipient.phoneNormalized!, mediaUrl }))),
-      }));
-      let replacementStatus = campaignStatusFromRemote(replacement.status, false) ?? 'SCHEDULED';
-      if (campaign.status === 'PAUSED') {
-        const paused = folderRecord(await client.editFolder({ folder_id: replacement.id, action: 'stop' }));
-        replacement = { ...replacement, status: paused.status ?? 'paused' };
-        replacementStatus = 'PAUSED';
-      }
-      await prisma.$transaction(async (tx) => {
-        const consolidated = await tx.whatsAppCampaign.updateMany({
-          where: {
-            id: campaign.id, tenantId: getTenantId(), status: campaign.status,
-            remoteFolderId: oldFolderId,
-          },
-          data: {
-            status: replacementStatus,
-            remoteFolderId: replacement!.id,
-            remoteFolderStatus: replacement!.status,
-            remoteFolderCreatedAt: replacement!.createdAt,
-            lastError: null,
-          },
-        });
-        if (consolidated.count !== 1) throw new Error('Suppression replacement CAS missed.');
-        await tx.whatsAppRecipient.updateMany({
-          where: {
-            tenantId: getTenantId(), campaignId: campaign.id,
-            id: { in: removed.map(({ id }) => id) }, status: { in: ['PENDING', 'QUEUED'] },
-          },
-          data: { status: 'CANCELED', canceledAt: occurredAt },
-        });
-      });
-    } catch {
-      if (replacement !== null) {
-        try { await client.editFolder({ folder_id: replacement.id, action: 'delete' }); } catch { /* best effort */ }
-      }
-      await recordSuppressionReconciliationFailure(campaign.id);
-      throw suppressionReconciliationError();
-    }
-    try { await client.editFolder({ folder_id: oldFolderId, action: 'delete' }); } catch { /* best effort */ }
-    await refreshCampaignMetrics(campaign.id);
+    });
   }
 
-  return { reconciledCampaignIds: affected.map(({ id }) => id) };
+  return { reconciledCampaignIds };
 }
 
 export async function retryFailedRecipients(

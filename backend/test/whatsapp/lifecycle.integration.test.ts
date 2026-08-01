@@ -36,6 +36,12 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
   let nextFolder = 1;
   let failNextAdvanced = false;
   let failStopFolder: string | null = null;
+  let concurrentStopGate: {
+    folderId: string;
+    entered: number;
+    firstEntered: ReturnType<typeof deferred>;
+    bothEntered: ReturnType<typeof deferred>;
+  } | null = null;
   let raceAfterEdit: { folderId: string; campaignId: string; status: 'COMPLETED' | 'CANCELED' } | null = null;
   let messagesBarrier: {
     folderId: string;
@@ -84,7 +90,9 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
     if (offset === 1000) {
       return [{
         messageid: 'message-sent', chatid: '5511976543210@s.whatsapp.net',
-        sender: '5511976543210', status: 'Sent', timestamp: '2026-08-01T10:05:00.000Z',
+        sender: '5511976543210', status: 'Sent',
+        messageTimestamp: '2026-08-01T11:05:00.000Z',
+        timestamp: '2020-01-01T00:00:00.000Z',
       }];
     }
     return [];
@@ -109,6 +117,15 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
     upstream.post('/sender/edit', async (request, reply) => {
       requests.push({ method: request.method, url: request.url, body: request.body });
       const body = request.body as { folder_id: string; action: 'stop' | 'continue' | 'delete' };
+      if (body.action === 'stop' && concurrentStopGate?.folderId === body.folder_id) {
+        concurrentStopGate.entered += 1;
+        if (concurrentStopGate.entered === 1) concurrentStopGate.firstEntered.resolve();
+        if (concurrentStopGate.entered === 2) concurrentStopGate.bothEntered.resolve();
+        await Promise.race([
+          concurrentStopGate.bothEntered.promise,
+          new Promise<void>((resolve) => setTimeout(resolve, 100)),
+        ]);
+      }
       if (body.action === 'stop' && body.folder_id === failStopFolder) {
         failStopFolder = null;
         return reply.code(500).send({ error: 'stop failed' });
@@ -173,8 +190,14 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
     } });
     tenantContext.setCurrentTenant(tenant);
     app = await buildApp({ logger: false });
-    coordinatorToken = app.jwt.sign({ sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id });
-    retryCoordinatorToken = app.jwt.sign({ sub: retryCoordinatorId, role: 'COORDENADOR', tenantId: tenant.id });
+    coordinatorToken = app.jwt.sign(
+      { sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id },
+      { expiresIn: '8h' },
+    );
+    retryCoordinatorToken = app.jwt.sign(
+      { sub: retryCoordinatorId, role: 'COORDENADOR', tenantId: tenant.id },
+      { expiresIn: '8h' },
+    );
   });
 
   afterAll(async () => {
@@ -262,6 +285,8 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
         },
         { id: 'recipient-sent', status: 'SENT', externalMessageIds: ['message-sent'] },
       ]);
+      expect(recipients.find(({ id }: { id: string }) => id === 'recipient-sent')?.sentAt.toISOString())
+        .toBe('2026-08-01T11:05:00.000Z');
       expect(requests.filter(({ url }) => url === '/sender/listmessages').slice(-2).map(({ body }) => body)).toEqual([
         { folder_id: 'folder-sync', limit: 1000, offset: 0 },
         { folder_id: 'folder-sync', limit: 1000, offset: 1000 },
@@ -336,6 +361,46 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
         .toBeGreaterThanOrEqual(1);
     });
 
+    test('atomically preserves message ids added after a sync snapshot was read', async () => {
+      await createCampaign({
+        id: 'campaign-sync-id-race', status: 'SENDING', remoteFolderId: 'folder-sync-id-race',
+      });
+      await createRecipient({
+        id: 'recipient-sync-id-race', campaignId: 'campaign-sync-id-race',
+        phone: '5511987878787', status: 'QUEUED', externalMessageIds: ['existing-message-id'],
+      });
+      folderStatuses.set('folder-sync-id-race', 'sending');
+      folderMessages.set('folder-sync-id-race', [{
+        messageid: 'remote-message-id', chatid: '5511987878787@s.whatsapp.net',
+        sender: '5511987878787', status: 'Sent', messageTimestamp: '2026-08-01T11:15:00.000Z',
+      }]);
+      const entered = deferred();
+      const released = deferred();
+      messagesBarrier = {
+        folderId: 'folder-sync-id-race', entered: entered.promise, markEntered: entered.resolve,
+        released: released.promise, release: released.resolve,
+      };
+
+      const syncing = app.inject({
+        method: 'POST', url: '/whatsapp/campaigns/campaign-sync-id-race/sync', headers: auth(),
+      });
+      await messagesBarrier.entered;
+      await prisma.whatsAppRecipient.update({
+        where: { id: 'recipient-sync-id-race' },
+        data: { externalMessageIds: { push: 'concurrent-message-id' } },
+      });
+      messagesBarrier.release();
+      const response = await syncing;
+      messagesBarrier = null;
+
+      expect(response.statusCode).toBe(200);
+      expect((await prisma.whatsAppRecipient.findUnique({
+        where: { id: 'recipient-sync-id-race' },
+      })).externalMessageIds).toEqual([
+        'existing-message-id', 'concurrent-message-id', 'remote-message-id',
+      ]);
+    });
+
     test('preserves a concurrent completion, terminal folder metadata, and counter maxima during sync', async () => {
       await createCampaign({
         id: 'campaign-sync-complete-race', status: 'SENDING',
@@ -382,7 +447,7 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       });
     });
 
-    test('preserves concurrent cancellation and its deleting folder metadata during stale sync', async () => {
+    test('serializes cancellation after an in-flight sync and preserves deleting metadata', async () => {
       await createCampaign({
         id: 'campaign-sync-cancel-race', status: 'SENDING',
         remoteFolderId: 'folder-sync-cancel-race',
@@ -407,20 +472,21 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
         method: 'POST', url: '/whatsapp/campaigns/campaign-sync-cancel-race/sync', headers: auth(),
       });
       await messagesBarrier.entered;
-      const canceling = await app.inject({
+      const cancelingRequest = app.inject({
         method: 'POST', url: '/whatsapp/campaigns/campaign-sync-cancel-race/cancel', headers: auth(),
-      });
-      expect(canceling.json().campaign).toMatchObject({
-        status: 'CANCELING', remoteFolderStatus: 'deleting',
       });
       messagesBarrier.release();
       const response = await syncing;
+      const canceling = await cancelingRequest;
       messagesBarrier = null;
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().campaign).toMatchObject({
+      expect(canceling.json().campaign).toMatchObject({
         status: 'CANCELING', remoteFolderStatus: 'deleting',
       });
+      expect(await prisma.whatsAppCampaign.findUnique({
+        where: { id: 'campaign-sync-cancel-race' },
+      })).toMatchObject({ status: 'CANCELING', remoteFolderStatus: 'deleting' });
       expect((await prisma.whatsAppRecipient.findUnique({
         where: { id: 'recipient-sync-cancel-race' },
       })).status).toBe('SENT');
@@ -641,6 +707,54 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       });
       expect([...folderStatuses].filter(([, status]) => ['scheduled', 'sending', 'paused'].includes(status))
         .map(([id]) => id)).toContain('folder-replace-local-fail');
+    });
+
+    test('serializes edit with pause so local status matches the surviving remote folder', async () => {
+      await createCampaign({
+        id: 'campaign-edit-pause-race', status: 'SENDING',
+        remoteFolderId: 'folder-edit-pause-race',
+      });
+      await createRecipient({
+        id: 'recipient-edit-pause-race', campaignId: 'campaign-edit-pause-race',
+        phone: '5511925252525', status: 'QUEUED',
+      });
+      folderStatuses.set('folder-edit-pause-race', 'sending');
+      concurrentStopGate = {
+        folderId: 'folder-edit-pause-race', entered: 0,
+        firstEntered: deferred(), bothEntered: deferred(),
+      };
+
+      let edit;
+      let pause;
+      try {
+        edit = app.inject({
+          method: 'PATCH', url: '/whatsapp/campaigns/campaign-edit-pause-race', headers: auth(),
+          payload: { name: 'Campanha editada antes da pausa' },
+        });
+        await concurrentStopGate.firstEntered.promise;
+        pause = app.inject({
+          method: 'POST', url: '/whatsapp/campaigns/campaign-edit-pause-race/pause', headers: auth(),
+        });
+        [edit, pause] = await Promise.all([edit, pause]);
+      } finally {
+        concurrentStopGate = null;
+      }
+
+      expect([edit.statusCode, pause.statusCode]).toEqual([200, 200]);
+      const campaign = await prisma.whatsAppCampaign.findUnique({
+        where: { id: 'campaign-edit-pause-race' },
+      });
+      const survivingFolderId = campaign.remoteFolderId;
+      expect(campaign).toMatchObject({
+        name: 'Campanha editada antes da pausa', status: 'PAUSED',
+        remoteFolderId: expect.stringMatching(/^folder-new-/), remoteFolderStatus: 'paused',
+      });
+      expect([...folderStatuses]).toContainEqual([survivingFolderId, 'paused']);
+      expect([...folderStatuses].filter(([folderId]) =>
+        folderId === 'folder-edit-pause-race' || folderId === survivingFolderId)).toEqual([
+        ['folder-edit-pause-race', 'deleting'],
+        [survivingFolderId, 'paused'],
+      ]);
     });
 
     test('reconciles instead of overwriting a concurrent terminal transition after remote pause', async () => {
@@ -864,7 +978,10 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       const sentPhone = '5511991111003';
       await createCampaign({ id: 'campaign-suppression-mixed', status: 'QUEUED', remoteFolderId: 'folder-suppression-mixed' });
       await createRecipient({ id: 'suppression-mixed-target', campaignId: 'campaign-suppression-mixed', phone: suppressedPhone, status: 'QUEUED' });
-      await createRecipient({ id: 'suppression-mixed-remaining', campaignId: 'campaign-suppression-mixed', phone: remainingPhone, status: 'PENDING' });
+      await createRecipient({
+        id: 'suppression-mixed-remaining', campaignId: 'campaign-suppression-mixed',
+        phone: remainingPhone, status: 'PENDING', externalMessageIds: ['old-remaining-message'],
+      });
       await createRecipient({ id: 'suppression-mixed-sent', campaignId: 'campaign-suppression-mixed', phone: sentPhone, status: 'SENT' });
       folderStatuses.set('folder-suppression-mixed', 'sending');
       const before = requests.length;
@@ -886,10 +1003,89 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
         .toMatch(/^folder-new-/);
       expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'suppression-mixed-target' } })).status)
         .toBe('CANCELED');
-      expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'suppression-mixed-remaining' } })).status)
-        .toBe('PENDING');
+      expect(await prisma.whatsAppRecipient.findUnique({
+        where: { id: 'suppression-mixed-remaining' },
+      })).toMatchObject({
+        status: 'QUEUED', externalMessageIds: [], externalChatId: null,
+        queuedAt: expect.any(Date),
+      });
       expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'suppression-mixed-sent' } })).status)
         .toBe('SENT');
+    });
+
+    test('serializes two phone suppressions in one campaign and builds only one safe replacement', async () => {
+      const firstPhone = '5511993333001';
+      const secondPhone = '5511993333002';
+      const remainingPhone = '5511993333003';
+      await createCampaign({
+        id: 'campaign-suppression-concurrent', status: 'QUEUED',
+        remoteFolderId: 'folder-suppression-concurrent',
+      });
+      await createRecipient({
+        id: 'suppression-concurrent-first', campaignId: 'campaign-suppression-concurrent',
+        phone: firstPhone, status: 'QUEUED',
+      });
+      await createRecipient({
+        id: 'suppression-concurrent-second', campaignId: 'campaign-suppression-concurrent',
+        phone: secondPhone, status: 'QUEUED',
+      });
+      await createRecipient({
+        id: 'suppression-concurrent-remaining', campaignId: 'campaign-suppression-concurrent',
+        phone: remainingPhone, status: 'PENDING',
+      });
+      await prisma.whatsAppSuppression.createMany({ data: [
+        {
+          tenantId: tenant.id, phoneNormalized: firstPhone, active: true,
+          reason: 'SAIR', source: 'WEBHOOK', firstOptOutAt: new Date(), lastOptOutAt: new Date(),
+        },
+        {
+          tenantId: tenant.id, phoneNormalized: secondPhone, active: true,
+          reason: 'SAIR', source: 'WEBHOOK', firstOptOutAt: new Date(), lastOptOutAt: new Date(),
+        },
+      ] });
+      folderStatuses.set('folder-suppression-concurrent', 'sending');
+      concurrentStopGate = {
+        folderId: 'folder-suppression-concurrent', entered: 0,
+        firstEntered: deferred(), bothEntered: deferred(),
+      };
+      const before = requests.length;
+      const { reconcileSuppressedPhone } = await import('../../src/whatsapp/services/campaign-service.js');
+
+      let results;
+      try {
+        results = await Promise.allSettled([
+          reconcileSuppressedPhone(firstPhone),
+          reconcileSuppressedPhone(secondPhone),
+        ]);
+      } finally {
+        concurrentStopGate = null;
+      }
+
+      expect(results.map(({ status }) => status)).toEqual(['fulfilled', 'fulfilled']);
+      expect(requests.slice(before).map(({ url, body }) => ({ url, body }))).toEqual([
+        {
+          url: '/sender/edit',
+          body: { folder_id: 'folder-suppression-concurrent', action: 'stop' },
+        },
+        {
+          url: '/sender/advanced',
+          body: expect.objectContaining({
+            messages: [{ number: remainingPhone, type: 'text', text: 'Olá, suppression-concurrent-remaining' }],
+          }),
+        },
+        {
+          url: '/sender/edit',
+          body: { folder_id: 'folder-suppression-concurrent', action: 'delete' },
+        },
+      ]);
+      expect(await prisma.whatsAppRecipient.findMany({
+        where: { campaignId: 'campaign-suppression-concurrent' }, orderBy: { id: 'asc' },
+        select: { id: true, status: true },
+      })).toEqual([
+        { id: 'suppression-concurrent-first', status: 'CANCELED' },
+        { id: 'suppression-concurrent-remaining', status: 'QUEUED' },
+        { id: 'suppression-concurrent-second', status: 'CANCELED' },
+      ]);
     });
 
     test('waits for remote deletion confirmation when no non-suppressed pending recipient remains', async () => {

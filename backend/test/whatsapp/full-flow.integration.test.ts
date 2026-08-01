@@ -324,14 +324,18 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
       },
     });
     app = await buildApp({ logger: { stream } });
-    coordinatorToken = app.jwt.sign({ sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id });
-    leaderToken = app.jwt.sign({ sub: leaderId, role: 'LIDER_REGIONAL', tenantId: tenant.id });
+    coordinatorToken = app.jwt.sign(
+      { sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id }, { expiresIn: '8h' },
+    );
+    leaderToken = app.jwt.sign(
+      { sub: leaderId, role: 'LIDER_REGIONAL', tenantId: tenant.id }, { expiresIn: '8h' },
+    );
     verifierToken = app.jwt.sign({
       sub: 'full-flow-verifier', role: 'VERIFICADORA', tenantId: tenant.id,
-    });
+    }, { expiresIn: '8h' });
     otherTenantToken = app.jwt.sign({
       sub: otherCoordinatorId, role: 'COORDENADOR', tenantId: otherTenant.id,
-    });
+    }, { expiresIn: '8h' });
   });
 
   afterAll(async () => {
@@ -378,7 +382,7 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
 
     const coordinatorClaimAfterDemotion = app.jwt.sign({
       sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id,
-    });
+    }, { expiresIn: '8h' });
     await basePrisma.user.update({
       where: { id: coordinatorId }, data: { role: 'LIDER_REGIONAL' },
     });
@@ -398,7 +402,7 @@ if (process.env.WHATSAPP_FULL_FLOW_CHILD !== '1') {
     });
     const missingUserToken = app.jwt.sign({
       sub: 'full-flow-missing-user', role: 'COORDENADOR', tenantId: tenant.id,
-    });
+    }, { expiresIn: '8h' });
     const missing = await inject({
       method: 'GET', url: '/whatsapp/templates', headers: auth(missingUserToken),
     });

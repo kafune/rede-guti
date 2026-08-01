@@ -295,6 +295,7 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
       }
 
       const persistInteraction = recipient !== null || optOut;
+      let firstProcessing = false;
       if (persistInteraction) {
         const duplicate = await tx.whatsAppInteraction.findFirst({
           where: { tenantId, externalId },
@@ -303,6 +304,7 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
           return { accepted: true, processed: false, duplicate: true };
         }
         if (duplicate === null) {
+          firstProcessing = true;
           await tx.whatsAppInteraction.create({
             data: {
               tenantId,
@@ -325,7 +327,7 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
         }
       }
 
-      if (inbound && recipient !== null && !optOut) {
+      if (inbound && recipient !== null && !optOut && firstProcessing) {
         await tx.whatsAppCampaign.updateMany({
           where: { id: recipient.campaignId, tenantId }, data: { replyCount: { increment: 1 } },
         });
@@ -343,7 +345,7 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
             reauthorizedAt: null, reauthorizedById: null,
           },
         });
-        if (recipient !== null) {
+        if (recipient !== null && firstProcessing) {
           await tx.whatsAppCampaign.updateMany({
             where: { id: recipient.campaignId, tenantId }, data: { optOutCount: { increment: 1 } },
           });

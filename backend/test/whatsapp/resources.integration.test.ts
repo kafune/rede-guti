@@ -121,9 +121,18 @@ beforeAll(async () => {
   coordinatorId = users[0].id;
 
   app = await buildApp({ logger: false });
-  coordinatorToken = app.jwt.sign({ sub: users[0].id, role: users[0].role, tenantId: tenantA.id });
-  leaderToken = app.jwt.sign({ sub: users[1].id, role: users[1].role, tenantId: tenantA.id });
-  verifierToken = app.jwt.sign({ sub: users[2].id, role: users[2].role, tenantId: tenantA.id });
+  coordinatorToken = app.jwt.sign(
+    { sub: users[0].id, role: users[0].role, tenantId: tenantA.id },
+    { expiresIn: '8h' },
+  );
+  leaderToken = app.jwt.sign(
+    { sub: users[1].id, role: users[1].role, tenantId: tenantA.id },
+    { expiresIn: '8h' },
+  );
+  verifierToken = app.jwt.sign(
+    { sub: users[2].id, role: users[2].role, tenantId: tenantA.id },
+    { expiresIn: '8h' },
+  );
 });
 
 afterAll(async () => {
@@ -147,6 +156,16 @@ function multipartFile(filename: string, mimeType: string, bytes: Uint8Array) {
 }
 
 describe('WhatsApp instance resource', () => {
+  test('rejects a legacy JWT without an explicit expiration', async () => {
+    const legacyToken = app.jwt.sign({
+      sub: coordinatorId, role: 'COORDENADOR', tenantId: tenantA.id,
+    });
+    const response = await app.inject({
+      method: 'GET', url: '/whatsapp/instance', headers: auth(legacyToken),
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
   test('requires public webhook settings before creating any remote or local instance', async () => {
     for (const key of ['publicApiUrl', 'uazapiWebhookSecret'] as const) {
       const original = runtimeConfig[key];

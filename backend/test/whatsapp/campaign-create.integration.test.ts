@@ -148,9 +148,18 @@ beforeAll(async () => {
   });
 
   app = await buildApp({ logger: false });
-  coordinatorToken = app.jwt.sign({ sub: 'campaign-coordinator', role: 'COORDENADOR', tenantId: tenantA.id });
-  leaderToken = app.jwt.sign({ sub: 'campaign-leader', role: 'LIDER_REGIONAL', tenantId: tenantA.id });
-  verifierToken = app.jwt.sign({ sub: 'campaign-verifier', role: 'VERIFICADORA', tenantId: tenantA.id });
+  coordinatorToken = app.jwt.sign(
+    { sub: 'campaign-coordinator', role: 'COORDENADOR', tenantId: tenantA.id },
+    { expiresIn: '8h' },
+  );
+  leaderToken = app.jwt.sign(
+    { sub: 'campaign-leader', role: 'LIDER_REGIONAL', tenantId: tenantA.id },
+    { expiresIn: '8h' },
+  );
+  verifierToken = app.jwt.sign(
+    { sub: 'campaign-verifier', role: 'VERIFICADORA', tenantId: tenantA.id },
+    { expiresIn: '8h' },
+  );
 });
 
 afterAll(async () => {

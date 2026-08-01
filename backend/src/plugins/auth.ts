@@ -9,11 +9,16 @@ import { getAccessDeniedReason, getCurrentUserAccess } from '../lib/userAccess.j
 const belongsToCurrentTenant = (user: { tenantId?: string }) =>
   user.tenantId === getTenantId();
 
+export const hasExplicitUnexpiredJwt = (user: { exp?: number }) =>
+  typeof user.exp === 'number'
+  && Number.isFinite(user.exp)
+  && user.exp > Math.floor(Date.now() / 1_000);
+
 export const registerAuth = (app: FastifyInstance) => {
   app.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
-      if (!belongsToCurrentTenant(request.user)) {
+      if (!hasExplicitUnexpiredJwt(request.user) || !belongsToCurrentTenant(request.user)) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
     } catch {
@@ -31,7 +36,7 @@ export const registerAuth = (app: FastifyInstance) => {
   app.decorate('requireCoordinator', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
-      if (!belongsToCurrentTenant(request.user)) {
+      if (!hasExplicitUnexpiredJwt(request.user) || !belongsToCurrentTenant(request.user)) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
     } catch {

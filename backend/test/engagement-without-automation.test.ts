@@ -85,7 +85,10 @@ if (process.env.ENGAGEMENT_WITHOUT_AUTOMATION_CHILD !== '1') {
     });
 
     app = await buildApp({ logger: false });
-    coordinatorToken = app.jwt.sign({ sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id });
+    coordinatorToken = app.jwt.sign(
+      { sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id },
+      { expiresIn: '8h' },
+    );
   });
 
   afterAll(async () => {

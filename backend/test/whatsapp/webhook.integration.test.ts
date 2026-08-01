@@ -66,7 +66,10 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
     ] });
     tenantContext.setCurrentTenant(tenant);
     app = await buildApp({ logger: false });
-    coordinatorToken = app.jwt.sign({ sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id });
+    coordinatorToken = app.jwt.sign(
+      { sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id },
+      { expiresIn: '8h' },
+    );
 
     await createCampaign('webhook-campaign-quoted', coordinatorId, 'SENDING');
     await createRecipient({
@@ -353,6 +356,66 @@ if (process.env.WEBHOOK_SCENARIO_CHILD !== '1') {
       expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'optout-queued-same' } })).status).toBe('CANCELED');
       expect((await prisma.whatsAppRecipient.findUnique({ where: { id: 'optout-queued-other-phone' } })).status).toBe('QUEUED');
       expect((await basePrisma.whatsAppRecipient.findUnique({ where: { id: 'optout-other-tenant' } })).status).toBe('QUEUED');
+    });
+
+    test('does not increment opt-out metrics again when retrying failed post-commit reconciliation', async () => {
+      const phone = '5511961010101';
+      await createCampaign('webhook-optout-retry-campaign', coordinatorId, 'QUEUED');
+      await createRecipient({
+        id: 'webhook-optout-retry-recipient', campaignId: 'webhook-optout-retry-campaign',
+        phone, status: 'QUEUED', externalMessageIds: ['webhook-optout-retry-outbound'],
+      });
+      await basePrisma.$executeRawUnsafe(`
+        CREATE OR REPLACE FUNCTION fail_optout_reconciliation_refresh() RETURNS trigger AS $$
+        BEGIN
+          IF OLD.id = 'webhook-optout-retry-campaign'
+             AND NEW.opt_out_count = OLD.opt_out_count
+             AND EXISTS (
+               SELECT 1 FROM whatsapp_recipients
+               WHERE campaign_id = OLD.id AND status = 'CANCELED'
+             ) THEN
+            RAISE EXCEPTION 'deterministic post-commit reconciliation failure';
+          END IF;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql
+      `);
+      await basePrisma.$executeRawUnsafe(`
+        CREATE TRIGGER fail_optout_reconciliation_refresh_trigger
+        BEFORE UPDATE ON whatsapp_campaigns
+        FOR EACH ROW EXECUTE FUNCTION fail_optout_reconciliation_refresh()
+      `);
+      const payload = { event: 'messages', eventId: 'optout-retry-event', data: {
+        messageid: 'optout-retry-message', sender_pn: phone, fromMe: false,
+        text: 'SAIR', quoted: 'webhook-optout-retry-outbound',
+      } };
+
+      let failed;
+      try {
+        failed = await webhook(payload);
+      } finally {
+        await basePrisma.$executeRawUnsafe(
+          'DROP TRIGGER fail_optout_reconciliation_refresh_trigger ON whatsapp_campaigns',
+        );
+        await basePrisma.$executeRawUnsafe('DROP FUNCTION fail_optout_reconciliation_refresh()');
+      }
+
+      expect(failed.statusCode).toBeGreaterThanOrEqual(500);
+      expect(await prisma.whatsAppCampaign.findUnique({
+        where: { id: 'webhook-optout-retry-campaign' },
+      })).toMatchObject({ optOutCount: 1 });
+      expect(await prisma.whatsAppInteraction.findUnique({
+        where: { tenantId_externalId: { tenantId: tenant.id, externalId: 'optout-retry-event' } },
+      })).toMatchObject({ status: 'FAILED' });
+
+      const retried = await webhook(payload);
+      expect(retried.json()).toEqual({ accepted: true, processed: true, duplicate: false });
+      expect(await prisma.whatsAppCampaign.findUnique({
+        where: { id: 'webhook-optout-retry-campaign' },
+      })).toMatchObject({ optOutCount: 1 });
+      expect(await prisma.whatsAppInteraction.findUnique({
+        where: { tenantId_externalId: { tenantId: tenant.id, externalId: 'optout-retry-event' } },
+      })).toMatchObject({ status: 'PROCESSED' });
     });
 
     test('never lets a later stale delivery overwrite a completed SAIR cancellation', async () => {

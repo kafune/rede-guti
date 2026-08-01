@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { normalizeRole } from '../../lib/access.js';
 import { getTenantId } from '../../lib/tenantContext.js';
 import { getCurrentUserAccess } from '../../lib/userAccess.js';
+import { hasExplicitUnexpiredJwt } from '../../plugins/auth.js';
 import { whatsappCampaignRoutes } from './campaigns.js';
 import { whatsappInstanceRoutes } from './instance.js';
 import { publicWhatsAppMediaRoutes, whatsappMediaRoutes } from './media.js';
@@ -17,7 +18,7 @@ export async function whatsappRoutes(app: FastifyInstance) {
       } catch {
         throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
       }
-      if (request.user.tenantId !== getTenantId()) {
+      if (!hasExplicitUnexpiredJwt(request.user) || request.user.tenantId !== getTenantId()) {
         throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
       }
       const currentUser = await getCurrentUserAccess(request.user.sub);

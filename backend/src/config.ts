@@ -1,3 +1,5 @@
+import { decodeEncryptionKey } from './whatsapp/domain/crypto.js';
+
 function optionalValue(value: string | undefined): string | null {
   return value?.trim() || null;
 }
@@ -12,6 +14,19 @@ function positiveInteger(value: string | undefined, fallback: number, name: stri
     throw new Error(`${name} must be a positive integer.`);
   }
   return parsed;
+}
+
+function optionalEncryptionKey(value: string | undefined): string | null {
+  const key = optionalValue(value);
+  if (key === null) return null;
+  try {
+    decodeEncryptionKey(key);
+  } catch {
+    throw new Error(
+      'WHATSAPP_ENCRYPTION_KEY must be 64 hex characters or base64 encoding exactly 32 bytes.',
+    );
+  }
+  return key;
 }
 
 const whatsappDelayMin = positiveInteger(process.env.WHATSAPP_DELAY_MIN, 5, 'WHATSAPP_DELAY_MIN');
@@ -54,7 +69,7 @@ export const config = {
   uazapiBaseUrl: optionalUrl(process.env.UAZAPI_BASE_URL),
   uazapiAdminToken: optionalValue(process.env.UAZAPI_ADMIN_TOKEN),
   uazapiWebhookSecret: optionalValue(process.env.UAZAPI_WEBHOOK_SECRET),
-  whatsappEncryptionKey: optionalValue(process.env.WHATSAPP_ENCRYPTION_KEY),
+  whatsappEncryptionKey: optionalEncryptionKey(process.env.WHATSAPP_ENCRYPTION_KEY),
   whatsappDelayMin,
   whatsappDelayMax,
   whatsappUploadMaxMb: positiveInteger(process.env.WHATSAPP_UPLOAD_MAX_MB, 20, 'WHATSAPP_UPLOAD_MAX_MB'),

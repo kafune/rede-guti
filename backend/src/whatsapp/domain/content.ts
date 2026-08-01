@@ -8,7 +8,14 @@ import type {
 } from '../types.js';
 
 export const MARKETING_FOOTER = 'Para não receber mais mensagens, responda SAIR.';
-const VARIABLE_PATTERN = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+const VARIABLE_PATTERN = /\{\{\s*([^{}]*?)\s*\}\}/gu;
+const MARKETING_FOOTER_PATTERN = new RegExp(
+  MARKETING_FOOTER
+    .split(/\s+/)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('\\s+'),
+  'giu',
+);
 
 function personalizeText(value: string, person: WhatsAppPerson): string {
   const firstName = person.name.trim().split(/\s+/)[0] ?? '';
@@ -78,22 +85,56 @@ export function personalizeContent(
   };
 }
 
-function normalizedText(value: string): string {
-  return value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+function removeMarketingFooter(value: string): string {
+  const withoutFooter = value.replace(MARKETING_FOOTER_PATTERN, '');
+  return withoutFooter === value ? value : withoutFooter.trim();
 }
 
-function itemTextValues(item: WhatsAppContentItem): string[] {
+function removeMarketingFooterFromButton(button: WhatsAppButton): WhatsAppButton {
+  return {
+    ...button,
+    label: removeMarketingFooter(button.label),
+    value: removeMarketingFooter(button.value),
+  };
+}
+
+function removeMarketingFooterFromItem(item: WhatsAppContentItem): WhatsAppContentItem {
   switch (item.type) {
-    case 'text': return [item.text];
+    case 'text':
+      return { ...item, text: removeMarketingFooter(item.text) };
     case 'image':
     case 'document':
-    case 'audio': return [item.caption ?? ''];
-    case 'button': return [item.text, item.footerText ?? '', ...item.buttons.flatMap(({ label, value }) => [label, value])];
-    case 'poll': return [item.text, ...item.choices];
-    case 'carousel': return [item.text, ...item.cards.flatMap((card) => [
-      card.text,
-      ...card.buttons.flatMap(({ label, value }) => [label, value]),
-    ])];
+    case 'audio':
+      return {
+        ...item,
+        ...(item.caption === undefined ? {} : { caption: removeMarketingFooter(item.caption) }),
+        ...(item.filename === undefined ? {} : { filename: removeMarketingFooter(item.filename) }),
+      };
+    case 'button':
+      return {
+        ...item,
+        text: removeMarketingFooter(item.text),
+        ...(item.footerText === undefined
+          ? {}
+          : { footerText: removeMarketingFooter(item.footerText) }),
+        buttons: item.buttons.map(removeMarketingFooterFromButton),
+      };
+    case 'poll':
+      return {
+        ...item,
+        text: removeMarketingFooter(item.text),
+        choices: item.choices.map(removeMarketingFooter),
+      };
+    case 'carousel':
+      return {
+        ...item,
+        text: removeMarketingFooter(item.text),
+        cards: item.cards.map((card) => ({
+          ...card,
+          text: removeMarketingFooter(card.text),
+          buttons: card.buttons.map(removeMarketingFooterFromButton),
+        })),
+      };
   }
 }
 
@@ -118,18 +159,10 @@ function appendFooter(item: WhatsAppContentItem): WhatsAppContentItem {
 }
 
 export function applyMarketingFooter(content: WhatsAppCampaignContent): WhatsAppCampaignContent {
-  const items = [content.primary, ...content.sequence];
-  const footer = normalizedText(MARKETING_FOOTER);
-  if (items.some((item) => itemTextValues(item).some((value) => normalizedText(value).includes(footer)))) {
-    return structuredClone(content);
-  }
-
-  const clonedSequence = content.sequence.map((item) => structuredClone(item));
-  if (clonedSequence.length === 0) {
-    return { primary: appendFooter(content.primary), sequence: [] };
-  }
-  clonedSequence[clonedSequence.length - 1] = appendFooter(clonedSequence[clonedSequence.length - 1]);
-  return { primary: structuredClone(content.primary), sequence: clonedSequence };
+  const cleanedItems = [content.primary, ...content.sequence].map(removeMarketingFooterFromItem);
+  const lastIndex = cleanedItems.length - 1;
+  cleanedItems[lastIndex] = appendFooter(cleanedItems[lastIndex]);
+  return { primary: cleanedItems[0], sequence: cleanedItems.slice(1) };
 }
 
 function encodeButton(button: WhatsAppButton): string {

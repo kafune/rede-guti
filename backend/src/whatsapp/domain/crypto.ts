@@ -1,18 +1,30 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 const REDACTED = '[REDACTED]';
 const ENVELOPE_VERSION = 'v1';
 
-function encryptionKey(key: string): Buffer {
-  if (!key) {
-    throw new Error('Encryption key is required.');
+const ENCRYPTION_KEY_ERROR = 'Encryption key must be 64 hex characters or base64 encoding exactly 32 bytes.';
+
+export function decodeEncryptionKey(value: string): Buffer {
+  const key = value.trim();
+  if (/^[0-9a-f]{64}$/i.test(key)) {
+    return Buffer.from(key, 'hex');
   }
-  return createHash('sha256').update(key, 'utf8').digest();
+
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(key)) {
+    const decoded = Buffer.from(key, 'base64');
+    const canonical = decoded.toString('base64').replace(/=+$/, '');
+    if (decoded.length === 32 && canonical === key.replace(/=+$/, '')) {
+      return decoded;
+    }
+  }
+
+  throw new Error(ENCRYPTION_KEY_ERROR);
 }
 
 export function encryptSecret(value: string, key: string): string {
   const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', encryptionKey(key), iv);
+  const cipher = createCipheriv('aes-256-gcm', decodeEncryptionKey(key), iv);
   const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
   const authenticationTag = cipher.getAuthTag();
 
@@ -30,7 +42,7 @@ export function decryptSecret(envelope: string, key: string): string {
     throw new Error('Invalid encrypted secret envelope.');
   }
 
-  const decipher = createDecipheriv('aes-256-gcm', encryptionKey(key), Buffer.from(encodedIv, 'base64url'));
+  const decipher = createDecipheriv('aes-256-gcm', decodeEncryptionKey(key), Buffer.from(encodedIv, 'base64url'));
   decipher.setAuthTag(Buffer.from(encodedTag, 'base64url'));
   return Buffer.concat([
     decipher.update(Buffer.from(encodedCiphertext, 'base64url')),
@@ -41,11 +53,16 @@ export function decryptSecret(envelope: string, key: string): string {
 function isCredentialKey(key: string): boolean {
   const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
   return normalized === 'authorization'
+    || normalized === 'auth'
+    || normalized.endsWith('auth')
     || normalized.includes('token')
     || normalized.includes('password')
     || normalized.includes('secret')
     || normalized.includes('apikey')
-    || normalized.includes('encryptionkey');
+    || normalized.includes('encryptionkey')
+    || normalized.includes('credential')
+    || normalized.includes('cookie')
+    || normalized.includes('privatekey');
 }
 
 export function sanitizeCredentials<T>(value: T): T {

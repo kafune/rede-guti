@@ -24,6 +24,9 @@ describe('normalizeBrazilianPhone', () => {
     ['(11) 98765-4321', '5511987654321'],
     ['+55 (21) 99876-5432', '5521998765432'],
     ['55 31 91234 5678', '5531912345678'],
+    ['(11) 2345-6789', '551123456789'],
+    ['551123456789', '551123456789'],
+    ['20 58765-4321', '5520587654321'],
   ] as const) {
     test(`normalizes ${input}`, () => {
       expect(normalizeBrazilianPhone(input)).toEqual({
@@ -37,7 +40,7 @@ describe('normalizeBrazilianPhone', () => {
   for (const [input, reason] of [
     ['119876543', 'INVALID_LENGTH'],
     ['(10) 98765-4321', 'INVALID_DDD'],
-    ['(11) 58765-4321', 'INVALID_SUBSCRIBER'],
+    ['(11) 18765-4321', 'INVALID_SUBSCRIBER'],
   ] as const) {
     test(`rejects ${input} as ${reason}`, () => {
       expect(normalizeBrazilianPhone(input)).toEqual({
@@ -92,6 +95,14 @@ describe('campaign content', () => {
       primary: { type: 'text', text: 'Olá, {{email}}' },
       sequence: [],
     }, { name: 'Maria' })).toThrow('Unsupported variable: email');
+    expect(() => personalizeContent({
+      primary: { type: 'text', text: 'Olá, {{e-mail}}' },
+      sequence: [],
+    }, { name: 'Maria' })).toThrow('Unsupported variable: e-mail');
+    expect(() => personalizeContent({
+      primary: { type: 'text', text: 'Olá, {{nöme}}' },
+      sequence: [],
+    }, { name: 'Maria' })).toThrow('Unsupported variable: nöme');
   });
 
   test('accepts ten content items and rejects eleven', () => {
@@ -124,6 +135,32 @@ describe('campaign content', () => {
     });
     expect(twice).toEqual(once);
     expect(original.sequence[0]).toEqual({ type: 'image', mediaId: 'media-1', caption: 'Última' });
+  });
+
+  test('moves duplicate marketing footers from earlier items to the last item', () => {
+    const original: WhatsAppCampaignContent = {
+      primary: {
+        type: 'text',
+        text: 'Primeira\n\nPara não receber mais mensagens, responda SAIR.\n\nPARA NÃO RECEBER MAIS MENSAGENS, RESPONDA SAIR.',
+      },
+      sequence: [
+        { type: 'button', text: 'Intermediária\nPara  não receber mais mensagens, responda SAIR.', buttons: [] },
+        { type: 'image', mediaId: 'media-1', caption: 'Última' },
+      ],
+    };
+
+    expect(applyMarketingFooter(original)).toEqual({
+      primary: { type: 'text', text: 'Primeira' },
+      sequence: [
+        { type: 'button', text: 'Intermediária', buttons: [] },
+        {
+          type: 'image',
+          mediaId: 'media-1',
+          caption: 'Última\n\nPara não receber mais mensagens, responda SAIR.',
+        },
+      ],
+    });
+    expect(original.primary.text).toContain('PARA NÃO RECEBER MAIS MENSAGENS');
   });
 });
 
@@ -193,16 +230,43 @@ describe('buildUazapiMessage', () => {
 
 describe('credential safety', () => {
   test('round-trips AES ciphertext and rejects authenticated ciphertext mutation', () => {
-    const encrypted = encryptSecret('instance-token', 'test encryption key');
+    const key = '00'.repeat(32);
+    const encrypted = encryptSecret('instance-token', key);
     expect(encrypted).not.toContain('instance-token');
-    expect(decryptSecret(encrypted, 'test encryption key')).toBe('instance-token');
+    expect(decryptSecret(encrypted, key)).toBe('instance-token');
 
     const parts = encrypted.split(':');
     const ciphertext = Buffer.from(parts[3], 'base64url');
     ciphertext[0] ^= 1;
     parts[3] = ciphertext.toString('base64url');
     const mutated = parts.join(':');
-    expect(() => decryptSecret(mutated, 'test encryption key')).toThrow();
+    expect(() => decryptSecret(mutated, key)).toThrow();
+  });
+
+  test('accepts only encryption keys that decode to exactly 32 bytes', () => {
+    const base64Key = Buffer.alloc(32, 7).toString('base64');
+    const encrypted = encryptSecret('instance-token', base64Key);
+    expect(decryptSecret(encrypted, base64Key)).toBe('instance-token');
+    expect(() => encryptSecret('instance-token', 'test encryption key')).toThrow(
+      'Encryption key must be 64 hex characters or base64 encoding exactly 32 bytes.',
+    );
+    expect(() => encryptSecret('instance-token', Buffer.alloc(31).toString('base64'))).toThrow(
+      'Encryption key must be 64 hex characters or base64 encoding exactly 32 bytes.',
+    );
+  });
+
+  test('rejects an invalid WHATSAPP_ENCRYPTION_KEY during configuration', () => {
+    const result = Bun.spawnSync({
+      cmd: [process.execPath, '-e', "await import('./src/config.ts')"],
+      cwd: new URL('../../', import.meta.url).pathname,
+      env: { ...process.env, WHATSAPP_ENCRYPTION_KEY: 'test encryption key' },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain(
+      'WHATSAPP_ENCRYPTION_KEY must be 64 hex characters or base64 encoding exactly 32 bytes.',
+    );
   });
 
   test('recursively redacts credential keys without mutating the input', () => {
@@ -210,7 +274,11 @@ describe('credential safety', () => {
       token: 'instance-token',
       nested: {
         admintoken: 'admin-token',
-        rows: [{ authorization: 'Bearer secret' }, { password: 'password' }],
+        rows: [
+          { authorization: 'Bearer secret', credentials: { user: 'alice' } },
+          { password: 'password', auth: 'basic', cookie: 'session=secret' },
+          { privateKey: 'private-key', credential: 'credential-value' },
+        ],
       },
       status: 'connected',
     };
@@ -218,7 +286,11 @@ describe('credential safety', () => {
       token: '[REDACTED]',
       nested: {
         admintoken: '[REDACTED]',
-        rows: [{ authorization: '[REDACTED]' }, { password: '[REDACTED]' }],
+        rows: [
+          { authorization: '[REDACTED]', credentials: '[REDACTED]' },
+          { password: '[REDACTED]', auth: '[REDACTED]', cookie: '[REDACTED]' },
+          { privateKey: '[REDACTED]', credential: '[REDACTED]' },
+        ],
       },
       status: 'connected',
     });
@@ -244,5 +316,15 @@ describe('monotonic delivery state', () => {
       status: 'COMPLETED', queued: 10, sent: 10, failed: 1, delivered: 9,
       read: 7, played: 3, replies: 3, optOuts: 1,
     });
+  });
+
+  test('campaign status never regresses and paused campaigns can resume', () => {
+    const current = {
+      status: 'SENDING' as const, queued: 10, sent: 5, failed: 0, delivered: 3,
+      read: 2, played: 0, replies: 1, optOuts: 0,
+    };
+    expect(mergeCampaignMetrics(current, { status: 'DRAFT' }).status).toBe('SENDING');
+    expect(mergeCampaignMetrics(current, { status: 'QUEUED' }).status).toBe('SENDING');
+    expect(mergeCampaignMetrics({ ...current, status: 'PAUSED' }, { status: 'SENDING' }).status).toBe('SENDING');
   });
 });

@@ -27,8 +27,10 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
   let basePrisma: any;
   let prisma: any;
   let coordinatorToken: string;
+  let retryCoordinatorToken: string;
   const tenant = { id: 'lifecycle-tenant', slug: 'lifecycle-tenant', name: 'Lifecycle Tenant' };
   const coordinatorId = 'lifecycle-coordinator';
+  const retryCoordinatorId = 'lifecycle-retry-coordinator';
   const requests: Array<{ method: string; url: string; body: any }> = [];
   let nextFolder = 1;
 
@@ -115,6 +117,10 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       id: coordinatorId, tenantId: tenant.id, email: 'coord@lifecycle.test',
       passwordHash: 'unused', role: 'COORDENADOR', active: true,
     } });
+    await basePrisma.user.create({ data: {
+      id: retryCoordinatorId, tenantId: tenant.id, email: 'retry-coord@lifecycle.test',
+      passwordHash: 'unused', role: 'COORDENADOR', active: true,
+    } });
     await basePrisma.whatsAppConfig.create({ data: {
       tenantId: tenant.id,
       instanceId: 'lifecycle-instance', instanceName: 'Lifecycle', status: 'connected',
@@ -123,6 +129,7 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
     tenantContext.setCurrentTenant(tenant);
     app = await buildApp({ logger: false });
     coordinatorToken = app.jwt.sign({ sub: coordinatorId, role: 'COORDENADOR', tenantId: tenant.id });
+    retryCoordinatorToken = app.jwt.sign({ sub: retryCoordinatorId, role: 'COORDENADOR', tenantId: tenant.id });
   });
 
   afterAll(async () => {
@@ -329,27 +336,42 @@ if (process.env.LIFECYCLE_SCENARIO_CHILD !== '1') {
       expect(requests).toHaveLength(beforeRemote);
     });
 
-    test('retries only failed recipients in a new folder without changing successful recipients', async () => {
+    test('retries failed recipients as a new audit campaign and leaves the terminal original immutable', async () => {
       await createCampaign({ id: 'campaign-retry', status: 'FAILED', remoteFolderId: 'folder-failed' });
       await createRecipient({ id: 'recipient-retry-failed', campaignId: 'campaign-retry', phone: '5511933333333', status: 'FAILED', name: 'Falhou' });
       await createRecipient({ id: 'recipient-retry-read', campaignId: 'campaign-retry', phone: '5511922222222', status: 'READ', name: 'Sucesso', externalMessageIds: ['successful-message'] });
+      const originalBefore = await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-retry' } });
 
       const response = await app.inject({
-        method: 'POST', url: '/whatsapp/campaigns/campaign-retry/retry-failed', headers: auth(),
+        method: 'POST', url: '/whatsapp/campaigns/campaign-retry/retry-failed',
+        headers: { authorization: `Bearer ${retryCoordinatorToken}` },
       });
       expect(response.statusCode).toBe(200);
       expect(response.json().campaign).toMatchObject({
-        id: 'campaign-retry', status: 'QUEUED', remoteFolderId: 'folder-new-3', failedCount: 1,
+        name: 'campaign-retry (retry)', status: 'QUEUED', remoteFolderId: 'folder-new-3',
+        createdById: retryCoordinatorId,
+        audienceFilter: { type: 'RETRY', retryOfCampaignId: 'campaign-retry' },
+        totalRecipients: 1, validRecipients: 1, queuedCount: 1, failedCount: 0,
       });
+      expect(response.json().campaign.id).not.toBe('campaign-retry');
       expect(requests.filter(({ url }) => url === '/sender/advanced').at(-1)?.body).toMatchObject({
         info: 'campaign-retry (retry)',
         messages: [{ number: '5511933333333', type: 'text', text: 'Olá, Falhou' }],
       });
+      expect(await prisma.whatsAppCampaign.findUnique({ where: { id: 'campaign-retry' } })).toEqual(originalBefore);
       expect(await prisma.whatsAppRecipient.findUnique({ where: { id: 'recipient-retry-failed' } })).toMatchObject({
-        status: 'QUEUED', error: null,
+        status: 'FAILED',
       });
       expect(await prisma.whatsAppRecipient.findUnique({ where: { id: 'recipient-retry-read' } })).toMatchObject({
         status: 'READ', externalMessageIds: ['successful-message'],
+      });
+      const retryRecipients = await prisma.whatsAppRecipient.findMany({
+        where: { campaignId: response.json().campaign.id },
+      });
+      expect(retryRecipients).toHaveLength(1);
+      expect(retryRecipients[0]).toMatchObject({
+        phoneNormalized: '5511933333333', personName: 'Falhou', status: 'QUEUED',
+        externalMessageIds: [],
       });
     });
   });

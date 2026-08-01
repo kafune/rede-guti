@@ -259,7 +259,7 @@ export async function whatsappCampaignRoutes(app: FastifyInstance) {
     const params = paramsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: 'Invalid id' });
     try {
-      return { campaign: await retryFailedRecipients(params.data.id) };
+      return { campaign: await retryFailedRecipients(params.data.id, request.user.sub) };
     } catch (error) {
       return sendCampaignError(reply, error);
     }

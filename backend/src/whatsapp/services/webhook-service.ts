@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto';
 import { prisma } from '../../db.js';
 import { getTenantId } from '../../lib/tenantContext.js';
-import { advanceRecipientStatus } from '../domain/metrics.js';
 import { normalizeBrazilianPhone } from '../domain/phone.js';
 import type { WhatsAppRecipientStatus } from '../types.js';
-import { refreshCampaignMetrics } from './campaign-service.js';
 
 type JsonRecord = Record<string, unknown>;
+type TransactionClient = Pick<
+  typeof prisma,
+  'whatsAppRecipient' | 'whatsAppCampaign' | 'whatsAppInteraction' | 'whatsAppSuppression'
+>;
 
 const record = (value: unknown): JsonRecord =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
@@ -66,6 +68,19 @@ function statusDateField(status: WhatsAppRecipientStatus) {
   return fields[status];
 }
 
+const LOWER_RECIPIENT_STATES: Record<WhatsAppRecipientStatus, WhatsAppRecipientStatus[]> = {
+  PENDING: [],
+  QUEUED: ['PENDING'],
+  SENT: ['PENDING', 'QUEUED'],
+  DELIVERED: ['PENDING', 'QUEUED', 'SENT'],
+  READ: ['PENDING', 'QUEUED', 'SENT', 'DELIVERED'],
+  PLAYED: ['PENDING', 'QUEUED', 'SENT', 'DELIVERED', 'READ'],
+  FAILED: ['PENDING', 'QUEUED', 'SENT', 'DELIVERED', 'READ', 'PLAYED'],
+  CANCELED: ['PENDING', 'QUEUED', 'SENT', 'DELIVERED', 'READ', 'PLAYED'],
+};
+
+const SENT_OR_BEYOND = new Set<WhatsAppRecipientStatus>(['SENT', 'DELIVERED', 'READ', 'PLAYED']);
+
 function stableFallbackId(eventType: string, messageId: string | null, status: string | null) {
   const source = `${eventType}|${messageId ?? 'none'}|${status ?? 'received'}`;
   return `fallback:${createHash('sha256').update(source).digest('hex')}`;
@@ -75,24 +90,80 @@ function isOptOut(text: string | null) {
   return text !== null && /^sair[.!]?$/i.test(text.trim());
 }
 
-async function recipientByMessageId(messageId: string | null) {
+async function recipientByMessageId(
+  tx: TransactionClient,
+  tenantId: string,
+  messageId: string | null,
+) {
   if (messageId === null) return null;
-  return prisma.whatsAppRecipient.findFirst({
-    where: { externalMessageIds: { has: messageId } },
+  return tx.whatsAppRecipient.findFirst({
+    where: { tenantId, externalMessageIds: { has: messageId } },
   });
 }
 
-async function recipientForInbound(quotedId: string | null, phone: string | null) {
-  const quoted = await recipientByMessageId(quotedId);
+async function recipientForInbound(
+  tx: TransactionClient,
+  tenantId: string,
+  quotedId: string | null,
+  phone: string | null,
+) {
+  const quoted = await recipientByMessageId(tx, tenantId, quotedId);
   if (quoted !== null || phone === null) return quoted;
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  return prisma.whatsAppRecipient.findFirst({
+  return tx.whatsAppRecipient.findFirst({
     where: {
+      tenantId,
       phoneNormalized: phone,
       status: { in: ['SENT', 'DELIVERED', 'READ', 'PLAYED'] },
-      OR: [{ sentAt: { gte: cutoff } }, { sentAt: null, updatedAt: { gte: cutoff } }],
+      sentAt: { gte: cutoff },
     },
-    orderBy: [{ sentAt: 'desc' }, { updatedAt: 'desc' }],
+    orderBy: { sentAt: 'desc' },
+  });
+}
+
+async function advanceRecipientAtomically(
+  tx: TransactionClient,
+  tenantId: string,
+  recipientId: string,
+  status: WhatsAppRecipientStatus,
+  occurredAt: Date,
+) {
+  const lower = LOWER_RECIPIENT_STATES[status];
+  if (lower.length === 0) return;
+  const field = statusDateField(status);
+  await tx.whatsAppRecipient.updateMany({
+    where: { id: recipientId, tenantId, status: { in: lower } },
+    data: { status, ...(field === undefined ? {} : { [field]: occurredAt }) },
+  });
+}
+
+async function refreshCampaignMetricsInTransaction(
+  tx: TransactionClient,
+  tenantId: string,
+  campaignId: string,
+) {
+  const campaign = await tx.whatsAppCampaign.findFirst({
+    where: { id: campaignId, tenantId },
+    include: { recipients: { where: { tenantId, isValid: true } } },
+  });
+  if (campaign === null) return;
+  const recipients = campaign.recipients;
+  const queued = recipients.filter(({ status }) => status !== 'PENDING').length;
+  const sent = recipients.filter(({ status }) => SENT_OR_BEYOND.has(status)).length;
+  const failed = recipients.filter(({ status }) => status === 'FAILED').length;
+  const delivered = recipients.filter(({ status }) => ['DELIVERED', 'READ', 'PLAYED'].includes(status)).length;
+  const read = recipients.filter(({ status }) => ['READ', 'PLAYED'].includes(status)).length;
+  const played = recipients.filter(({ status }) => status === 'PLAYED').length;
+  await tx.whatsAppCampaign.updateMany({
+    where: { id: campaignId, tenantId },
+    data: {
+      queuedCount: Math.max(campaign.queuedCount, queued),
+      sentCount: Math.max(campaign.sentCount, sent),
+      failedCount: Math.max(campaign.failedCount, failed),
+      deliveredCount: Math.max(campaign.deliveredCount, delivered),
+      readCount: Math.max(campaign.readCount, read),
+      playedCount: Math.max(campaign.playedCount, played),
+    },
   });
 }
 
@@ -133,95 +204,84 @@ export async function processUazapiWebhook(payload: unknown): Promise<WebhookPro
   const fromMe = data.fromMe === true || data.from_me === true || data.wasSentByApi === true;
   const inbound = !fromMe && (text !== null || quotedId !== null || status === null);
   const optOut = inbound && isOptOut(text);
-  const recipient = inbound
-    ? await recipientForInbound(quotedId, phone)
-    : await recipientByMessageId(messageId);
-
-  const duplicate = await prisma.whatsAppInteraction.findUnique({
-    where: { tenantId_externalId: { tenantId: getTenantId(), externalId } },
-  });
-  if (duplicate) return { accepted: true, processed: false, duplicate: true };
-  if (recipient === null && !optOut) return { accepted: true, processed: false, duplicate: false };
+  const tenantId = getTenantId();
 
   try {
-    await prisma.whatsAppInteraction.create({
-      data: {
-        tenantId: getTenantId(),
-        campaignId: recipient?.campaignId ?? null,
-        recipientId: recipient?.id ?? null,
-        externalId,
-        eventType,
-        direction: inbound ? 'INBOUND' : 'OUTBOUND',
-        status: 'RECEIVED',
-        phoneNormalized: phone,
-        payload: payload as any,
-        occurredAt,
-      },
-    });
-  } catch (error) {
-    if (isUniqueViolation(error)) return { accepted: true, processed: false, duplicate: true };
-    throw error;
-  }
+    return await prisma.$transaction(async (tx) => {
+      // Tenant predicates are explicit throughout this transaction. This keeps
+      // isolation independent of whether Prisma propagates client extensions
+      // to an interactive transaction client in a future adapter release.
+      const duplicate = await tx.whatsAppInteraction.findFirst({
+        where: { tenantId, externalId },
+      });
+      if (duplicate !== null) return { accepted: true, processed: false, duplicate: true };
 
-  try {
-    if (recipient !== null && status !== null && !inbound) {
-      const next = advanceRecipientStatus(recipient.status, status);
-      const field = statusDateField(next);
-      await prisma.whatsAppRecipient.update({
-        where: { id: recipient.id },
+      const recipient = inbound
+        ? await recipientForInbound(tx, tenantId, quotedId, phone)
+        : await recipientByMessageId(tx, tenantId, messageId);
+      if (recipient === null && !optOut) {
+        return { accepted: true, processed: false, duplicate: false };
+      }
+
+      await tx.whatsAppInteraction.create({
         data: {
-          status: next,
-          ...(field !== undefined && next !== recipient.status && recipient[field] === null
-            ? { [field]: occurredAt }
-            : {}),
+          tenantId,
+          campaignId: recipient?.campaignId ?? null,
+          recipientId: recipient?.id ?? null,
+          externalId,
+          eventType,
+          direction: inbound ? 'INBOUND' : 'OUTBOUND',
+          status: 'RECEIVED',
+          phoneNormalized: phone,
+          payload: payload as any,
+          occurredAt,
         },
       });
-    }
 
-    if (inbound && recipient !== null && !optOut) {
-      await prisma.whatsAppCampaign.update({
-        where: { id: recipient.campaignId }, data: { replyCount: { increment: 1 } },
-      });
-    }
+      if (recipient !== null && status !== null && !inbound) {
+        await advanceRecipientAtomically(tx, tenantId, recipient.id, status, occurredAt);
+      }
 
-    if (optOut && phone !== null) {
-      const now = occurredAt;
-      await prisma.whatsAppSuppression.upsert({
-        where: { tenantId_phoneNormalized: { tenantId: getTenantId(), phoneNormalized: phone } },
-        create: {
-          tenantId: getTenantId(), phoneNormalized: phone, active: true,
-          reason: 'SAIR', source: 'WEBHOOK', firstOptOutAt: now, lastOptOutAt: now,
-        },
-        update: {
-          active: true, reason: 'SAIR', source: 'WEBHOOK', lastOptOutAt: now,
-          reauthorizedAt: null, reauthorizedById: null,
-        },
-      });
-      await prisma.whatsAppRecipient.updateMany({
-        where: { phoneNormalized: phone, status: { in: ['PENDING', 'QUEUED'] } },
-        data: { status: 'CANCELED', canceledAt: now },
-      });
-      if (recipient !== null) {
-        await prisma.whatsAppCampaign.update({
-          where: { id: recipient.campaignId }, data: { optOutCount: { increment: 1 } },
+      if (inbound && recipient !== null && !optOut) {
+        await tx.whatsAppCampaign.updateMany({
+          where: { id: recipient.campaignId, tenantId }, data: { replyCount: { increment: 1 } },
         });
       }
-    }
 
-    await prisma.whatsAppInteraction.update({
-      where: { tenantId_externalId: { tenantId: getTenantId(), externalId } },
-      data: { status: 'PROCESSED', processedAt: new Date() },
-    });
-    if (recipient !== null) await refreshCampaignMetrics(recipient.campaignId);
-    return { accepted: true, processed: true, duplicate: false };
+      if (optOut && phone !== null) {
+        await tx.whatsAppSuppression.upsert({
+          where: { tenantId_phoneNormalized: { tenantId, phoneNormalized: phone } },
+          create: {
+            tenantId, phoneNormalized: phone, active: true,
+            reason: 'SAIR', source: 'WEBHOOK', firstOptOutAt: occurredAt, lastOptOutAt: occurredAt,
+          },
+          update: {
+            active: true, reason: 'SAIR', source: 'WEBHOOK', lastOptOutAt: occurredAt,
+            reauthorizedAt: null, reauthorizedById: null,
+          },
+        });
+        await tx.whatsAppRecipient.updateMany({
+          where: { tenantId, phoneNormalized: phone, status: { in: ['PENDING', 'QUEUED'] } },
+          data: { status: 'CANCELED', canceledAt: occurredAt },
+        });
+        if (recipient !== null) {
+          await tx.whatsAppCampaign.updateMany({
+            where: { id: recipient.campaignId, tenantId }, data: { optOutCount: { increment: 1 } },
+          });
+        }
+      }
+
+      await tx.whatsAppInteraction.updateMany({
+        where: { tenantId, externalId },
+        data: { status: 'PROCESSED', processedAt: new Date() },
+      });
+      if (recipient !== null) {
+        await refreshCampaignMetricsInTransaction(tx, tenantId, recipient.campaignId);
+      }
+      return { accepted: true, processed: true, duplicate: false };
+    }) as WebhookProcessResult;
   } catch (error) {
-    await prisma.whatsAppInteraction.update({
-      where: { tenantId_externalId: { tenantId: getTenantId(), externalId } },
-      data: {
-        status: 'FAILED', processedAt: new Date(),
-        error: error instanceof Error ? error.message.slice(0, 1_000) : 'Webhook processing failed.',
-      },
-    });
+    if (isUniqueViolation(error)) return { accepted: true, processed: false, duplicate: true };
     throw error;
   }
 }

@@ -402,24 +402,22 @@ async function assertUnstarted(campaign: Awaited<ReturnType<typeof requireCampai
 
 async function recreateCampaignFolder(
   campaign: Awaited<ReturnType<typeof requireCampaign>>,
-  options: { name: string; content: WhatsAppCampaignContent; scheduledAt: Date; retry?: boolean },
+  options: { name: string; content: WhatsAppCampaignContent; scheduledAt: Date },
 ) {
   const client = await getConfiguredUazapiClient();
-  if (!options.retry && campaign.remoteFolderId) {
+  if (campaign.remoteFolderId) {
     await client.editFolder({ folder_id: campaign.remoteFolderId, action: 'delete' });
   }
   const mediaUrl = await mediaUrlFactory(options.content);
   const recipients = campaign.recipients.filter(({ isValid, status }) => isValid && status !== 'CANCELED');
   const personalized = recipients.map((recipient) => ({
     recipient,
-    content: options.retry
-      ? recipient.personalizedContent as unknown as WhatsAppCampaignContent
-      : personalizeContent(options.content, { name: recipient.personName }),
+    content: personalizeContent(options.content, { name: recipient.personName }),
   }));
   const response = await client.sendAdvanced({
     delayMin: config.whatsappDelayMin,
     delayMax: config.whatsappDelayMax,
-    info: options.retry ? `${options.name} (retry)` : options.name,
+    info: options.name,
     scheduled_for: options.scheduledAt.getTime(),
     messages: personalized.flatMap(({ recipient, content }) =>
       allItems(content).map((item) => buildUazapiMessage(item, {
@@ -433,7 +431,8 @@ async function recreateCampaignFolder(
       where: { id: recipient.id },
       data: {
         status: 'QUEUED', queuedAt, error: null, failedAt: null,
-        ...(!options.retry ? { personalizedContent: content as any, externalMessageIds: [] } : {}),
+        personalizedContent: content as any,
+        externalMessageIds: [],
       },
     });
   }
@@ -480,25 +479,85 @@ export async function editUnstartedCampaign(
   });
 }
 
-export async function retryFailedRecipients(campaignId: string) {
+export async function retryFailedRecipients(campaignId: string, coordinatorId: string) {
   const campaign = await requireCampaign(campaignId);
   const failed = campaign.recipients.filter(({ status, isValid }) => status === 'FAILED' && isValid);
   if (failed.length === 0) throw new CampaignConflictError('Campaign has no failed recipients.');
-  const retryCampaign = { ...campaign, recipients: failed };
-  const recreated = await recreateCampaignFolder(retryCampaign as typeof campaign, {
-    name: campaign.name,
-    content: campaign.content as unknown as WhatsAppCampaignContent,
-    scheduledAt: new Date(),
-    retry: true,
+  const name = `${campaign.name} (retry)`;
+  const retry = await prisma.$transaction(async (tx) => {
+    const audit = await tx.whatsAppCampaign.create({
+      data: {
+        tenantId: getTenantId(), createdById: coordinatorId, name,
+        status: 'DRAFT', category: campaign.category,
+        audienceFilter: { type: 'RETRY', retryOfCampaignId: campaign.id },
+        content: campaign.content as any,
+        consentAt: campaign.consentAt,
+        totalRecipients: failed.length,
+        validRecipients: failed.length,
+      },
+    });
+    await tx.whatsAppRecipient.createMany({
+      data: failed.map((recipient) => ({
+        tenantId: getTenantId(), campaignId: audit.id,
+        origin: recipient.origin, sourceId: recipient.sourceId, sourceName: recipient.sourceName,
+        personName: recipient.personName, phoneOriginal: recipient.phoneOriginal,
+        phoneNormalized: recipient.phoneNormalized,
+        personalizedContent: recipient.personalizedContent as any,
+        isValid: true, status: 'PENDING' as const,
+      })),
+    });
+    return audit;
   });
-  return prisma.whatsAppCampaign.update({
-    where: { id: campaignId },
-    data: {
-      status: 'QUEUED', remoteFolderId: recreated.folder.id,
-      remoteFolderStatus: recreated.folder.status, remoteFolderCreatedAt: recreated.folder.createdAt,
-      queuedAt: recreated.queuedAt, lastError: null, failedAt: null,
-    },
-  });
+
+  const client = await getConfiguredUazapiClient();
+  const content = campaign.content as unknown as WhatsAppCampaignContent;
+  const mediaUrl = await mediaUrlFactory(content);
+  let response: Record<string, unknown>;
+  try {
+    response = await client.sendAdvanced({
+      delayMin: config.whatsappDelayMin,
+      delayMax: config.whatsappDelayMax,
+      info: name,
+      scheduled_for: Date.now(),
+      messages: failed.flatMap((recipient) =>
+        allItems(recipient.personalizedContent as unknown as WhatsAppCampaignContent).map((item) =>
+          buildUazapiMessage(item, { number: recipient.phoneNormalized!, mediaUrl }))),
+    });
+  } catch (error) {
+    const message = safeRemoteError(error);
+    const failedAt = new Date();
+    await prisma.$transaction([
+      prisma.whatsAppRecipient.updateMany({
+        where: { campaignId: retry.id }, data: { status: 'FAILED', error: message, failedAt },
+      }),
+      prisma.whatsAppCampaign.update({
+        where: { id: retry.id },
+        data: { status: 'FAILED', failedCount: failed.length, lastError: message, failedAt },
+      }),
+    ]);
+    throw new CampaignDispatchError(message);
+  }
+
+  try {
+    const folder = remoteFolder(response);
+    const queuedAt = new Date();
+    await prisma.$transaction([
+      prisma.whatsAppRecipient.updateMany({
+        where: { campaignId: retry.id }, data: { status: 'QUEUED', queuedAt },
+      }),
+      prisma.whatsAppCampaign.update({
+        where: { id: retry.id },
+        data: {
+          status: 'QUEUED', remoteFolderId: folder.id,
+          remoteFolderStatus: folder.status, remoteFolderCreatedAt: folder.createdAt,
+          queuedCount: failed.length, queuedAt,
+        },
+      }),
+    ]);
+    return prisma.whatsAppCampaign.findUniqueOrThrow({ where: { id: retry.id } });
+  } catch {
+    throw new CampaignStateIndeterminateError();
+  }
 }
 
 async function persistAudit(

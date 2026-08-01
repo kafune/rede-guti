@@ -23,11 +23,49 @@ import { userRoutes } from './routes/users.js';
 import { whatsappRoutes } from './routes/whatsapp/index.js';
 
 export interface BuildAppOptions {
-  logger?: boolean;
+  logger?: boolean | Record<string, unknown>;
+}
+
+const REDACTED = '[REDACTED]';
+
+function redactSecretQuery(url: string | undefined) {
+  return url?.replace(/([?&]secret=)[^&]*/gi, `$1${REDACTED}`);
+}
+
+function safeRequestLog(request: any) {
+  const headers = { ...(request.headers ?? {}) };
+  for (const name of ['authorization', 'x-webhook-secret']) {
+    if (headers[name] !== undefined) headers[name] = REDACTED;
+  }
+  return {
+    method: request.method,
+    url: redactSecretQuery(request.url),
+    host: request.hostname ?? headers.host,
+    remoteAddress: request.ip ?? request.socket?.remoteAddress,
+    headers,
+  };
+}
+
+function loggerOptions(input: BuildAppOptions['logger']) {
+  if (input === false) return false;
+  const supplied = input !== null && typeof input === 'object' ? input : {};
+  return {
+    ...supplied,
+    redact: {
+      paths: [
+        'req.headers.authorization',
+        'req.headers["x-webhook-secret"]',
+        'headers.authorization',
+        'headers["x-webhook-secret"]',
+      ],
+      censor: REDACTED,
+    },
+    serializers: { req: safeRequestLog },
+  };
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
-  const app = Fastify({ logger: options.logger ?? true });
+  const app = Fastify({ logger: loggerOptions(options.logger) as any });
 
   await app.register(cors, { origin: true });
   await app.register(sensible);

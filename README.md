@@ -20,8 +20,8 @@
 3. Install dependencies:
    `npm install`
 4. Run migrations and seed users:
-   `npx prisma migrate dev --name init`
-   `npm run seed`
+   `bun run prisma:deploy`
+   `bun run seed`
 5. Start the API:
    `npm run dev`
 
@@ -31,7 +31,11 @@ The API will start at `http://localhost:4000`.
 
 1. Create `backend/.env` from the example and set `JWT_SECRET` + admin credentials.
 2. Run:
-   `docker compose up -d`
+   `docker compose up -d db`
+   `docker compose run --rm api bun run prisma:deploy`
+   `docker compose up -d api frontend`
+
+Migrations are always applied before the new API process is exposed.
 
 ### Database helpers
 
@@ -59,3 +63,19 @@ From the project root, you can use Bun scripts for the Postgres container:
 - `GET /settings` / `PATCH /settings` (link do grupo + aviso da coordenação)
 - `GET /engagement/me` / `GET /engagement/leaderboard` / `GET /engagement/leaderboard/weekly`
 - `GET /engagement/ledger` / `POST /engagement/recalculate` / `POST /engagement/scan-inactive` (coordenador)
+
+## WhatsApp / UazapiGO
+
+O módulo de WhatsApp é restrito ao coordenador e cobre conexão por QR, mídias,
+templates, prévias de público, envio de teste, campanhas imediatas/agendadas,
+webhooks, opt-out e controles de campanha. Configure as nove variáveis descritas
+em `backend/.env.example` e `DEPLOY.md`; `PUBLIC_API_URL` deve ser a URL HTTPS
+pública da API para o registro do webhook.
+
+Use um número WhatsApp Business dedicado. O UazapiGO usa API não oficial do
+WhatsApp e, portanto, existe risco de bloqueio ou desconexão. Antes de qualquer
+uso operacional, faça envio de teste e uma campanha pequena com contatos
+consentidos, seguindo `docs/whatsapp-homologation.md`.
+
+Não há automações ou envios iniciados sem ação explícita da coordenação. Um
+agendamento manual é enviado pelo UazapiGO na data escolhida.

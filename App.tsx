@@ -81,13 +81,13 @@ const loadStoredUser = (): User | null => {
 
 type AppView = 'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' | 'relatorio' |
   'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'equipes' | 'mensagens';
-const appViews = new Set<AppView>([
-  'dashboard', 'form', 'list', 'detail', 'admin', 'map', 'export', 'relatorio', 'metas',
-  'eventos', 'evento-novo', 'evento-detalhe', 'atividades', 'equipes', 'mensagens',
+const persistedAppViews = new Set<AppView>([
+  'dashboard', 'form', 'list', 'admin', 'map', 'export', 'relatorio', 'metas',
+  'eventos', 'evento-novo', 'atividades', 'equipes', 'mensagens',
 ]);
 const loadStoredView = (): AppView => {
   const stored = localStorage.getItem('guti_view') as AppView | null;
-  return stored && appViews.has(stored) ? stored : 'dashboard';
+  return stored && persistedAppViews.has(stored) ? stored : 'dashboard';
 };
 
 const App: React.FC = () => {
@@ -101,7 +101,9 @@ const App: React.FC = () => {
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
   const [selectedEventoId, setSelectedEventoId] = useState<string | null>(null);
 
-  useEffect(() => { localStorage.setItem('guti_view', view); }, [view]);
+  useEffect(() => {
+    localStorage.setItem('guti_view', persistedAppViews.has(view) ? view : 'dashboard');
+  }, [view]);
 
   const isPublicEventoIndicacao = (hash: string) =>
     hash.startsWith('#/eventos/') && hash.includes('/indicacao');

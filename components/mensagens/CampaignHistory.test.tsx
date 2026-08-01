@@ -20,6 +20,15 @@ function campaign(status: WhatsAppCampaignStatus, overrides: Partial<WhatsAppCam
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise; reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 const apiFor = (campaigns: WhatsAppCampaign[]) => ({
   listCampaigns: vi.fn().mockResolvedValue(campaigns),
   getCampaign: vi.fn().mockImplementation(async (id: string) => ({ ...campaigns.find((item) => item.id === id)!, recipients: [] })),
@@ -110,7 +119,7 @@ describe('CampaignHistory', () => {
     expect(await screen.findByText('Número indisponível')).toBeInTheDocument();
   });
 
-  it('upserts and opens a new retry campaign, then suppresses retry on its original after reload', async () => {
+  it('locks retry synchronously, then upserts the child and suppresses retry on its original', async () => {
     const user = userEvent.setup();
     const original = campaign('FAILED', {
       id: 'campaign-original', name: 'Campanha original', failedCount: 2,
@@ -128,16 +137,24 @@ describe('CampaignHistory', () => {
     api.getCampaign = vi.fn().mockImplementation(async (id: string) => ({
       ...(id === retry.id ? retry : original), recipients: [],
     }));
-    api.retryFailedRecipients = vi.fn().mockResolvedValue(retry);
+    const pendingRetry = deferred<WhatsAppCampaign>();
+    api.retryFailedRecipients = vi.fn().mockReturnValue(pendingRetry.promise);
 
     render(<CampaignHistory api={api} />);
     await user.click(within(await screen.findByRole('article', { name: original.name }))
       .getByRole('button', { name: 'Ver detalhes' }));
-    await user.click(await screen.findByRole('button', { name: 'Reenviar falhas' }));
+    const retryButton = await screen.findByRole('button', { name: 'Reenviar falhas' });
+    act(() => { retryButton.click(); retryButton.click(); });
+
+    expect(api.retryFailedRecipients).toHaveBeenCalledTimes(1);
+    expect(retryButton).toBeDisabled();
+    expect(retryButton).toHaveTextContent('Reenviando falhas');
+    expect(screen.getByRole('button', { name: 'Sincronizar' })).toBeDisabled();
+
+    await act(async () => pendingRetry.resolve(retry));
 
     expect(await screen.findByRole('heading', { name: retry.name })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reenviar falhas' })).not.toBeInTheDocument();
-    expect(api.retryFailedRecipients).toHaveBeenCalledTimes(1);
     expect(api.listCampaigns).toHaveBeenCalledTimes(2);
 
     await user.click(screen.getByRole('button', { name: /Voltar ao histórico/ }));

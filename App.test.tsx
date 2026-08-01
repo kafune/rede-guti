@@ -54,4 +54,20 @@ describe('App messages navigation', () => {
     expect(screen.queryByRole('heading', { name: 'Mensagens' })).not.toBeInTheDocument();
     await waitFor(() => expect(localStorage.getItem('guti_view')).toBe('dashboard'));
   });
+
+  it.each(['detail', 'evento-detalhe'])('restores stale context-dependent view %s as dashboard', async (view) => {
+    localStorage.setItem('guti_user', JSON.stringify({ id: 'coordinator-1', email: 'coord@test.local', name: 'Coord', role: 'COORDENADOR' }));
+    localStorage.setItem('guti_view', view);
+    render(<App />);
+    expect(await screen.findByText('Total da Rede SP')).toBeInTheDocument();
+    await waitFor(() => expect(localStorage.getItem('guti_view')).toBe('dashboard'));
+  });
+
+  it('restores the self-contained messages view for a coordinator', async () => {
+    localStorage.setItem('guti_user', JSON.stringify({ id: 'coordinator-1', email: 'coord@test.local', name: 'Coord', role: 'COORDENADOR' }));
+    localStorage.setItem('guti_view', 'mensagens');
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Mensagens' })).toBeInTheDocument();
+    expect(localStorage.getItem('guti_view')).toBe('mensagens');
+  });
 });

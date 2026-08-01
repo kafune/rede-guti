@@ -117,3 +117,22 @@ Os arquivos raiz `api.ts` e `types.ts` não foram alterados.
 
 - O backend não oferece endpoints de catálogo para mídia, eventos, equipes ou contatos dentro de `/whatsapp`; por isso os filtros avançados e seleção de mídia aceitam IDs explícitos, além do upload direto. Isso é funcional, mas menos amigável do que seletores pesquisáveis.
 - O bundle frontend continua emitindo o aviso existente de chunks grandes; code splitting está fora do escopo desta tarefa.
+
+## Fix round 2/5
+
+Escopo restrito aos dois findings da rodada.
+
+### RED observado
+
+```text
+bun run test -- components/mensagens/CampaignHistory.test.tsx App.test.tsx
+```
+
+Resultado contra `3ae6bcb`: 3 falhas. O teste com Promise controlada e dois cliques no mesmo batch observou duas chamadas a `retryFailedRecipients`; as restaurações de `detail` e `evento-detalhe` deixaram o conteúdo principal vazio porque seus IDs selecionados não eram persistidos.
+
+### GREEN
+
+- `CampaignDetail` adquiriu um lock síncrono em `useRef` antes de qualquer `await`, estado visual de ação pendente e bloqueio dos controles concorrentes. Enquanto o retry aguarda, o botão fica desabilitado com feedback `Reenviando falhas…`; a resolução mantém o upsert/seleção/refetch e a supressão no original.
+- A persistência de `guti_view` agora aceita somente views autocontidas. `detail` e `evento-detalhe` são gravadas/restauradas como `dashboard`; `mensagens` continua sendo restaurada para coordenador e redirecionada para usuário sem autorização.
+
+O teste focado repetido terminou com 2 arquivos e 17/17 testes aprovados. Na verificação completa, o frontend terminou com 8 arquivos e 47/47 testes; o backend, após recriar apenas seu banco isolado não idempotente de campanha, terminou com 56/56 testes e 148 assertions. Os builds Vite/PWA e TypeScript do backend também foram aprovados antes do commit separado desta rodada.

@@ -6,6 +6,8 @@ import { AudienceValidationError } from '../../whatsapp/domain/audience.js';
 import { applyMarketingFooter, personalizeContent } from '../../whatsapp/domain/content.js';
 import {
   CampaignDispatchError,
+  CampaignStateIndeterminateError,
+  CampaignValidationError,
   createCampaign,
   sendTestCampaign,
 } from '../../whatsapp/services/campaign-service.js';
@@ -103,16 +105,22 @@ const testSchema = z.object({
 }).strict();
 const createSchema = previewSchema.extend({
   name: z.string().trim().min(1).max(160),
-  consent: z.literal(true),
+  consentimentoConfirmado: z.literal(true),
   scheduledAt: z.string().datetime({ offset: true }).optional(),
 }).strict();
 const paramsSchema = z.object({ id });
 
 function sendCampaignError(reply: FastifyReply, error: unknown) {
+  if (error instanceof CampaignValidationError) {
+    return reply.code(error.statusCode).send({ error: error.message });
+  }
   if (error instanceof AudienceValidationError) {
     return reply.code(error.statusCode).send({ error: error.message });
   }
   if (error instanceof CampaignDispatchError) {
+    return reply.code(error.statusCode).send({ error: error.message });
+  }
+  if (error instanceof CampaignStateIndeterminateError) {
     return reply.code(error.statusCode).send({ error: error.message });
   }
   if (error instanceof UazapiError) {

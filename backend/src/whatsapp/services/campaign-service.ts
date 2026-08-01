@@ -14,7 +14,7 @@ export interface CreateCampaignInput {
   category: 'MARKETING' | 'UTILITY';
   audienceFilter: AudienceFilter;
   content: WhatsAppCampaignContent;
-  consent: true;
+  consentimentoConfirmado: true;
   scheduledAt?: string;
 }
 
@@ -27,6 +27,18 @@ export interface TestCampaignInput {
 
 export class CampaignDispatchError extends Error {
   readonly statusCode = 502;
+}
+
+export class CampaignValidationError extends Error {
+  readonly statusCode = 400;
+}
+
+export class CampaignStateIndeterminateError extends Error {
+  readonly statusCode = 503;
+
+  constructor() {
+    super('Uazapi accepted the campaign, but local state could not be confirmed. Do not retry automatically.');
+  }
 }
 
 const configurationError = () => new Error('WhatsApp integration is not configured.');
@@ -140,19 +152,25 @@ async function persistAudit(
 type InternalCreateCampaignInput = CreateCampaignInput & { coordinatorId: string };
 
 export async function createCampaign(input: CreateCampaignInput, coordinatorId: string) {
-  if (input.consent !== true) throw new Error('Explicit consent is required.');
+  if (input.consentimentoConfirmado !== true) throw new Error('Explicit consent is required.');
+  const consentAt = new Date();
+  const scheduledAt = input.scheduledAt === undefined ? null : new Date(input.scheduledAt);
+  if (
+    scheduledAt !== null
+    && (!Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() <= consentAt.getTime())
+  ) {
+    throw new CampaignValidationError('Scheduled time must be in the future.');
+  }
   const client = await getConfiguredUazapiClient();
   const content = campaignContent(input);
   const mediaUrl = await mediaUrlFactory(content);
   const preview = await previewAudience(input.audienceFilter, content);
-  const consentAt = new Date();
-  const scheduledAt = input.scheduledAt === undefined ? null : new Date(input.scheduledAt);
   const internalInput: InternalCreateCampaignInput = { ...input, coordinatorId };
   const audit = await persistAudit(internalInput, content, preview, consentAt, scheduledAt);
   const validRecipients = preview.recipients.filter(
     (recipient): recipient is typeof recipient & { phoneNormalized: string } => recipient.isValid,
   );
-  const scheduledFor = scheduledAt?.getTime() ?? Date.now();
+  const scheduledFor = scheduledAt?.getTime() ?? consentAt.getTime();
 
   if (validRecipients.length === 0) {
     return prisma.whatsAppCampaign.update({
@@ -164,8 +182,9 @@ export async function createCampaign(input: CreateCampaignInput, coordinatorId: 
     });
   }
 
+  let response: Record<string, unknown>;
   try {
-    const response = await client.sendAdvanced({
+    response = await client.sendAdvanced({
       delayMin: config.whatsappDelayMin,
       delayMax: config.whatsappDelayMax,
       info: input.name,
@@ -175,23 +194,6 @@ export async function createCampaign(input: CreateCampaignInput, coordinatorId: 
           number: recipient.phoneNormalized,
           mediaUrl,
         }))),
-    });
-    const folder = remoteFolder(response);
-    const queuedAt = new Date();
-    await prisma.whatsAppRecipient.updateMany({
-      where: { campaignId: audit.id, isValid: true },
-      data: { status: 'QUEUED', queuedAt },
-    });
-    return await prisma.whatsAppCampaign.update({
-      where: { id: audit.id },
-      data: {
-        status: scheduledAt === null ? 'QUEUED' : 'SCHEDULED',
-        remoteFolderId: folder.id,
-        remoteFolderStatus: folder.status,
-        remoteFolderCreatedAt: folder.createdAt,
-        queuedCount: validRecipients.length,
-        queuedAt,
-      },
     });
   } catch (error) {
     const message = safeRemoteError(error);
@@ -209,6 +211,28 @@ export async function createCampaign(input: CreateCampaignInput, coordinatorId: 
       }),
     ]);
     throw new CampaignDispatchError(message);
+  }
+
+  try {
+    const folder = remoteFolder(response);
+    const queuedAt = new Date();
+    await prisma.whatsAppRecipient.updateMany({
+      where: { campaignId: audit.id, isValid: true },
+      data: { status: 'QUEUED', queuedAt },
+    });
+    return await prisma.whatsAppCampaign.update({
+      where: { id: audit.id },
+      data: {
+        status: scheduledAt === null ? 'QUEUED' : 'SCHEDULED',
+        remoteFolderId: folder.id,
+        remoteFolderStatus: folder.status,
+        remoteFolderCreatedAt: folder.createdAt,
+        queuedCount: validRecipients.length,
+        queuedAt,
+      },
+    });
+  } catch {
+    throw new CampaignStateIndeterminateError();
   }
 }
 

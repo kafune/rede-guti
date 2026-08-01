@@ -191,14 +191,18 @@ describe('campaign preview and test send', () => {
 });
 
 describe('campaign creation', () => {
-  test('requires literal consent true before persisting or calling Uazapi', async () => {
+  test('requires only literal consentimentoConfirmado true before persisting or calling Uazapi', async () => {
     const beforeRequests = requests.length;
-    for (const consent of [false, 'true', 1, undefined]) {
+    for (const consentFields of [
+      {},
+      { consentimentoConfirmado: false },
+      { consent: true },
+    ]) {
       const response = await app.inject({
         method: 'POST', url: '/whatsapp/campaigns', headers: auth(coordinatorToken),
         payload: {
           name: 'Sem consentimento', category: 'UTILITY', audienceFilter, content: campaignContent,
-          ...(consent === undefined ? {} : { consent }),
+          ...consentFields,
         },
       });
       expect(response.statusCode).toBe(400);
@@ -213,7 +217,7 @@ describe('campaign creation', () => {
       method: 'POST', url: '/whatsapp/campaigns', headers: auth(coordinatorToken),
       payload: {
         name: 'Campanha agendada', category: 'MARKETING', audienceFilter, content: campaignContent,
-        consent: true, scheduledAt,
+        consentimentoConfirmado: true, scheduledAt,
       },
     });
     expect(response.statusCode).toBe(201);
@@ -244,6 +248,8 @@ describe('campaign creation', () => {
     const campaign = await prisma.whatsAppCampaign.findUnique({
       where: { id: response.json().campaign.id }, include: { recipients: { orderBy: { sourceId: 'asc' } } },
     });
+    expect(campaign.createdById).toBe('campaign-coordinator');
+    expect(campaign.consentAt).toBeInstanceOf(Date);
     expect(campaign.scheduledAt.toISOString()).toBe('2026-08-02T12:30:00.000Z');
     expect(campaign.recipients.map((recipient: any) => ({
       sourceId: recipient.sourceId, isValid: recipient.isValid, reason: recipient.exclusionReason,
@@ -299,12 +305,33 @@ describe('campaign creation', () => {
     expect(frozen.personalizedContent.primary.text).toBe('Olá, Maria');
   });
 
+  test('rejects invalid or non-future scheduledAt before persistence and remote calls', async () => {
+    const beforeRequests = requests.length;
+    const beforeCampaigns = await prisma.whatsAppCampaign.count();
+    for (const [name, scheduledAt] of [
+      ['Agendamento passado', new Date(Date.now() - 60_000).toISOString()],
+      ['Agendamento inválido', 'amanhã às nove'],
+    ] as const) {
+      const response = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns', headers: auth(coordinatorToken),
+        payload: {
+          name, category: 'UTILITY', audienceFilter, content: campaignContent,
+          consentimentoConfirmado: true, scheduledAt,
+        },
+      });
+      expect(response.statusCode).toBe(400);
+    }
+    expect(requests).toHaveLength(beforeRequests);
+    expect(await prisma.whatsAppCampaign.count()).toBe(beforeCampaigns);
+  });
+
   test('uses current epoch milliseconds for an immediate manual campaign', async () => {
     const before = Date.now();
     const response = await app.inject({
       method: 'POST', url: '/whatsapp/campaigns', headers: auth(coordinatorToken),
       payload: {
-        name: 'Campanha imediata', category: 'UTILITY', audienceFilter, content: campaignContent, consent: true,
+        name: 'Campanha imediata', category: 'UTILITY', audienceFilter, content: campaignContent,
+        consentimentoConfirmado: true,
       },
     });
     const after = Date.now();
@@ -322,7 +349,8 @@ describe('campaign creation', () => {
       response = await app.inject({
         method: 'POST', url: '/whatsapp/campaigns', headers: auth(coordinatorToken),
         payload: {
-          name: 'Campanha com falha', category: 'UTILITY', audienceFilter, content: campaignContent, consent: true,
+          name: 'Campanha com falha', category: 'UTILITY', audienceFilter, content: campaignContent,
+          consentimentoConfirmado: true,
         },
       });
     } finally {
@@ -341,6 +369,54 @@ describe('campaign creation', () => {
     expect(campaign.recipients.map((recipient: any) => recipient.status)).toEqual([
       'FAILED', 'PENDING', 'PENDING', 'PENDING',
     ]);
+  });
+
+  test('does not mark audit rows failed or resend when local persistence fails after Uazapi accepted', async () => {
+    const beforeRequests = requests.length;
+    await basePrisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION test_reject_recipient_queue() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.status = 'QUEUED' AND OLD.status = 'PENDING' THEN
+          RAISE EXCEPTION 'deterministic local queue failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql
+    `);
+    await basePrisma.$executeRawUnsafe(`
+      CREATE TRIGGER test_reject_recipient_queue_trigger
+      BEFORE UPDATE ON whatsapp_recipients
+      FOR EACH ROW EXECUTE FUNCTION test_reject_recipient_queue()
+    `);
+
+    let response;
+    try {
+      response = await app.inject({
+        method: 'POST', url: '/whatsapp/campaigns', headers: auth(coordinatorToken),
+        payload: {
+          name: 'Campanha aceita com estado local incerto', category: 'UTILITY',
+          audienceFilter, content: campaignContent, consentimentoConfirmado: true,
+        },
+      });
+    } finally {
+      await basePrisma.$executeRawUnsafe(
+        'DROP TRIGGER test_reject_recipient_queue_trigger ON whatsapp_recipients',
+      );
+      await basePrisma.$executeRawUnsafe('DROP FUNCTION test_reject_recipient_queue()');
+    }
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      error: 'Uazapi accepted the campaign, but local state could not be confirmed. Do not retry automatically.',
+    });
+    expect(requests).toHaveLength(beforeRequests + 1);
+    expect(requests.at(-1)?.url).toBe('/sender/advanced');
+    const campaign = await prisma.whatsAppCampaign.findFirst({
+      where: { name: 'Campanha aceita com estado local incerto' },
+      include: { recipients: true },
+    });
+    expect(campaign.status).not.toBe('FAILED');
+    expect(campaign.recipients.every((recipient: any) => recipient.status !== 'FAILED')).toBe(true);
   });
 
   test('rejects 1,001 valid unique phones with 400 but keeps excluded rows outside that limit', async () => {

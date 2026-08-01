@@ -56,19 +56,34 @@ describe('CampaignHistory', () => {
   });
 
   it.each([
-    ['SENDING', ['Pausar', 'Cancelar'], ['Retomar', 'Editar', 'Reenviar falhas']],
-    ['PAUSED', ['Retomar', 'Cancelar', 'Editar'], ['Pausar', 'Reenviar falhas']],
-    ['SCHEDULED', ['Pausar', 'Cancelar', 'Editar'], ['Retomar', 'Reenviar falhas']],
-    ['FAILED', ['Reenviar falhas'], ['Pausar', 'Retomar', 'Cancelar', 'Editar']],
-    ['COMPLETED', [], ['Pausar', 'Retomar', 'Cancelar', 'Editar', 'Reenviar falhas']],
-  ] as const)('shows lifecycle controls allowed for %s', async (status, visible, hidden) => {
+    ['SENDING', { remoteFolderStatus: 'Active' }, ['Pausar', 'Cancelar'], ['Retomar', 'Editar', 'Reenviar falhas']],
+    ['PAUSED', { remoteFolderStatus: 'Paused' }, ['Retomar', 'Cancelar'], ['Pausar', 'Editar', 'Reenviar falhas']],
+    ['SCHEDULED', { remoteFolderStatus: 'Active', sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0 }, ['Pausar', 'Cancelar', 'Editar'], ['Retomar', 'Reenviar falhas']],
+    ['DRAFT', { remoteFolderId: null, remoteFolderStatus: null, sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0 }, ['Editar'], ['Pausar', 'Retomar', 'Cancelar', 'Reenviar falhas']],
+    ['FAILED', { failedCount: 2 }, ['Reenviar falhas'], ['Pausar', 'Retomar', 'Cancelar', 'Editar']],
+    ['COMPLETED', {}, [], ['Pausar', 'Retomar', 'Cancelar', 'Editar', 'Reenviar falhas']],
+  ] as const)('shows backend-compatible lifecycle controls for %s', async (status, overrides, visible, hidden) => {
     const user = userEvent.setup();
-    const api = apiFor([campaign(status, { failedCount: status === 'FAILED' ? 2 : 0 })]);
+    const api = apiFor([campaign(status, { failedCount: status === 'FAILED' ? 2 : 0, ...overrides })]);
     render(<CampaignHistory api={api} />);
     const card = await screen.findByRole('article', { name: `Campanha ${status}` });
     await user.click(within(card).getByRole('button', { name: 'Ver detalhes' }));
     for (const label of visible) expect(await screen.findByRole('button', { name: label })).toBeInTheDocument();
     for (const label of hidden) expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+  });
+
+  it('only offers rescheduling inside the edit form for an unstarted campaign', async () => {
+    const user = userEvent.setup();
+    const item = campaign('SCHEDULED', {
+      remoteFolderStatus: 'Active', sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0,
+    });
+    const api = apiFor([item]);
+    render(<CampaignHistory api={api} />);
+    await user.click(within(await screen.findByRole('article', { name: item.name }))
+      .getByRole('button', { name: 'Ver detalhes' }));
+    expect(screen.queryByRole('button', { name: 'Reagendar' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Editar' }));
+    expect(screen.getByRole('button', { name: 'Reagendar' })).toBeInTheDocument();
   });
 
   it('renders every campaign metric and recipient errors in detail', async () => {
@@ -93,5 +108,42 @@ describe('CampaignHistory', () => {
     }
     await user.click(within(card).getByRole('button', { name: 'Ver detalhes' }));
     expect(await screen.findByText('Número indisponível')).toBeInTheDocument();
+  });
+
+  it('upserts and opens a new retry campaign, then suppresses retry on its original after reload', async () => {
+    const user = userEvent.setup();
+    const original = campaign('FAILED', {
+      id: 'campaign-original', name: 'Campanha original', failedCount: 2,
+      sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0,
+    });
+    const retry = campaign('QUEUED', {
+      id: 'campaign-retry', name: 'Campanha original (retry)', failedCount: 0,
+      sentCount: 0, deliveredCount: 0, readCount: 0, playedCount: 0,
+      audienceFilter: { type: 'RETRY', retryOfCampaignId: original.id },
+    });
+    const api = apiFor([original]);
+    api.listCampaigns = vi.fn()
+      .mockResolvedValueOnce([original])
+      .mockResolvedValue([original, retry]);
+    api.getCampaign = vi.fn().mockImplementation(async (id: string) => ({
+      ...(id === retry.id ? retry : original), recipients: [],
+    }));
+    api.retryFailedRecipients = vi.fn().mockResolvedValue(retry);
+
+    render(<CampaignHistory api={api} />);
+    await user.click(within(await screen.findByRole('article', { name: original.name }))
+      .getByRole('button', { name: 'Ver detalhes' }));
+    await user.click(await screen.findByRole('button', { name: 'Reenviar falhas' }));
+
+    expect(await screen.findByRole('heading', { name: retry.name })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reenviar falhas' })).not.toBeInTheDocument();
+    expect(api.retryFailedRecipients).toHaveBeenCalledTimes(1);
+    expect(api.listCampaigns).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getByRole('button', { name: /Voltar ao histórico/ }));
+    await user.click(within(await screen.findByRole('article', { name: original.name }))
+      .getByRole('button', { name: 'Ver detalhes' }));
+    expect(await screen.findByRole('heading', { name: original.name })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reenviar falhas' })).not.toBeInTheDocument();
   });
 });

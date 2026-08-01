@@ -491,6 +491,7 @@ model WhatsAppTemplate {
   createdById String                   @map("created_by_id")
   name        String
   category    WhatsAppCampaignCategory
+  purpose     String?
   content     Json
   favorite    Boolean                  @default(false)
   version     Int                      @default(1)

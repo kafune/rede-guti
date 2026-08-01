@@ -61,12 +61,14 @@ const campaignContentSchema = z.object({
 const createSchema = z.object({
   name: z.string().trim().min(1).max(160),
   category: z.enum(['MARKETING', 'UTILITY']),
+  purpose: z.string().trim().min(1).max(500).optional(),
   content: campaignContentSchema,
 }).strict();
 
 const updateSchema = z.object({
   name: z.string().trim().min(1).max(160).optional(),
   category: z.enum(['MARKETING', 'UTILITY']).optional(),
+  purpose: z.string().trim().min(1).max(500).nullable().optional(),
   content: campaignContentSchema.optional(),
 }).strict().refine((value) => Object.keys(value).length > 0);
 
@@ -98,6 +100,7 @@ export async function whatsappTemplateRoutes(app: FastifyInstance) {
           createdById: request.user.sub,
           name: input.data.name,
           category: input.data.category,
+          purpose: input.data.purpose,
           content: input.data.content as any,
         },
       });
@@ -154,6 +157,7 @@ export async function whatsappTemplateRoutes(app: FastifyInstance) {
           createdById: request.user.sub,
           name: input.data.name,
           category: source.category,
+          purpose: source.purpose,
           content: source.content as any,
           favorite: false,
           version: 1,

@@ -52,6 +52,16 @@ function fakeApi(overrides: Partial<WhatsAppApi> = {}): WhatsAppApi {
 }
 
 describe('MensagensPanel', () => {
+  it('blocks preview until the composed content is valid', async () => {
+    const user = userEvent.setup();
+    render(<MensagensPanel api={fakeApi()} />);
+    await user.click(screen.getByRole('tab', { name: 'Nova campanha' }));
+    await user.click(screen.getByRole('button', { name: 'Continuar para conteúdo' }));
+    expect(screen.getByRole('button', { name: 'Gerar prévia' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Preencha o texto da mensagem');
+    await user.type(screen.getByLabelText('Mensagem principal'), 'Olá');
+    expect(screen.getByRole('button', { name: 'Gerar prévia' })).toBeEnabled();
+  });
   it('serializes supporter audience filters and hides church filtering when disabled', async () => {
     const user = userEvent.setup();
     const api = fakeApi();
@@ -95,6 +105,25 @@ describe('MensagensPanel', () => {
     } }));
   });
 
+  it('serializes leader roles, activity, hierarchy root and explicit selections', async () => {
+    const user = userEvent.setup();
+    const api = fakeApi();
+    render(<MensagensPanel api={api} />);
+    await user.click(screen.getByRole('tab', { name: 'Nova campanha' }));
+    await user.selectOptions(screen.getByLabelText('Tipo de público'), 'LEADERS');
+    await user.selectOptions(screen.getByLabelText('Perfis'), ['COORDENADOR', 'VERIFICADORA']);
+    await user.selectOptions(screen.getByLabelText('Situação'), 'true');
+    await user.type(screen.getByLabelText('Raiz da hierarquia'), 'leader-root');
+    await user.type(screen.getByLabelText('IDs selecionados'), 'leader-1, leader-2');
+    await user.click(screen.getByRole('button', { name: 'Continuar para conteúdo' }));
+    await user.type(screen.getByLabelText('Mensagem principal'), 'Olá');
+    await user.click(screen.getByRole('button', { name: 'Gerar prévia' }));
+    expect(api.previewCampaign).toHaveBeenCalledWith(expect.objectContaining({ audienceFilter: {
+      type: 'LEADERS', roles: ['COORDENADOR', 'VERIFICADORA'], active: true,
+      hierarchyRootId: 'leader-root', selectedIds: ['leader-1', 'leader-2'],
+    } }));
+  });
+
   it('serializes team status, contact kinds, teams and selected contacts', async () => {
     const user = userEvent.setup();
     const api = fakeApi();
@@ -118,7 +147,7 @@ describe('MensagensPanel', () => {
     render(<MensagensPanel api={fakeApi()} />);
     await user.click(screen.getByRole('tab', { name: 'Nova campanha' }));
     await user.click(screen.getByRole('button', { name: 'Continuar para conteúdo' }));
-    await user.type(screen.getByLabelText('Mensagem principal'), 'Olá, {{primeiro_nome}}');
+    fireEvent.change(screen.getByLabelText('Mensagem principal'), { target: { value: 'Olá, {{primeiro_nome}}' } });
     await user.click(screen.getByRole('button', { name: 'Gerar prévia' }));
 
     const summary = screen.getByRole('region', { name: 'Resumo da prévia' });
@@ -127,6 +156,24 @@ describe('MensagensPanel', () => {
     expect(within(summary).getByText('2 duplicados')).toBeInTheDocument();
     expect(within(summary).getByText('1 suprimido')).toBeInTheDocument();
     expect(screen.getByText('Olá, Maria')).toBeInTheDocument();
+  });
+
+  it('sends a personalized test message and confirms success', async () => {
+    const user = userEvent.setup();
+    const sendTestCampaign = vi.fn().mockResolvedValue({ sent: true });
+    render(<MensagensPanel api={fakeApi({ sendTestCampaign })} />);
+    await user.click(screen.getByRole('tab', { name: 'Nova campanha' }));
+    await user.click(screen.getByRole('button', { name: 'Continuar para conteúdo' }));
+    fireEvent.change(screen.getByLabelText('Mensagem principal'), { target: { value: 'Olá, {{primeiro_nome}}' } });
+    await user.click(screen.getByRole('button', { name: 'Gerar prévia' }));
+    await user.type(screen.getByLabelText('Telefone de teste'), '11987654321');
+    await user.clear(screen.getByLabelText('Nome de teste'));
+    await user.type(screen.getByLabelText('Nome de teste'), 'Maria Teste');
+    await user.click(screen.getByRole('button', { name: 'Enviar teste' }));
+    expect(sendTestCampaign).toHaveBeenCalledWith({
+      phone: '11987654321', name: 'Maria Teste', category: 'UTILITY', content,
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent('Mensagem de teste enviada');
   });
 
   it('requires explicit consent and converts a local schedule once before create', async () => {

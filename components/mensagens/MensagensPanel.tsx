@@ -42,7 +42,7 @@ function NewCampaign({ api, churchFieldEnabled, onCreated }: {
   const [audience, setAudience] = useState<AudienceFilter>({ type: 'SUPPORTERS' });
   const [category, setCategory] = useState<WhatsAppCampaignCategory>('UTILITY');
   const [content, setContent] = useState<WhatsAppCampaignContent>(initialContent);
-  const [contentValid, setContentValid] = useState(true);
+  const [contentValid, setContentValid] = useState(false);
   const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [name, setName] = useState(''); const [schedule, setSchedule] = useState('');
   const [consent, setConsent] = useState(false); const [testPhone, setTestPhone] = useState('');

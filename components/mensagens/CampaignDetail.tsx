@@ -2,13 +2,25 @@ import React, { useEffect, useState } from 'react';
 import { localDateTimeToUtc } from '../../whatsapp/date';
 import type { WhatsAppApi, WhatsAppCampaign, WhatsAppCampaignDetail } from '../../whatsapp/types';
 
-const canPause = (status: WhatsAppCampaign['status']) => ['SCHEDULED', 'QUEUED', 'SENDING'].includes(status);
-const canResume = (status: WhatsAppCampaign['status']) => status === 'PAUSED';
-const canCancel = (status: WhatsAppCampaign['status']) => ['DRAFT', 'SCHEDULED', 'QUEUED', 'SENDING', 'PAUSED'].includes(status);
-const canEdit = (status: WhatsAppCampaign['status']) => ['DRAFT', 'SCHEDULED', 'QUEUED', 'PAUSED'].includes(status);
+const terminalRemoteStatuses = new Set(['completed', 'complete', 'canceled', 'cancelled', 'failed', 'deleted']);
+const hasActiveRemoteFolder = (campaign: WhatsAppCampaign) => Boolean(
+  campaign.remoteFolderId && campaign.remoteFolderStatus
+  && !terminalRemoteStatuses.has(campaign.remoteFolderStatus.trim().toLowerCase()),
+);
+const isUnstarted = (campaign: WhatsAppCampaign) => [
+  campaign.sentCount, campaign.deliveredCount, campaign.readCount, campaign.playedCount,
+].every((count) => count === 0);
+const canPause = (campaign: WhatsAppCampaign) => hasActiveRemoteFolder(campaign)
+  && ['SCHEDULED', 'QUEUED', 'SENDING'].includes(campaign.status);
+const canResume = (campaign: WhatsAppCampaign) => hasActiveRemoteFolder(campaign) && campaign.status === 'PAUSED';
+const canCancel = (campaign: WhatsAppCampaign) => hasActiveRemoteFolder(campaign)
+  && ['SCHEDULED', 'QUEUED', 'SENDING', 'PAUSED'].includes(campaign.status);
+const canEdit = (campaign: WhatsAppCampaign) => isUnstarted(campaign)
+  && ['DRAFT', 'SCHEDULED', 'QUEUED', 'PAUSED'].includes(campaign.status);
 
-export function CampaignDetail({ campaignId, api, onBack, onChanged }: {
+export function CampaignDetail({ campaignId, api, onBack, onChanged, onRetry, retryAlreadyExists }: {
   campaignId: string; api: WhatsAppApi; onBack: () => void; onChanged: (campaign: WhatsAppCampaign) => void;
+  onRetry?: (campaignId: string) => Promise<void>; retryAlreadyExists?: boolean;
 }) {
   const [campaign, setCampaign] = useState<WhatsAppCampaignDetail | null>(null);
   const [editing, setEditing] = useState(false); const [name, setName] = useState('');
@@ -25,11 +37,19 @@ export function CampaignDetail({ campaignId, api, onBack, onChanged }: {
     <button onClick={onBack} className="font-bold text-blue-600">← Voltar ao histórico</button>
     <div><h2 id="campaign-detail-heading" className="text-xl font-black">{campaign.name}</h2><p>Status: {campaign.status}</p></div>
     <div className="flex flex-wrap gap-2">
-      {canPause(campaign.status) && <button onClick={() => void run(() => api.pauseCampaign(campaign.id))} className="rounded-xl border px-4 py-2">Pausar</button>}
-      {canResume(campaign.status) && <button onClick={() => void run(() => api.resumeCampaign(campaign.id))} className="rounded-xl border px-4 py-2">Retomar</button>}
-      {canCancel(campaign.status) && <button onClick={() => void run(() => api.cancelCampaign(campaign.id))} className="rounded-xl border px-4 py-2 text-red-600">Cancelar</button>}
-      {canEdit(campaign.status) && <button onClick={() => setEditing((value) => !value)} className="rounded-xl border px-4 py-2">Editar</button>}
-      {campaign.failedCount > 0 && <button onClick={() => void run(() => api.retryFailedRecipients(campaign.id))} className="rounded-xl border px-4 py-2">Reenviar falhas</button>}
+      {canPause(campaign) && <button onClick={() => void run(() => api.pauseCampaign(campaign.id))} className="rounded-xl border px-4 py-2">Pausar</button>}
+      {canResume(campaign) && <button onClick={() => void run(() => api.resumeCampaign(campaign.id))} className="rounded-xl border px-4 py-2">Retomar</button>}
+      {canCancel(campaign) && <button onClick={() => void run(() => api.cancelCampaign(campaign.id))} className="rounded-xl border px-4 py-2 text-red-600">Cancelar</button>}
+      {canEdit(campaign) && <button onClick={() => setEditing((value) => !value)} className="rounded-xl border px-4 py-2">Editar</button>}
+      {campaign.failedCount > 0 && !retryAlreadyExists && <button
+        onClick={() => {
+          if (!onRetry) { void run(() => api.retryFailedRecipients(campaign.id)); return; }
+          setError(null);
+          void onRetry(campaign.id).catch((caught) => setError(
+            caught instanceof Error ? caught.message : 'Erro ao controlar campanha.',
+          ));
+        }}
+        className="rounded-xl border px-4 py-2">Reenviar falhas</button>}
       <button onClick={() => void run(() => api.syncCampaign(campaign.id))} className="rounded-xl border px-4 py-2">Sincronizar</button>
     </div>
     {editing && <form className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-2" onSubmit={(event) => {

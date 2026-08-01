@@ -11,8 +11,8 @@ const types = ['text', 'image', 'document', 'audio', 'button', 'poll', 'carousel
 
 const emptyItem = (type: WhatsAppContentItem['type']): WhatsAppContentItem => {
   if (type === 'text') return { type, text: '' };
-  if (type === 'image' || type === 'audio') return { type, mediaId: '', caption: '' };
-  if (type === 'document') return { type, mediaId: '', caption: '', filename: '' };
+  if (type === 'image' || type === 'audio') return { type, mediaId: '' };
+  if (type === 'document') return { type, mediaId: '' };
   if (type === 'button') return { type, text: '', buttons: [{ label: '', action: 'REPLY', value: '' }] };
   if (type === 'poll') return { type, text: '', choices: ['', ''], selectableCount: 1 };
   return { type: 'carousel', text: '', cards: [{ text: '', buttons: [{ label: '', action: 'REPLY', value: '' }] }] };
@@ -36,6 +36,57 @@ function variableError(content: WhatsAppCampaignContent) {
   return null;
 }
 
+const blank = (value: string | undefined) => !value?.trim();
+const optionalBlank = (value: string | undefined) => value !== undefined && blank(value);
+
+function buttonError(buttons: Array<{ label: string; value: string }>) {
+  if (buttons.length < 1 || buttons.length > 10) return 'Adicione entre 1 e 10 botões.';
+  if (buttons.some((button) => blank(button.label) || blank(button.value))) return 'Preencha o rótulo e o valor de todos os botões.';
+  return null;
+}
+
+function itemError(item: WhatsAppContentItem) {
+  if (item.type === 'text') return blank(item.text) ? 'Preencha o texto da mensagem.' : null;
+  if (item.type === 'image' || item.type === 'audio' || item.type === 'document') {
+    if (blank(item.mediaId)) return 'Selecione ou envie uma mídia.';
+    if (optionalBlank(item.caption)) return 'Remova ou preencha a legenda.';
+    if (item.type === 'document' && optionalBlank(item.filename)) return 'Remova ou preencha o nome do documento.';
+    return null;
+  }
+  if (item.type === 'button') {
+    if (blank(item.text)) return 'Preencha o texto da mensagem com botões.';
+    if (optionalBlank(item.footerText)) return 'Remova ou preencha o rodapé.';
+    if (optionalBlank(item.mediaId)) return 'Remova ou selecione a mídia do botão.';
+    return buttonError(item.buttons);
+  }
+  if (item.type === 'poll') {
+    if (blank(item.text)) return 'Preencha a pergunta da enquete.';
+    if (item.choices.length < 2 || item.choices.length > 12 || item.choices.some(blank)) return 'Informe entre 2 e 12 opções preenchidas.';
+    if (!Number.isInteger(item.selectableCount) || item.selectableCount < 1 || item.selectableCount > item.choices.length) {
+      return 'A quantidade selecionável deve ficar entre 1 e o número de opções.';
+    }
+    return null;
+  }
+  if (blank(item.text)) return 'Preencha o texto do carrossel.';
+  if (item.cards.length < 1 || item.cards.length > 10) return 'Adicione entre 1 e 10 cards.';
+  for (const card of item.cards) {
+    if (blank(card.text)) return 'Preencha o texto de todos os cards.';
+    if (optionalBlank(card.mediaId)) return 'Remova ou selecione a mídia do card.';
+    const error = buttonError(card.buttons);
+    if (error) return error;
+  }
+  return null;
+}
+
+export function contentValidationError(content: WhatsAppCampaignContent) {
+  if (content.sequence.length > 9) return 'A sequência aceita no máximo 9 itens';
+  for (const item of [content.primary, ...content.sequence]) {
+    const error = itemError(item);
+    if (error) return error;
+  }
+  return variableError(content);
+}
+
 function ItemEditor({ item, label, onChange, api }: {
   item: WhatsAppContentItem; label: string; onChange: (item: WhatsAppContentItem) => void; api?: WhatsAppApi;
 }) {
@@ -43,7 +94,7 @@ function ItemEditor({ item, label, onChange, api }: {
   const typeLabel = label === 'principal' ? 'Tipo da mensagem principal' : `Tipo da mensagem ${label}`;
   const textLabel = label === 'principal' ? 'Mensagem principal' : `Texto ${label}`;
   const upload = async (file?: File) => {
-    if (!file || !api || !('mediaId' in item)) return;
+    if (!file || !api || item.type === 'text' || item.type === 'poll' || item.type === 'carousel') return;
     setUploading(true);
     try { onChange({ ...item, mediaId: (await api.uploadMedia(file)).id }); } finally { setUploading(false); }
   };
@@ -78,6 +129,12 @@ function ItemEditor({ item, label, onChange, api }: {
     {item.type === 'button' && <>
       <label className="block font-semibold">{textLabel}<textarea className="mt-1 w-full rounded-xl border p-3" value={item.text}
         onChange={(event) => onChange({ ...item, text: event.target.value })} /></label>
+      <label className="block font-semibold">Rodapé do botão<input className="mt-1 w-full rounded-xl border p-3" value={item.footerText ?? ''}
+        onChange={(event) => onChange({ ...item, footerText: event.target.value || undefined })} /></label>
+      <label className="block font-semibold">Mídia do botão<input className="mt-1 w-full rounded-xl border p-3" value={item.mediaId ?? ''}
+        onChange={(event) => onChange({ ...item, mediaId: event.target.value || undefined })} /></label>
+      {api && <label className="block font-semibold">Enviar mídia do botão<input type="file" disabled={uploading}
+        className="mt-1 block w-full" onChange={(event) => void upload(event.target.files?.[0])} /></label>}
       {item.buttons.map((button, index) => <div key={index} className="grid grid-cols-3 gap-2">
         <input aria-label={`Rótulo do botão ${index + 1}`} className="rounded-xl border p-2" value={button.label}
           onChange={(event) => onChange({ ...item, buttons: item.buttons.map((old, at) => at === index ? { ...old, label: event.target.value } : old) })} />
@@ -130,7 +187,7 @@ export function MessageComposer({ value, onChange, api, onValidityChange }: Prop
   const [limitError, setLimitError] = useState<string | null>(null);
   useEffect(() => setDraft(value), [value]);
   const update = (next: WhatsAppCampaignContent) => { setDraft(next); onChange(next); setLimitError(null); };
-  const validationError = useMemo(() => variableError(draft), [draft]);
+  const validationError = useMemo(() => contentValidationError(draft), [draft]);
   useEffect(() => onValidityChange?.(!validationError), [validationError, onValidityChange]);
   const addSequence = () => {
     if (draft.sequence.length >= 9) { setLimitError('A sequência aceita no máximo 9 itens'); return; }
@@ -148,7 +205,7 @@ export function MessageComposer({ value, onChange, api, onValidityChange }: Prop
     </fieldset>)}
     <button type="button" aria-disabled={draft.sequence.length >= 9} onClick={addSequence}
       className="rounded-xl border px-4 py-3 font-bold">Adicionar item à sequência</button>
-    {(validationError || limitError) && <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-700">{validationError ?? limitError}</p>}
+    {(validationError || limitError) && <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-700">{limitError ?? validationError}</p>}
     <button type="button" disabled={Boolean(validationError)} className="sr-only">Validar conteúdo</button>
   </section>;
 }

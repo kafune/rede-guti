@@ -11,6 +11,9 @@ export function CampaignHistory({ api }: { api: WhatsAppApi }) {
   const load = async () => { try { setCampaigns(await api.listCampaigns()); setError(null); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Erro no histórico.'); } };
   useEffect(() => { void load(); }, [api]);
   const hasActive = useMemo(() => campaigns.some(({ status }) => ACTIVE.has(status)), [campaigns]);
+  const retriedCampaignIds = useMemo(() => new Set(campaigns.flatMap((campaign) =>
+    campaign.audienceFilter.type === 'RETRY' ? [campaign.audienceFilter.retryOfCampaignId] : []
+  )), [campaigns]);
   useEffect(() => {
     if (!hasActive) return;
     const timer = window.setInterval(() => { void api.syncCampaigns().then(load).catch((caught) => setError(caught instanceof Error ? caught.message : 'Erro ao sincronizar.')); }, 15_000);
@@ -19,6 +22,13 @@ export function CampaignHistory({ api }: { api: WhatsAppApi }) {
 
   if (selected) return <CampaignDetail campaignId={selected} api={api} onBack={() => setSelected(null)} onChanged={(changed) => {
     setCampaigns((current) => current.map((item) => item.id === changed.id ? changed : item));
+  }} retryAlreadyExists={retriedCampaignIds.has(selected)} onRetry={async (campaignId) => {
+    const retry = await api.retryFailedRecipients(campaignId);
+    setCampaigns((current) => current.some(({ id }) => id === retry.id)
+      ? current.map((item) => item.id === retry.id ? retry : item)
+      : [...current, retry]);
+    setSelected(retry.id);
+    await load();
   }} />;
 
   return <section className="space-y-5"><div className="flex items-center justify-between"><h2 className="text-xl font-black">Histórico de campanhas</h2>

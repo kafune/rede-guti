@@ -175,6 +175,7 @@ export interface WhatsAppTemplate {
   createdById: string;
   name: string;
   category: WhatsAppCampaignCategory;
+  purpose: string | null;
   content: WhatsAppCampaignContent;
   favorite: boolean;
   version: number;
@@ -224,8 +225,8 @@ export interface WhatsAppApi {
   disconnectInstance(): Promise<WhatsAppDisconnectResponse>;
   uploadMedia(file: File): Promise<WhatsAppMedia>;
   listTemplates(): Promise<WhatsAppTemplate[]>;
-  createTemplate(input: Pick<WhatsAppTemplate, 'name' | 'category' | 'content'>): Promise<WhatsAppTemplate>;
-  updateTemplate(id: string, input: Partial<Pick<WhatsAppTemplate, 'name' | 'category' | 'content'>>): Promise<WhatsAppTemplate>;
+  createTemplate(input: Pick<WhatsAppTemplate, 'name' | 'category' | 'content'> & { purpose?: string }): Promise<WhatsAppTemplate>;
+  updateTemplate(id: string, input: Partial<Pick<WhatsAppTemplate, 'name' | 'category' | 'purpose' | 'content'>>): Promise<WhatsAppTemplate>;
   setTemplateFavorite(id: string, favorite: boolean): Promise<WhatsAppTemplate>;
   duplicateTemplate(id: string, name: string): Promise<WhatsAppTemplate>;
   deleteTemplate(id: string): Promise<void>;

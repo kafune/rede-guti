@@ -301,11 +301,17 @@ describe('WhatsApp template resource', () => {
 
     const created = await app.inject({
       method: 'POST', url: '/whatsapp/templates', headers: auth(coordinatorToken),
-      payload: { name: 'Boas-vindas', category: 'MARKETING', content },
+      payload: {
+        name: 'Boas-vindas', category: 'MARKETING',
+        purpose: 'Boas-vindas a novos apoiadores', content,
+      },
     });
     expect(created.statusCode).toBe(201);
     const template = created.json().template;
-    expect(template).toMatchObject({ name: 'Boas-vindas', category: 'MARKETING', content, favorite: false, version: 1 });
+    expect(template).toMatchObject({
+      name: 'Boas-vindas', category: 'MARKETING',
+      purpose: 'Boas-vindas a novos apoiadores', content, favorite: false, version: 1,
+    });
 
     await basePrisma.whatsAppTemplate.create({ data: {
       tenantId: tenantB.id,
@@ -319,13 +325,18 @@ describe('WhatsApp template resource', () => {
       method: 'GET', url: '/whatsapp/templates', headers: auth(coordinatorToken),
     });
     expect(listed.statusCode).toBe(200);
-    expect(listed.json().templates.map((item: { name: string }) => item.name)).toEqual(['Boas-vindas']);
+    expect(listed.json().templates).toHaveLength(1);
+    expect(listed.json().templates[0]).toMatchObject({
+      name: 'Boas-vindas', purpose: 'Boas-vindas a novos apoiadores',
+    });
 
     const updated = await app.inject({
       method: 'PATCH', url: `/whatsapp/templates/${template.id}`, headers: auth(coordinatorToken),
-      payload: { name: 'Boas-vindas 2026' },
+      payload: { name: 'Boas-vindas 2026', purpose: 'Mobilização de apoiadores em 2026' },
     });
-    expect(updated.json().template).toMatchObject({ name: 'Boas-vindas 2026', version: 2 });
+    expect(updated.json().template).toMatchObject({
+      name: 'Boas-vindas 2026', purpose: 'Mobilização de apoiadores em 2026', version: 2,
+    });
 
     const favorited = await app.inject({
       method: 'PATCH', url: `/whatsapp/templates/${template.id}/favorite`, headers: auth(coordinatorToken),
@@ -340,7 +351,8 @@ describe('WhatsApp template resource', () => {
     expect(duplicated.statusCode).toBe(201);
     const copy = duplicated.json().template;
     expect(copy).toMatchObject({
-      name: 'Boas-vindas cópia', category: 'MARKETING', content, favorite: false, version: 1,
+      name: 'Boas-vindas cópia', category: 'MARKETING',
+      purpose: 'Mobilização de apoiadores em 2026', content, favorite: false, version: 1,
     });
 
     const removed = await app.inject({

@@ -79,6 +79,17 @@ const loadStoredUser = (): User | null => {
   }
 };
 
+type AppView = 'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' | 'relatorio' |
+  'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'equipes' | 'mensagens';
+const appViews = new Set<AppView>([
+  'dashboard', 'form', 'list', 'detail', 'admin', 'map', 'export', 'relatorio', 'metas',
+  'eventos', 'evento-novo', 'evento-detalhe', 'atividades', 'equipes', 'mensagens',
+]);
+const loadStoredView = (): AppView => {
+  const stored = localStorage.getItem('guti_view') as AppView | null;
+  return stored && appViews.has(stored) ? stored : 'dashboard';
+};
+
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => loadStoredUser());
   const [apiSupporters, setApiSupporters] = useState<Supporter[]>([]);
@@ -86,12 +97,11 @@ const App: React.FC = () => {
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [view, setView] = useState<
-    'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' | 'relatorio' |
-    'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'equipes' | 'mensagens'
-  >('dashboard');
+  const [view, setView] = useState<AppView>(() => loadStoredView());
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
   const [selectedEventoId, setSelectedEventoId] = useState<string | null>(null);
+
+  useEffect(() => { localStorage.setItem('guti_view', view); }, [view]);
 
   const isPublicEventoIndicacao = (hash: string) =>
     hash.startsWith('#/eventos/') && hash.includes('/indicacao');

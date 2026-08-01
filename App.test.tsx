@@ -45,4 +45,13 @@ describe('App messages navigation', () => {
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'Mensagens' })).not.toBeInTheDocument();
   });
+
+  it('redirects a stale unauthorized messages view to the dashboard', async () => {
+    localStorage.setItem('guti_user', JSON.stringify({ id: 'leader-1', email: 'leader@test.local', name: 'Leader', role: 'LIDER_REGIONAL' }));
+    localStorage.setItem('guti_view', 'mensagens');
+    render(<App />);
+    expect(await screen.findByText('Total da Sua Rede Regional')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Mensagens' })).not.toBeInTheDocument();
+    await waitFor(() => expect(localStorage.getItem('guti_view')).toBe('dashboard'));
+  });
 });

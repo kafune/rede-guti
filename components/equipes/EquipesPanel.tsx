@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Equipe, User } from '../../types';
-import { deleteEquipe, fetchEquipes, getApiErrorMessage } from '../../api';
+import { AdminUser, Equipe, User } from '../../types';
+import { deleteEquipe, fetchEquipes, fetchUsers, getApiErrorMessage } from '../../api';
 import { canManageEquipeValores } from '../../roleUtils';
+import ShareLinkQrCode from '../ShareLinkQrCode';
 import EquipeCard from './EquipeCard';
 import EquipeForm from './EquipeForm';
 
@@ -12,25 +13,47 @@ interface Props {
 const formatBRLTotal = (total: number) =>
   total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+const getCadastroLink = (liderId: string) => {
+  const base = window.location.origin + window.location.pathname;
+  return `${base}#/equipes/cadastro?lider=${liderId}`;
+};
+
 const EquipesPanel: React.FC<Props> = ({ currentUser }) => {
   const [equipes, setEquipes] = useState<Equipe[]>([]);
+  const [lideres, setLideres] = useState<{ id: string; nome: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Equipe | null>(null);
 
+  const [linkLiderId, setLinkLiderId] = useState('');
+  const [copied, setCopied] = useState(false);
+
   const isCoordinator = canManageEquipeValores(currentUser.role);
 
   useEffect(() => {
     let active = true;
-    fetchEquipes()
-      .then((list) => active && setEquipes(list))
+    const usersPromise = isCoordinator
+      ? fetchUsers().catch(() => [] as AdminUser[])
+      : Promise.resolve([] as AdminUser[]);
+
+    Promise.all([fetchEquipes(), usersPromise])
+      .then(([list, users]) => {
+        if (!active) return;
+        setEquipes(list);
+        setLideres(
+          users
+            .filter((u) => u.role === 'LIDER_REGIONAL')
+            .map((u) => ({ id: u.id, nome: u.name ?? u.email }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+        );
+      })
       .catch((err) => active && setError(getApiErrorMessage(err)))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, []);
+  }, [isCoordinator]);
 
   // Visão do coordenador: equipes agrupadas por liderança.
   const grupos = useMemo(() => {
@@ -50,7 +73,8 @@ const EquipesPanel: React.FC<Props> = ({ currentUser }) => {
       const parsed = Number(e.valor ?? '');
       return acc + (Number.isNaN(parsed) ? 0 : parsed);
     }, 0);
-    return { equipes: equipes.length, liderancas: grupos.length, valorTotal };
+    const visitasTotal = equipes.reduce((acc, e) => acc + (e.visitasCount ?? 0), 0);
+    return { equipes: equipes.length, liderancas: grupos.length, valorTotal, visitasTotal };
   }, [equipes, grupos]);
 
   const applySaved = (saved: Equipe) => {
@@ -79,6 +103,19 @@ const EquipesPanel: React.FC<Props> = ({ currentUser }) => {
 
   const handleValorSaved = (updated: Equipe) => {
     setEquipes((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+  };
+
+  // Link de autocadastro: coordenador escolhe a liderança; líder usa o próprio id.
+  const activeLinkLiderId = isCoordinator ? linkLiderId : currentUser.id;
+  const activeLinkLiderNome = isCoordinator
+    ? lideres.find((l) => l.id === linkLiderId)?.nome ?? ''
+    : currentUser.name;
+
+  const handleCopyLink = async () => {
+    if (!activeLinkLiderId) return;
+    await navigator.clipboard.writeText(getCadastroLink(activeLinkLiderId));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const renderCard = (equipe: Equipe) => (
@@ -129,12 +166,66 @@ const EquipesPanel: React.FC<Props> = ({ currentUser }) => {
       {showForm && (
         <EquipeForm
           equipe={editing}
+          lideres={isCoordinator ? lideres : undefined}
           onSave={applySaved}
           onCancel={() => {
             setShowForm(false);
             setEditing(null);
           }}
         />
+      )}
+
+      {/* Link de autocadastro de equipes de rua */}
+      {!showForm && (
+        <div className="bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 shadow-sm p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <i className="fa-solid fa-share-nodes text-blue-500"></i>
+            <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">
+              Link de autocadastro de equipes
+            </p>
+          </div>
+          <p className="text-xs opacity-50 font-semibold -mt-1">
+            {isCoordinator
+              ? 'Escolha a liderança e envie o link. As equipes cadastradas por esse link já ficam vinculadas ao perfil dela.'
+              : 'Compartilhe seu link para que suas equipes de rua se cadastrem sozinhas — já vinculadas ao seu perfil.'}
+          </p>
+
+          {isCoordinator && (
+            <select
+              value={linkLiderId}
+              onChange={(e) => setLinkLiderId(e.target.value)}
+              className="w-full bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+            >
+              <option value="">Selecionar liderança...</option>
+              {lideres.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.nome}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {activeLinkLiderId && (
+            <div className="space-y-2">
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl px-4 py-3 text-xs font-mono opacity-60 break-all">
+                {getCadastroLink(activeLinkLiderId)}
+              </div>
+              <button
+                onClick={handleCopyLink}
+                className={`w-full font-black uppercase tracking-widest text-xs py-3 rounded-2xl transition-all active:scale-95 ${
+                  copied ? 'bg-green-50 text-green-700 dark:bg-green-900/20' : 'bg-blue-600 text-white shadow-lg'
+                }`}
+              >
+                <i className={`fa-solid ${copied ? 'fa-check' : 'fa-copy'} mr-2`}></i>
+                {copied ? 'Link copiado!' : 'Copiar link'}
+              </button>
+              <ShareLinkQrCode
+                url={getCadastroLink(activeLinkLiderId)}
+                ownerName={activeLinkLiderNome ?? undefined}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {loading && <p className="text-sm opacity-60">Carregando equipes...</p>}
@@ -152,7 +243,7 @@ const EquipesPanel: React.FC<Props> = ({ currentUser }) => {
 
       {/* Resumo (coordenador) */}
       {isCoordinator && equipes.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700">
             <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Lideranças</p>
             <p className="text-2xl font-black text-gray-700 dark:text-gray-300">{totals.liderancas}</p>
@@ -160,6 +251,12 @@ const EquipesPanel: React.FC<Props> = ({ currentUser }) => {
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700">
             <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Equipes</p>
             <p className="text-2xl font-black text-blue-700 dark:text-blue-400">{totals.equipes}</p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700">
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Visitas</p>
+            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+              {totals.visitasTotal}
+            </p>
           </div>
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700">
             <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Valor total</p>

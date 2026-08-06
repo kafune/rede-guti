@@ -6,6 +6,11 @@ import {
   Church,
   Equipe,
   EquipePayload,
+  EquipePublicInfo,
+  EquipePublicResumo,
+  EquipeVisita,
+  EquipeVisitaPayload,
+  EquipeVisitaPublic,
   Evento,
   EventoIndicado,
   EventoIndicadoStatus,
@@ -602,6 +607,57 @@ export const updateEquipeValor = async (
 
 export const deleteEquipe = async (id: string) => {
   await request<void>(`/equipes/${id}`, { method: 'DELETE' });
+};
+
+// ── VISITAS DAS EQUIPES (prestação de contas) ────────────────────────────────
+
+export const fetchEquipeVisitas = async (equipeId: string) => {
+  const data = await request<{ visitas: EquipeVisita[] }>(`/equipes/${equipeId}/visitas`);
+  return data.visitas;
+};
+
+export const deleteEquipeVisita = async (visitaId: string) => {
+  await request<void>(`/equipes/visitas/${visitaId}`, { method: 'DELETE' });
+};
+
+// ── AUTOCADASTRO PÚBLICO DE EQUIPES + PRESTAÇÃO DE CONTAS ─────────────────────
+
+export const fetchPublicEquipesByLider = async (liderId: string) => {
+  const data = await request<{ equipes: EquipePublicResumo[] }>(
+    `/public/lideres/${liderId}/equipes`
+  );
+  return data.equipes;
+};
+
+export const createPublicEquipe = async (payload: EquipePayload & { liderId: string }) => {
+  const data = await request<{ equipe: Equipe }>('/public/equipes', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return data.equipe;
+};
+
+export const fetchPublicEquipeInfo = async (equipeId: string) => {
+  const data = await request<{ equipe: EquipePublicInfo }>(`/public/equipes/${equipeId}`);
+  return data.equipe;
+};
+
+export const fetchPublicEquipeVisitas = async (equipeId: string) => {
+  const data = await request<{ visitas: EquipeVisitaPublic[] }>(
+    `/public/equipes/${equipeId}/visitas`
+  );
+  return data.visitas;
+};
+
+export const createPublicEquipeVisita = async (
+  equipeId: string,
+  payload: EquipeVisitaPayload
+) => {
+  const data = await request<{ visita: EquipeVisita }>(`/public/equipes/${equipeId}/visitas`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return data.visita;
 };
 
 export { getApiBase };

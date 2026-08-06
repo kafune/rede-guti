@@ -85,6 +85,7 @@ model Tenant {
   metasCidade          MetaCidade[]
   equipes              Equipe[]
   equipeMembros        EquipeMembro[]
+  equipeVisitas        EquipeVisita[]
   appConfig            AppConfig?
   whatsappConfig       WhatsAppConfig?
   whatsappCampaigns    WhatsAppCampaign[]
@@ -347,24 +348,29 @@ enum EquipeStatus {
 // custo combinado com a coordenação — visíveis e editáveis SOMENTE pelo
 // COORDENADOR (a rota faz strip para os demais papéis).
 model Equipe {
-  id                String         @id @default(cuid())
-  tenantId          String         @map("tenant_id")
-  liderId           String         @map("lider_id")
-  nome              String
-  motoristaNome     String         @map("motorista_nome")
-  motoristaCnh      String         @map("motorista_cnh")
-  motoristaTelefone String         @map("motorista_telefone")
-  carroPlaca        String         @map("carro_placa")
-  carroModelo       String         @map("carro_modelo")
-  carroCor          String         @map("carro_cor")
-  status            EquipeStatus   @default(ATIVA)
-  valor             Decimal?       @db.Decimal(12, 2)
-  valorObservacoes  String?        @map("valor_observacoes")
-  createdAt         DateTime       @default(now()) @map("created_at")
-  updatedAt         DateTime       @updatedAt @map("updated_at")
-  tenant            Tenant         @relation(fields: [tenantId], references: [id])
-  lider             User           @relation("LiderEquipes", fields: [liderId], references: [id])
-  membros           EquipeMembro[]
+  id                     String         @id @default(cuid())
+  tenantId               String         @map("tenant_id")
+  liderId                String         @map("lider_id")
+  nome                   String
+  motoristaNome          String         @map("motorista_nome")
+  motoristaCnh           String         @map("motorista_cnh")
+  motoristaTelefone      String         @map("motorista_telefone")
+  motoristaTituloEleitor String?        @map("motorista_titulo_eleitor")
+  motoristaSecao         String?        @map("motorista_secao")
+  carroPlaca             String         @map("carro_placa")
+  carroModelo            String         @map("carro_modelo")
+  carroCor               String         @map("carro_cor")
+  status                 EquipeStatus   @default(ATIVA)
+  // Origem do cadastro: MANUAL (dentro do app) ou AUTOCADASTRO (link público).
+  origem                 String         @default("MANUAL")
+  valor                  Decimal?       @db.Decimal(12, 2)
+  valorObservacoes       String?        @map("valor_observacoes")
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
+  tenant                 Tenant         @relation(fields: [tenantId], references: [id])
+  lider                  User           @relation("LiderEquipes", fields: [liderId], references: [id])
+  membros                EquipeMembro[]
+  visitas                EquipeVisita[]
 
   @@index([liderId])
   @@index([tenantId])
@@ -372,19 +378,45 @@ model Equipe {
 }
 
 model EquipeMembro {
-  id        String   @id @default(cuid())
-  tenantId  String   @map("tenant_id")
-  equipeId  String   @map("equipe_id")
-  nome      String
-  telefone  String
-  ordem     Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  equipe    Equipe   @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  equipeId      String   @map("equipe_id")
+  nome          String
+  telefone      String
+  tituloEleitor String?  @map("titulo_eleitor")
+  secao         String?  @map("secao")
+  ordem         Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at")
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  equipe        Equipe   @relation(fields: [equipeId], references: [id], onDelete: Cascade)
 
   @@index([equipeId])
   @@index([tenantId])
   @@map("equipe_membros")
+}
+
+// Prestação de contas: cada visita ("porta de igreja") registrada por uma equipe
+// em campo, normalmente pelo link público da própria equipe. Guarda local,
+// data/hora, foto de comprovação, observação e geolocalização opcional.
+model EquipeVisita {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  equipeId     String   @map("equipe_id")
+  local        String
+  dataHora     DateTime @map("data_hora")
+  observacoes  String?
+  fotoUrl      String?  @map("foto_url")
+  latitude     Float?
+  longitude    Float?
+  // Nome livre de quem registrou (o link público não exige login).
+  registradoPor String? @map("registrado_por")
+  createdAt    DateTime @default(now()) @map("created_at")
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  equipe       Equipe   @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+
+  @@index([equipeId])
+  @@index([tenantId])
+  @@map("equipe_visitas")
 }
 
 model WhatsAppConfig {

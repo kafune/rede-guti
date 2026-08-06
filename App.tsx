@@ -45,6 +45,8 @@ import EventoDetail from './components/eventos/EventoDetail';
 import PublicEventoIndicacao from './components/PublicEventoIndicacao';
 import PublicEventoConfirmacao from './components/PublicEventoConfirmacao';
 import PublicAtividadeCadastro from './components/PublicAtividadeCadastro';
+import PublicEquipeCadastro from './components/PublicEquipeCadastro';
+import PublicEquipeVisita from './components/PublicEquipeVisita';
 import AtividadesList from './components/atividades/AtividadesList';
 import { MensagensPanel } from './components/mensagens/MensagensPanel';
 import {
@@ -114,6 +116,10 @@ const App: React.FC = () => {
   const isPublicAtividadeCadastro = (hash: string) =>
     hash.startsWith('#/atividades/cadastro');
 
+  const isPublicEquipeCadastro = (hash: string) => hash.startsWith('#/equipes/cadastro');
+
+  const isPublicEquipeVisita = (hash: string) => hash.startsWith('#/equipes/visita');
+
   const [isPublicRoute, setIsPublicRoute] = useState(() =>
     window.location.hash.startsWith('#/cadastro')
   );
@@ -128,6 +134,12 @@ const App: React.FC = () => {
   );
   const [isPublicAtividadeRoute, setIsPublicAtividadeRoute] = useState(() =>
     isPublicAtividadeCadastro(window.location.hash)
+  );
+  const [isPublicEquipeCadastroRoute, setIsPublicEquipeCadastroRoute] = useState(() =>
+    isPublicEquipeCadastro(window.location.hash)
+  );
+  const [isPublicEquipeVisitaRoute, setIsPublicEquipeVisitaRoute] = useState(() =>
+    isPublicEquipeVisita(window.location.hash)
   );
   const refreshInFlight = useRef(false);
   // Mapa pede dados quase em tempo real; demais telas se contentam com 60s.
@@ -144,6 +156,8 @@ const App: React.FC = () => {
       setIsPublicEventoRoute(isPublicEventoIndicacao(hash));
       setIsPublicConfirmacaoRoute(isPublicEventoConfirmacao(hash));
       setIsPublicAtividadeRoute(isPublicAtividadeCadastro(hash));
+      setIsPublicEquipeCadastroRoute(isPublicEquipeCadastro(hash));
+      setIsPublicEquipeVisitaRoute(isPublicEquipeVisita(hash));
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -501,6 +515,14 @@ const App: React.FC = () => {
 
   if (isPublicAtividadeRoute) {
     return <PublicAtividadeCadastro />;
+  }
+
+  if (isPublicEquipeVisitaRoute) {
+    return <PublicEquipeVisita />;
+  }
+
+  if (isPublicEquipeCadastroRoute) {
+    return <PublicEquipeCadastro />;
   }
 
   if (!currentUser) {

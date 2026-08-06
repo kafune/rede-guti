@@ -211,11 +211,14 @@ export interface MetaCidade {
 }
 
 export type EquipeStatus = 'ATIVA' | 'INATIVA';
+export type EquipeOrigem = 'MANUAL' | 'AUTOCADASTRO';
 
 export interface EquipeMembro {
   id?: string; // ausente ao criar
   nome: string;
   telefone: string;
+  tituloEleitor?: string | null;
+  secao?: string | null;
   ordem?: number;
 }
 
@@ -229,15 +232,27 @@ export interface Equipe {
   motoristaNome: string;
   motoristaCnh: string;
   motoristaTelefone: string;
+  motoristaTituloEleitor?: string | null;
+  motoristaSecao?: string | null;
   carroPlaca: string;
   carroModelo: string;
   carroCor: string;
   status: EquipeStatus;
+  origem: EquipeOrigem;
   membros: EquipeMembro[];
+  visitasCount: number;
+  ultimaVisitaEm?: string | null;
   createdAt: string;
   updatedAt: string;
   valor?: string | null;
   valorObservacoes?: string | null;
+}
+
+export interface EquipeMembroPayload {
+  nome: string;
+  telefone: string;
+  tituloEleitor: string;
+  secao: string;
 }
 
 export interface EquipePayload {
@@ -245,12 +260,69 @@ export interface EquipePayload {
   motoristaNome: string;
   motoristaCnh: string;
   motoristaTelefone: string;
+  motoristaTituloEleitor: string;
+  motoristaSecao: string;
   carroPlaca: string;
   carroModelo: string;
   carroCor: string;
   status?: EquipeStatus;
-  membros: { nome: string; telefone: string }[];
+  membros: EquipeMembroPayload[];
   liderId?: string; // só usado pelo coordenador ao cadastrar por uma liderança
+}
+
+// ── Prestação de contas: visitas das equipes ──────────────────────────────────
+
+export interface EquipeVisita {
+  id: string;
+  equipeId: string;
+  local: string;
+  dataHora: string;
+  observacoes?: string | null;
+  fotoUrl?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  registradoPor?: string | null;
+  createdAt: string;
+}
+
+export interface EquipeVisitaPayload {
+  local: string;
+  dataHora?: string;
+  observacoes?: string | null;
+  registradoPor?: string | null;
+  fotoUrl?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+// Resumo público de uma equipe (link de prestação de contas).
+export interface EquipePublicInfo {
+  id: string;
+  nome: string;
+  status: EquipeStatus;
+  liderNome: string;
+  motoristaNome: string;
+  totalApoiadores: number;
+  visitasCount: number;
+}
+
+// Visita no formato reduzido do link público (sem foto).
+export interface EquipeVisitaPublic {
+  id: string;
+  local: string;
+  dataHora: string;
+  registradoPor?: string | null;
+  temLocalizacao: boolean;
+}
+
+// Resumo público de uma equipe na página de autocadastro da liderança.
+export interface EquipePublicResumo {
+  id: string;
+  nome: string;
+  status: EquipeStatus;
+  totalApoiadores: number;
+  visitasCount: number;
+  createdAt: string;
 }
 
 export interface DashboardStats {

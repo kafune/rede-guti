@@ -47,6 +47,8 @@ import PublicEventoConfirmacao from './components/PublicEventoConfirmacao';
 import PublicAtividadeCadastro from './components/PublicAtividadeCadastro';
 import PublicEquipeCadastro from './components/PublicEquipeCadastro';
 import PublicEquipeVisita from './components/PublicEquipeVisita';
+import PublicIgrejaCadastro from './components/PublicIgrejaCadastro';
+import IgrejasPanel from './components/igrejas/IgrejasPanel';
 import AtividadesList from './components/atividades/AtividadesList';
 import { MensagensPanel } from './components/mensagens/MensagensPanel';
 import {
@@ -82,10 +84,10 @@ const loadStoredUser = (): User | null => {
 };
 
 type AppView = 'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' | 'relatorio' |
-  'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'equipes' | 'mensagens';
+  'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'equipes' | 'igrejas' | 'mensagens';
 const persistedAppViews = new Set<AppView>([
   'dashboard', 'form', 'list', 'admin', 'map', 'export', 'relatorio', 'metas',
-  'eventos', 'evento-novo', 'atividades', 'equipes', 'mensagens',
+  'eventos', 'evento-novo', 'atividades', 'equipes', 'igrejas', 'mensagens',
 ]);
 const loadStoredView = (): AppView => {
   const stored = localStorage.getItem('guti_view') as AppView | null;
@@ -120,6 +122,8 @@ const App: React.FC = () => {
 
   const isPublicEquipeVisita = (hash: string) => hash.startsWith('#/equipes/visita');
 
+  const isPublicIgrejaCadastro = (hash: string) => hash.startsWith('#/igrejas/cadastro');
+
   const [isPublicRoute, setIsPublicRoute] = useState(() =>
     window.location.hash.startsWith('#/cadastro')
   );
@@ -141,6 +145,9 @@ const App: React.FC = () => {
   const [isPublicEquipeVisitaRoute, setIsPublicEquipeVisitaRoute] = useState(() =>
     isPublicEquipeVisita(window.location.hash)
   );
+  const [isPublicIgrejaCadastroRoute, setIsPublicIgrejaCadastroRoute] = useState(() =>
+    isPublicIgrejaCadastro(window.location.hash)
+  );
   const refreshInFlight = useRef(false);
   // Mapa pede dados quase em tempo real; demais telas se contentam com 60s.
   const MAP_POLL_INTERVAL_MS = 15000;
@@ -158,6 +165,7 @@ const App: React.FC = () => {
       setIsPublicAtividadeRoute(isPublicAtividadeCadastro(hash));
       setIsPublicEquipeCadastroRoute(isPublicEquipeCadastro(hash));
       setIsPublicEquipeVisitaRoute(isPublicEquipeVisita(hash));
+      setIsPublicIgrejaCadastroRoute(isPublicIgrejaCadastro(hash));
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -525,6 +533,10 @@ const App: React.FC = () => {
     return <PublicEquipeCadastro />;
   }
 
+  if (isPublicIgrejaCadastroRoute) {
+    return <PublicIgrejaCadastro />;
+  }
+
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
@@ -676,6 +688,10 @@ const App: React.FC = () => {
           <EquipesPanel currentUser={currentUser} />
         )}
 
+        {view === 'igrejas' && canManageEquipes && (
+          <IgrejasPanel currentUser={currentUser} />
+        )}
+
         {view === 'eventos' && (
           <EventoList
             currentUser={currentUser}
@@ -813,6 +829,15 @@ const App: React.FC = () => {
               <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Equipes</span>
             </button>
           )}
+          {canManageEquipes && (
+            <button
+              onClick={() => setView('igrejas')}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'igrejas' ? 'text-blue-600' : 'opacity-40'}`}
+            >
+              <i className="fa-solid fa-church text-lg leading-none"></i>
+              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Igrejas</span>
+            </button>
+          )}
           <button
             onClick={() => setView('eventos')}
             className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${['eventos', 'evento-novo', 'evento-detalhe'].includes(view) ? 'text-blue-600' : 'opacity-40'}`}
@@ -937,6 +962,17 @@ const App: React.FC = () => {
             title="Equipes de Campanha"
           >
             <i className="fa-solid fa-car-side text-xl"></i>
+          </button>
+        )}
+        {canManageEquipes && (
+          <button
+            onClick={() => setView('igrejas')}
+            className={`p-4 rounded-2xl transition-all ${
+              view === 'igrejas' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
+            }`}
+            title="Cadastro de Igrejas"
+          >
+            <i className="fa-solid fa-church text-xl"></i>
           </button>
         )}
         <button

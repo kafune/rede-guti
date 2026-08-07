@@ -13,6 +13,7 @@ import { engagementRoutes } from './routes/engagement.js';
 import { equipeRoutes } from './routes/equipes.js';
 import { eventoRoutes } from './routes/eventos.js';
 import { healthRoutes } from './routes/health.js';
+import { igrejaRoutes } from './routes/igrejas.js';
 import { indicationRoutes } from './routes/indications.js';
 import { metaRoutes } from './routes/metas.js';
 import { municipalityRoutes } from './routes/municipalities.js';
@@ -117,6 +118,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await app.register(atividadeRoutes);
   await app.register(metaRoutes);
   await app.register(equipeRoutes);
+  await app.register(igrejaRoutes);
   await app.register(engagementRoutes);
   await app.register(whatsappRoutes);
 

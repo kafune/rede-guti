@@ -325,6 +325,61 @@ export interface EquipePublicResumo {
   createdAt: string;
 }
 
+// ── Módulo de cadastro de igrejas ─────────────────────────────────────────────
+
+export type IgrejaOrigem = 'admin' | 'public' | 'import';
+
+export interface IgrejaEquipeVinculo {
+  assignmentId: string;
+  equipeId: string;
+  equipeNome: string;
+  dataAgendada?: string | null;
+}
+
+export interface Igreja {
+  id: string;
+  nome: string;
+  denominacao: string;
+  pastor: string;
+  endereco: string;
+  bairro: string;
+  cidade: string;
+  estado: string;
+  telefone: string;
+  email: string;
+  latitude: number | null;
+  longitude: number | null;
+  observacoes: string;
+  membrosEstimados: number | null;
+  zonaEleitoral: number | null;
+  origem: IgrejaOrigem;
+  createdById?: string | null;
+  createdByNome?: string | null;
+  equipes: IgrejaEquipeVinculo[];
+  createdAt: string;
+}
+
+// Dados do formulário (sem campos gerados pelo servidor).
+export interface IgrejaFormData {
+  nome: string;
+  denominacao: string;
+  pastor: string;
+  endereco: string;
+  bairro: string;
+  cidade: string;
+  estado: string;
+  telefone: string;
+  email: string;
+  latitude: number | null;
+  longitude: number | null;
+  observacoes: string;
+  membrosEstimados: number | null;
+  zonaEleitoral: number | null;
+}
+
+// Payload de criação: aceita vínculo opcional (admin) / obrigatório (público) com equipe.
+export type IgrejaPayload = IgrejaFormData & { equipeId?: string };
+
 export interface DashboardStats {
   total: number;
   last7Days: number;

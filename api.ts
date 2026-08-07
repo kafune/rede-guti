@@ -12,6 +12,9 @@ import {
   EquipeVisitaPayload,
   EquipeVisitaPublic,
   Evento,
+  Igreja,
+  IgrejaFormData,
+  IgrejaPayload,
   EventoIndicado,
   EventoIndicadoStatus,
   EventoPublicInfo,
@@ -658,6 +661,42 @@ export const createPublicEquipeVisita = async (
     body: JSON.stringify(payload)
   });
   return data.visita;
+};
+
+// ── MÓDULO DE IGREJAS ────────────────────────────────────────────────────────
+
+export const fetchIgrejas = async () => {
+  const data = await request<{ igrejas: Igreja[] }>('/igrejas');
+  return data.igrejas;
+};
+
+export const createIgreja = async (payload: IgrejaPayload) => {
+  const data = await request<{ igreja: Igreja }>('/igrejas', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return data.igreja;
+};
+
+export const updateIgreja = async (id: string, payload: Partial<IgrejaFormData>) => {
+  const data = await request<{ igreja: Igreja }>(`/igrejas/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+  return data.igreja;
+};
+
+export const deleteIgreja = async (id: string) => {
+  await request<void>(`/igrejas/${id}`, { method: 'DELETE' });
+};
+
+// Autocadastro público por link de equipe (sem login).
+export const createPublicIgreja = async (payload: IgrejaPayload & { equipeId: string }) => {
+  const data = await request<{ igreja: Igreja }>('/public/igrejas', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return data.igreja;
 };
 
 export { getApiBase };

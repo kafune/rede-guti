@@ -86,6 +86,8 @@ model Tenant {
   equipes              Equipe[]
   equipeMembros        EquipeMembro[]
   equipeVisitas        EquipeVisita[]
+  igrejas              IgrejaCadastro[]
+  equipeIgrejas        EquipeIgreja[]
   appConfig            AppConfig?
   whatsappConfig       WhatsAppConfig?
   whatsappCampaigns    WhatsAppCampaign[]
@@ -118,6 +120,7 @@ model User {
   eventoIndicacoes            EventoIndicado[]      @relation("LiderEventoIndicados")
   atividades                  Atividade[]           @relation("LiderAtividades")
   equipes                     Equipe[]              @relation("LiderEquipes")
+  igrejasCadastradas          IgrejaCadastro[]      @relation("IgrejaCriadaPor")
   leaderStats                 LeaderStats?
   pointsLedger                LeaderPointsLedger[]
   authoredWhatsAppCampaigns   WhatsAppCampaign[]    @relation("WhatsAppCampaignAuthor")
@@ -371,6 +374,7 @@ model Equipe {
   lider                  User           @relation("LiderEquipes", fields: [liderId], references: [id])
   membros                EquipeMembro[]
   visitas                EquipeVisita[]
+  igrejas                EquipeIgreja[]
 
   @@index([liderId])
   @@index([tenantId])
@@ -417,6 +421,58 @@ model EquipeVisita {
   @@index([equipeId])
   @@index([tenantId])
   @@map("equipe_visitas")
+}
+
+// Cadastro de igrejas (módulo independente). Registro rico com dados de
+// localização e eleitorais. origem: 'admin' (cadastro logado), 'public'
+// (autocadastro por link de equipe) ou 'import'. Não substitui o catálogo
+// simples `Church` usado pelas indicações — coexistem.
+model IgrejaCadastro {
+  id               String         @id @default(cuid())
+  tenantId         String         @map("tenant_id")
+  nome             String
+  denominacao      String         @default("")
+  pastor           String         @default("")
+  endereco         String         @default("")
+  bairro           String         @default("")
+  cidade           String         @default("Guarulhos")
+  estado           String         @default("SP")
+  telefone         String         @default("")
+  email            String         @default("")
+  latitude         Float?
+  longitude        Float?
+  observacoes      String         @default("")
+  membrosEstimados Int?           @map("membros_estimados")
+  zonaEleitoral    Int?           @map("zona_eleitoral")
+  origem           String         @default("admin")
+  createdById      String?        @map("created_by")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+  createdBy        User?          @relation("IgrejaCriadaPor", fields: [createdById], references: [id], onDelete: SetNull)
+  equipes          EquipeIgreja[]
+
+  @@index([tenantId])
+  @@index([createdById])
+  @@map("igrejas")
+}
+
+// Vínculo igreja <-> equipe (team_church_assignments no spec original). Usado no
+// autocadastro por link: toda igreja cadastrada pelo link da equipe fica atribuída.
+model EquipeIgreja {
+  id            String         @id @default(cuid())
+  tenantId      String         @map("tenant_id")
+  equipeId      String         @map("equipe_id")
+  igrejaId      String         @map("igreja_id")
+  dataAgendada  DateTime?      @map("data_agendada") @db.Date
+  assignedAt    DateTime       @default(now()) @map("assigned_at")
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  equipe        Equipe         @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+  igreja        IgrejaCadastro @relation(fields: [igrejaId], references: [id], onDelete: Cascade)
+
+  @@index([equipeId])
+  @@index([igrejaId])
+  @@index([tenantId])
+  @@map("equipe_igrejas")
 }
 
 model WhatsAppConfig {

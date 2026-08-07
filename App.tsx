@@ -148,6 +148,8 @@ const App: React.FC = () => {
   const [isPublicIgrejaCadastroRoute, setIsPublicIgrejaCadastroRoute] = useState(() =>
     isPublicIgrejaCadastro(window.location.hash)
   );
+  // Barra inferior (mobile): abre o menu "Mais" com os destinos secundários.
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const refreshInFlight = useRef(false);
   // Mapa pede dados quase em tempo real; demais telas se contentam com 60s.
   const MAP_POLL_INTERVAL_MS = 15000;
@@ -554,6 +556,70 @@ const App: React.FC = () => {
   const isMapView = view === 'map';
   const mainWidthClass = isMapView ? 'max-w-none w-full px-2 sm:px-4 lg:px-8' : 'max-w-4xl';
 
+  // ── Navegação: uma única fonte de verdade para a barra (mobile) e o trilho
+  // lateral (desktop). Evita duplicação e mantém tudo responsivo/rolável. ──────
+  type NavEntry = {
+    id: AppView;
+    label: string;
+    icon: string; // classe FontAwesome completa
+    color?: 'emerald';
+    show: boolean;
+    active: boolean;
+    fab?: boolean; // renderizado como botão central de ação no mobile
+  };
+
+  const eventoActive = ['eventos', 'evento-novo', 'evento-detalhe'].includes(view);
+  const allNavItems: NavEntry[] = [
+    { id: 'dashboard', label: 'Painel', icon: 'fa-solid fa-chart-line', show: true, active: view === 'dashboard' },
+    { id: 'list', label: supporterDirectoryLabel, icon: 'fa-solid fa-users', show: canBrowseSupporters, active: view === 'list' },
+    { id: 'form', label: 'Cadastrar', icon: 'fa-solid fa-plus', show: canCreateNewEntries, active: view === 'form', fab: true },
+    { id: 'map', label: 'Mapa', icon: 'fa-solid fa-map-location-dot', show: canAccessSupporterDirectory, active: view === 'map' },
+    { id: 'admin', label: 'Rede', icon: 'fa-solid fa-sitemap', show: canOpenManagementPanel, active: view === 'admin' },
+    { id: 'eventos', label: 'Eventos', icon: 'fa-solid fa-calendar-days', show: true, active: eventoActive },
+    { id: 'atividades', label: 'Atividades', icon: 'fa-solid fa-clipboard-list', color: 'emerald', show: true, active: view === 'atividades' },
+    { id: 'equipes', label: 'Equipes', icon: 'fa-solid fa-car-side', show: canManageEquipes, active: view === 'equipes' },
+    { id: 'igrejas', label: 'Igrejas', icon: 'fa-solid fa-church', show: canManageEquipes, active: view === 'igrejas' },
+    { id: 'mensagens', label: 'Mensagens', icon: 'fa-brands fa-whatsapp', color: 'emerald', show: canExportData, active: view === 'mensagens' },
+    { id: 'metas', label: 'Metas', icon: 'fa-solid fa-bullseye', show: canExportData, active: view === 'metas' },
+    { id: 'relatorio', label: 'Relatório', icon: 'fa-solid fa-ranking-star', show: canExportData, active: view === 'relatorio' },
+    { id: 'export', label: 'Exportar', icon: 'fa-solid fa-file-export', show: canExportData, active: view === 'export' },
+  ];
+
+  const visibleNav = allNavItems.filter((i) => i.show);
+  const fabItem = visibleNav.find((i) => i.fab) ?? null;
+  const menuItems = visibleNav.filter((i) => !i.fab); // trilho desktop + folha "Mais"
+
+  // Mobile: no máx. 3 destinos diretos na barra; o restante vai para "Mais".
+  const mobilePrimary = (['dashboard', 'list', 'map', 'admin', 'eventos', 'atividades'] as AppView[])
+    .map((id) => menuItems.find((i) => i.id === id))
+    .filter((i): i is NavEntry => Boolean(i))
+    .slice(0, 3);
+  const mobilePrimaryIds = new Set(mobilePrimary.map((i) => i.id));
+  const moreActive = menuItems.some((i) => i.active && !mobilePrimaryIds.has(i.id));
+  const mobileLeft = fabItem ? mobilePrimary.slice(0, 2) : mobilePrimary;
+  const mobileRight = fabItem ? mobilePrimary.slice(2) : [];
+
+  const activeBg = (item: NavEntry) => (item.color === 'emerald' ? 'bg-emerald-600' : 'bg-blue-600');
+  const activeText = (item: NavEntry) => (item.color === 'emerald' ? 'text-emerald-600' : 'text-blue-600');
+  const go = (v: AppView) => {
+    setView(v);
+    setMoreMenuOpen(false);
+  };
+
+  const renderMobileTab = (item: NavEntry) => (
+    <button
+      key={item.id}
+      onClick={() => go(item.id)}
+      aria-current={item.active ? 'page' : undefined}
+      className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-1 px-1 transition-colors ${
+        item.active ? activeText(item) : 'text-gray-400 dark:text-gray-500'
+      }`}
+    >
+      <i className={`${item.icon} text-lg leading-none`}></i>
+      <span className="text-[10px] font-bold leading-none truncate max-w-full">{item.label}</span>
+    </button>
+  );
+
   return (
     <div
       className={`min-h-screen md:pl-24 transition-colors duration-500 ${
@@ -730,271 +796,101 @@ const App: React.FC = () => {
         )}
       </main>
 
+      {/* ── Barra inferior (mobile): destinos primários + FAB + "Mais" ── */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 md:hidden"
+        className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-t dark:border-gray-800"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           paddingLeft: 'env(safe-area-inset-left, 0px)',
           paddingRight: 'env(safe-area-inset-right, 0px)'
         }}
       >
-        <div className="flex items-stretch h-14 sm:h-16">
-          <button
-            onClick={() => setView('dashboard')}
-            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'dashboard' ? 'text-blue-600' : 'opacity-40'}`}
-          >
-            <i className="fa-solid fa-chart-line text-lg leading-none"></i>
-            <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Dashboard</span>
-          </button>
-          {canBrowseSupporters && (
-            <button
-              onClick={() => setView('list')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'list' ? 'text-blue-600' : 'opacity-40'}`}
-            >
-              <i className="fa-solid fa-users text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">{supporterDirectoryLabel}</span>
-            </button>
-          )}
-          {canCreateNewEntries && (
-            <div className="relative -top-5 sm:-top-6 flex-shrink-0 w-14 sm:w-16 flex items-center justify-center">
+        <div className="flex items-stretch h-16">
+          {mobileLeft.map(renderMobileTab)}
+          {fabItem && (
+            <div className="relative -top-5 flex-shrink-0 w-16 flex items-center justify-center">
               <button
-                onClick={() => setView('form')}
-                className="theme-brand-mark w-12 h-12 sm:w-14 sm:h-14 rounded-[1.25rem] sm:rounded-[1.5rem] flex items-center justify-center text-xl sm:text-2xl transition-transform active:scale-90"
+                onClick={() => go(fabItem.id)}
+                className="theme-brand-mark w-14 h-14 rounded-[1.5rem] flex items-center justify-center text-2xl text-white shadow-lg transition-transform active:scale-90"
                 aria-label="Novo cadastro"
               >
                 <i className="fa-solid fa-plus"></i>
               </button>
             </div>
           )}
-          {canAccessSupporterDirectory && (
-            <button
-              onClick={() => setView('map')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'map' ? 'text-blue-600' : 'opacity-40'}`}
-            >
-              <i className="fa-solid fa-map-location-dot text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Mapa</span>
-            </button>
-          )}
-          {canOpenManagementPanel && (
-            <button
-              onClick={() => setView('admin')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'admin' ? 'text-blue-600' : 'opacity-40'}`}
-            >
-              <i className="fa-solid fa-sitemap text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Rede</span>
-            </button>
-          )}
-          {canExportData && (
-            <button
-              onClick={() => setView('mensagens')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'mensagens' ? 'text-emerald-600' : 'opacity-40'}`}
-            >
-              <i className="fa-brands fa-whatsapp text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Mensagens</span>
-            </button>
-          )}
-          {canExportData && (
-            <button
-              onClick={() => setView('export')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'export' ? 'text-blue-600' : 'opacity-40'}`}
-            >
-              <i className="fa-solid fa-file-export text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Exportar</span>
-            </button>
-          )}
-          {canExportData && (
-            <button
-              onClick={() => setView('relatorio')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'relatorio' ? 'text-blue-600' : 'opacity-40'}`}
-            >
-              <i className="fa-solid fa-ranking-star text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Relatório</span>
-            </button>
-          )}
-          {canExportData && (
-            <button
-              onClick={() => setView('metas')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'metas' ? 'text-blue-600' : 'opacity-40'}`}
-            >
-              <i className="fa-solid fa-bullseye text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Metas</span>
-            </button>
-          )}
-          {canManageEquipes && (
-            <button
-              onClick={() => setView('equipes')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'equipes' ? 'text-blue-600' : 'opacity-40'}`}
-            >
-              <i className="fa-solid fa-car-side text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Equipes</span>
-            </button>
-          )}
-          {canManageEquipes && (
-            <button
-              onClick={() => setView('igrejas')}
-              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'igrejas' ? 'text-blue-600' : 'opacity-40'}`}
-            >
-              <i className="fa-solid fa-church text-lg leading-none"></i>
-              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Igrejas</span>
-            </button>
-          )}
+          {mobileRight.map(renderMobileTab)}
           <button
-            onClick={() => setView('eventos')}
-            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${['eventos', 'evento-novo', 'evento-detalhe'].includes(view) ? 'text-blue-600' : 'opacity-40'}`}
+            onClick={() => setMoreMenuOpen(true)}
+            aria-haspopup="true"
+            aria-expanded={moreMenuOpen}
+            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-1 px-1 transition-colors ${
+              moreActive ? 'text-blue-600' : 'text-gray-400 dark:text-gray-500'
+            }`}
           >
-            <i className="fa-solid fa-calendar-days text-lg leading-none"></i>
-            <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Eventos</span>
-          </button>
-          <button
-            onClick={() => setView('atividades')}
-            className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'atividades' ? 'text-emerald-600' : 'opacity-40'}`}
-          >
-            <i className="fa-solid fa-clipboard-list text-lg leading-none"></i>
-            <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Atividades</span>
+            <i className="fa-solid fa-ellipsis text-lg leading-none"></i>
+            <span className="text-[10px] font-bold leading-none">Mais</span>
           </button>
         </div>
       </nav>
 
-      <nav className="hidden md:flex fixed top-0 left-0 bottom-0 w-24 bg-white dark:bg-gray-900 border-r dark:border-gray-800 z-50 flex-col items-center pt-28 gap-8">
-        <button
-          onClick={() => setView('dashboard')}
-          className={`p-4 rounded-2xl transition-all ${
-            view === 'dashboard' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-          }`}
-          title="Dashboard"
-        >
-          <i className="fa-solid fa-chart-line text-xl"></i>
-        </button>
-        {canBrowseSupporters && (
+      {/* ── Folha "Mais" (mobile): menu completo e rolável ── */}
+      {moreMenuOpen && (
+        <div className="fixed inset-0 z-[60] md:hidden" role="dialog" aria-modal="true">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-up"
+            onClick={() => setMoreMenuOpen(false)}
+          />
+          <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl border-t dark:border-gray-800 shadow-2xl p-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] max-h-[80vh] overflow-y-auto no-scrollbar animate-fade-up">
+            <div className="w-10 h-1.5 rounded-full bg-gray-300 dark:bg-gray-700 mx-auto mb-4" />
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-black text-lg">Menu</p>
+              <button
+                onClick={() => setMoreMenuOpen(false)}
+                aria-label="Fechar menu"
+                className="w-9 h-9 rounded-xl opacity-50 hover:opacity-100 active:scale-90 transition-all"
+              >
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              {menuItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => go(item.id)}
+                  aria-current={item.active ? 'page' : undefined}
+                  className={`flex flex-col items-center justify-center gap-2 rounded-2xl p-3 min-h-[80px] transition-all active:scale-95 ${
+                    item.active
+                      ? `${activeBg(item)} text-white shadow-lg`
+                      : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  <i className={`${item.icon} text-xl`}></i>
+                  <span className="text-[11px] font-bold leading-tight text-center">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Trilho lateral (desktop): rolável, com rótulos ── */}
+      <nav className="hidden md:flex fixed top-0 left-0 bottom-0 w-24 bg-white dark:bg-gray-900 border-r dark:border-gray-800 z-50 flex-col items-center pt-24 pb-6 gap-1.5 overflow-y-auto no-scrollbar [scrollbar-width:none]">
+        {menuItems.map((item) => (
           <button
-            onClick={() => setView('list')}
-            className={`p-4 rounded-2xl transition-all ${
-              view === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
+            key={item.id}
+            onClick={() => go(item.id)}
+            title={item.label}
+            aria-current={item.active ? 'page' : undefined}
+            className={`shrink-0 w-16 flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all ${
+              item.active
+                ? `${activeBg(item)} text-white shadow-lg`
+                : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200'
             }`}
-            title={supporterDirectoryLabel}
           >
-            <i className="fa-solid fa-users text-xl"></i>
+            <i className={`${item.icon} text-lg`}></i>
+            <span className="text-[9px] font-bold uppercase leading-tight tracking-tight text-center">{item.label}</span>
           </button>
-        )}
-        {canCreateNewEntries && (
-          <button
-            onClick={() => setView('form')}
-            className={`p-4 rounded-2xl transition-all ${
-              view === 'form' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-            }`}
-            title="Novo Cadastro"
-          >
-            <i className="fa-solid fa-plus text-xl"></i>
-          </button>
-        )}
-        {canAccessSupporterDirectory && (
-          <button
-            onClick={() => setView('map')}
-            className={`p-4 rounded-2xl transition-all ${
-              view === 'map' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-            }`}
-            title="Mapa"
-          >
-            <i className="fa-solid fa-map-location-dot text-xl"></i>
-          </button>
-        )}
-        {canOpenManagementPanel && (
-          <button
-            onClick={() => setView('admin')}
-            className={`p-4 rounded-2xl transition-all ${
-              view === 'admin' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-            }`}
-            title="Rede"
-          >
-            <i className="fa-solid fa-sitemap text-xl"></i>
-          </button>
-        )}
-        {canExportData && (
-          <button
-            onClick={() => setView('mensagens')}
-            className={`p-4 rounded-2xl transition-all ${
-              view === 'mensagens' ? 'bg-emerald-600 text-white shadow-lg' : 'opacity-30'
-            }`}
-            title="Mensagens"
-          >
-            <i className="fa-brands fa-whatsapp text-xl"></i>
-          </button>
-        )}
-        {canExportData && (
-          <button
-            onClick={() => setView('export')}
-            className={`p-4 rounded-2xl transition-all ${
-              view === 'export' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-            }`}
-            title="Exportar"
-          >
-            <i className="fa-solid fa-file-export text-xl"></i>
-          </button>
-        )}
-        {canExportData && (
-          <button
-            onClick={() => setView('relatorio')}
-            className={`p-4 rounded-2xl transition-all ${
-              view === 'relatorio' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-            }`}
-            title="Relatório de Lideranças"
-          >
-            <i className="fa-solid fa-ranking-star text-xl"></i>
-          </button>
-        )}
-        {canExportData && (
-          <button
-            onClick={() => setView('metas')}
-            className={`p-4 rounded-2xl transition-all ${
-              view === 'metas' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-            }`}
-            title="Metas por Cidade"
-          >
-            <i className="fa-solid fa-bullseye text-xl"></i>
-          </button>
-        )}
-        {canManageEquipes && (
-          <button
-            onClick={() => setView('equipes')}
-            className={`p-4 rounded-2xl transition-all ${
-              view === 'equipes' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-            }`}
-            title="Equipes de Campanha"
-          >
-            <i className="fa-solid fa-car-side text-xl"></i>
-          </button>
-        )}
-        {canManageEquipes && (
-          <button
-            onClick={() => setView('igrejas')}
-            className={`p-4 rounded-2xl transition-all ${
-              view === 'igrejas' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
-            }`}
-            title="Cadastro de Igrejas"
-          >
-            <i className="fa-solid fa-church text-xl"></i>
-          </button>
-        )}
-        <button
-          onClick={() => setView('eventos')}
-          className={`p-4 rounded-2xl transition-all ${
-            ['eventos', 'evento-novo', 'evento-detalhe'].includes(view)
-              ? 'bg-blue-600 text-white shadow-lg'
-              : 'opacity-30'
-          }`}
-          title="Eventos"
-        >
-          <i className="fa-solid fa-calendar-days text-xl"></i>
-        </button>
-        <button
-          onClick={() => setView('atividades')}
-          className={`p-4 rounded-2xl transition-all ${
-            view === 'atividades' ? 'bg-emerald-600 text-white shadow-lg' : 'opacity-30'
-          }`}
-          title="Atividades"
-        >
-          <i className="fa-solid fa-clipboard-list text-xl"></i>
-        </button>
+        ))}
       </nav>
     </div>
   );

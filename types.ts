@@ -353,6 +353,7 @@ export interface Igreja {
   membrosEstimados: number | null;
   zonaEleitoral: number | null;
   origem: IgrejaOrigem;
+  liderancaLabel?: string | null;
   createdById?: string | null;
   createdByNome?: string | null;
   equipes: IgrejaEquipeVinculo[];

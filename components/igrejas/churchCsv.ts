@@ -21,6 +21,7 @@ const COLUMNS: { header: string; get: (i: Igreja) => unknown }[] = [
   { header: 'Membros estimados', get: (i) => (i.membrosEstimados ?? '') },
   { header: 'Zona eleitoral', get: (i) => (i.zonaEleitoral ?? '') },
   { header: 'Origem', get: (i) => i.origem },
+  { header: 'Liderança', get: (i) => i.liderancaLabel ?? i.createdByNome ?? '' },
   { header: 'Equipes vinculadas', get: (i) => i.equipes.map((e) => e.equipeNome).join(' | ') },
   { header: 'Cadastrado por', get: (i) => i.createdByNome ?? '' },
   { header: 'Observações', get: (i) => i.observacoes },

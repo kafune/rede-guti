@@ -21,6 +21,8 @@ import { publicRoutes } from './routes/public.js';
 import { settingsRoutes } from './routes/settings.js';
 import { userRoutes } from './routes/users.js';
 import { whatsappRoutes } from './routes/whatsapp/index.js';
+import { territoryRoutes } from './routes/territory.js';
+import { territoryPublicRoutes } from './routes/territoryPublic.js';
 
 export interface BuildAppOptions {
   logger?: boolean | Record<string, unknown>;
@@ -121,6 +123,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await app.register(igrejaRoutes);
   await app.register(engagementRoutes);
   await app.register(whatsappRoutes);
+  await app.register(territoryRoutes);
+  await app.register(territoryPublicRoutes);
 
   return app;
 }

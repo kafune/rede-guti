@@ -700,3 +700,6 @@ export const createPublicIgreja = async (payload: IgrejaPayload & { equipeId: st
 };
 
 export { getApiBase };
+// Reutilizado pelo cliente do módulo territorial (territoryApi.ts).
+export { request as apiRequest };
+export { ApiError };

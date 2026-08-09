@@ -51,6 +51,8 @@ import PublicIgrejaCadastro from './components/PublicIgrejaCadastro';
 import IgrejasPanel from './components/igrejas/IgrejasPanel';
 import AtividadesList from './components/atividades/AtividadesList';
 import { MensagensPanel } from './components/mensagens/MensagensPanel';
+import TerritoryApp from './components/territory/TerritoryApp';
+import PublicVisit from './components/PublicVisit';
 import {
   canAccessEquipes,
   canAccessManagementPanel,
@@ -84,10 +86,10 @@ const loadStoredUser = (): User | null => {
 };
 
 type AppView = 'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' | 'relatorio' |
-  'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'equipes' | 'igrejas' | 'mensagens';
+  'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'equipes' | 'igrejas' | 'mensagens' | 'territorio';
 const persistedAppViews = new Set<AppView>([
   'dashboard', 'form', 'list', 'admin', 'map', 'export', 'relatorio', 'metas',
-  'eventos', 'evento-novo', 'atividades', 'equipes', 'igrejas', 'mensagens',
+  'eventos', 'evento-novo', 'atividades', 'equipes', 'igrejas', 'mensagens', 'territorio',
 ]);
 const loadStoredView = (): AppView => {
   const stored = localStorage.getItem('guti_view') as AppView | null;
@@ -148,6 +150,10 @@ const App: React.FC = () => {
   const [isPublicIgrejaCadastroRoute, setIsPublicIgrejaCadastroRoute] = useState(() =>
     isPublicIgrejaCadastro(window.location.hash)
   );
+  // Link individual da visita territorial (motorista, sem login): #/v/{token}
+  const [isPublicVisitRoute, setIsPublicVisitRoute] = useState(() =>
+    window.location.hash.startsWith('#/v/')
+  );
   // Barra inferior (mobile): abre o menu "Mais" com os destinos secundários.
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const refreshInFlight = useRef(false);
@@ -168,6 +174,7 @@ const App: React.FC = () => {
       setIsPublicEquipeCadastroRoute(isPublicEquipeCadastro(hash));
       setIsPublicEquipeVisitaRoute(isPublicEquipeVisita(hash));
       setIsPublicIgrejaCadastroRoute(isPublicIgrejaCadastro(hash));
+      setIsPublicVisitRoute(hash.startsWith('#/v/'));
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -273,6 +280,11 @@ const App: React.FC = () => {
     }
 
     if (view === 'mensagens' && currentUser.role !== 'COORDENADOR') {
+      setView('dashboard');
+      return;
+    }
+
+    if (view === 'territorio' && !(FEATURES.territoryEnabled && canDirectory)) {
       setView('dashboard');
       return;
     }
@@ -539,6 +551,10 @@ const App: React.FC = () => {
     return <PublicIgrejaCadastro />;
   }
 
+  if (isPublicVisitRoute) {
+    return <PublicVisit />;
+  }
+
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
@@ -553,6 +569,8 @@ const App: React.FC = () => {
   const canCreateNewEntries = canCreateRegistrations(currentUser.role);
   const canExportData = currentUser.role === 'COORDENADOR';
   const canManageEquipes = canAccessEquipes(currentUser.role);
+  // Território: coordenação e verificadora gerenciam; leitura para quem vê a base.
+  const canTerritory = FEATURES.territoryEnabled && canAccessSupporterDirectory;
   const isMapView = view === 'map';
   const mainWidthClass = isMapView ? 'max-w-none w-full px-2 sm:px-4 lg:px-8' : 'max-w-4xl';
 
@@ -579,6 +597,7 @@ const App: React.FC = () => {
     { id: 'atividades', label: 'Atividades', icon: 'fa-solid fa-clipboard-list', color: 'emerald', show: true, active: view === 'atividades' },
     { id: 'equipes', label: 'Equipes', icon: 'fa-solid fa-car-side', show: canManageEquipes, active: view === 'equipes' },
     { id: 'igrejas', label: 'Igrejas', icon: 'fa-solid fa-church', show: canManageEquipes, active: view === 'igrejas' },
+    { id: 'territorio', label: 'Território', icon: 'fa-solid fa-route', show: canTerritory, active: view === 'territorio' },
     { id: 'mensagens', label: 'Mensagens', icon: 'fa-brands fa-whatsapp', color: 'emerald', show: canExportData, active: view === 'mensagens' },
     { id: 'metas', label: 'Metas', icon: 'fa-solid fa-bullseye', show: canExportData, active: view === 'metas' },
     { id: 'relatorio', label: 'Relatório', icon: 'fa-solid fa-ranking-star', show: canExportData, active: view === 'relatorio' },
@@ -793,6 +812,10 @@ const App: React.FC = () => {
 
         {view === 'mensagens' && currentUser.role === 'COORDENADOR' && (
           <MensagensPanel />
+        )}
+
+        {view === 'territorio' && canTerritory && (
+          <TerritoryApp currentUser={currentUser} onLogout={handleLogout} />
         )}
       </main>
 

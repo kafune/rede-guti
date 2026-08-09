@@ -555,3 +555,6 @@ export const deleteMeta = async (id: string) => {
 };
 
 export { getApiBase };
+// Reutilizado pelo cliente do módulo territorial (territoryApi.ts).
+export { request as apiRequest };
+export { ApiError };

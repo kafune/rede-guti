@@ -11,4 +11,8 @@ const flag = (key: string, fallback: boolean): boolean => {
 
 export const FEATURES = {
   churchFieldEnabled: flag('VITE_CHURCH_FIELD_ENABLED', true),
+  // Módulo territorial (Igrejas × Zona Eleitoral × Equipes × Visitas). Ligado
+  // por padrão; instâncias que não usam podem desligar com
+  // VITE_TERRITORY_ENABLED=false.
+  territoryEnabled: flag('VITE_TERRITORY_ENABLED', true),
 };

@@ -613,7 +613,7 @@ export async function territoryRoutes(app: FastifyInstance) {
     if (!requireCoordinator(request, reply)) return;
     const body = teamSchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: body.error.issues[0]?.message ?? 'Dados inválidos.' });
-    const team = await prisma.team.create({ data: { tenantId: getTenantId(), ...body.data } });
+    const team = await prisma.team.create({ data: { tenantId: getTenantId(), ...body.data } as any });
     return reply.code(201).send({ team });
   });
 

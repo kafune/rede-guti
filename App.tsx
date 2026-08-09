@@ -45,6 +45,8 @@ import PublicEventoIndicacao from './components/PublicEventoIndicacao';
 import PublicEventoConfirmacao from './components/PublicEventoConfirmacao';
 import PublicAtividadeCadastro from './components/PublicAtividadeCadastro';
 import AtividadesList from './components/atividades/AtividadesList';
+import TerritoryApp from './components/territory/TerritoryApp';
+import PublicVisit from './components/PublicVisit';
 import {
   canAccessManagementPanel,
   canCreateRegistrations,
@@ -85,7 +87,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState<
     'dashboard' | 'form' | 'list' | 'detail' | 'admin' | 'map' | 'export' | 'relatorio' |
-    'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades'
+    'metas' | 'eventos' | 'evento-novo' | 'evento-detalhe' | 'atividades' | 'territorio'
   >('dashboard');
   const [selectedSupporter, setSelectedSupporter] = useState<Supporter | null>(null);
   const [selectedEventoId, setSelectedEventoId] = useState<string | null>(null);
@@ -114,6 +116,10 @@ const App: React.FC = () => {
   const [isPublicAtividadeRoute, setIsPublicAtividadeRoute] = useState(() =>
     isPublicAtividadeCadastro(window.location.hash)
   );
+  // Link individual da visita (motorista, sem login): #/v/{token}
+  const [isPublicVisitRoute, setIsPublicVisitRoute] = useState(() =>
+    window.location.hash.startsWith('#/v/')
+  );
   const refreshInFlight = useRef(false);
   // Mapa pede dados quase em tempo real; demais telas se contentam com 60s.
   const MAP_POLL_INTERVAL_MS = 15000;
@@ -129,6 +135,7 @@ const App: React.FC = () => {
       setIsPublicEventoRoute(isPublicEventoIndicacao(hash));
       setIsPublicConfirmacaoRoute(isPublicEventoConfirmacao(hash));
       setIsPublicAtividadeRoute(isPublicAtividadeCadastro(hash));
+      setIsPublicVisitRoute(hash.startsWith('#/v/'));
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -229,6 +236,11 @@ const App: React.FC = () => {
 
     // O mapa continua restrito a quem enxerga a base completa.
     if (view === 'map' && !canDirectory) {
+      setView('dashboard');
+      return;
+    }
+
+    if (view === 'territorio' && !(FEATURES.territoryEnabled && canDirectory)) {
       setView('dashboard');
       return;
     }
@@ -483,6 +495,10 @@ const App: React.FC = () => {
     return <PublicAtividadeCadastro />;
   }
 
+  if (isPublicVisitRoute) {
+    return <PublicVisit />;
+  }
+
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
   }
@@ -496,6 +512,8 @@ const App: React.FC = () => {
   const supporterDirectoryLabel = isLeader ? 'Meus Cadastros' : 'Apoiadores';
   const canCreateNewEntries = canCreateRegistrations(currentUser.role);
   const canExportData = currentUser.role === 'COORDENADOR';
+  // Território: coordenação e verificadora gerenciam; leitura para quem vê a base.
+  const canTerritory = FEATURES.territoryEnabled && canAccessSupporterDirectory;
   const isMapView = view === 'map';
   const mainWidthClass = isMapView ? 'max-w-none w-full px-2 sm:px-4 lg:px-8' : 'max-w-4xl';
 
@@ -661,6 +679,10 @@ const App: React.FC = () => {
         {view === 'atividades' && (
           <AtividadesList currentUser={currentUser} onLogout={handleLogout} />
         )}
+
+        {view === 'territorio' && canTerritory && (
+          <TerritoryApp currentUser={currentUser} onLogout={handleLogout} />
+        )}
       </main>
 
       <nav
@@ -706,6 +728,15 @@ const App: React.FC = () => {
             >
               <i className="fa-solid fa-map-location-dot text-lg leading-none"></i>
               <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Mapa</span>
+            </button>
+          )}
+          {canTerritory && (
+            <button
+              onClick={() => setView('territorio')}
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 px-1 active:opacity-70 transition-opacity ${view === 'territorio' ? 'text-blue-600' : 'opacity-40'}`}
+            >
+              <i className="fa-solid fa-church text-lg leading-none"></i>
+              <span className="text-[9px] font-black uppercase leading-none w-full truncate text-center">Território</span>
             </button>
           )}
           {canOpenManagementPanel && (
@@ -802,6 +833,17 @@ const App: React.FC = () => {
             title="Mapa"
           >
             <i className="fa-solid fa-map-location-dot text-xl"></i>
+          </button>
+        )}
+        {canTerritory && (
+          <button
+            onClick={() => setView('territorio')}
+            className={`p-4 rounded-2xl transition-all ${
+              view === 'territorio' ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'
+            }`}
+            title="Território"
+          >
+            <i className="fa-solid fa-church text-xl"></i>
           </button>
         )}
         {canOpenManagementPanel && (

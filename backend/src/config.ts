@@ -67,4 +67,12 @@ export const config = {
     'WHATSAPP_MASS_MAX_RECIPIENTS',
   ),
   publicApiUrl: optionalUrl(process.env.PUBLIC_API_URL),
+  // Geocodificação do módulo territorial. Nominatim (OSM) exige ~1 req/s e
+  // um User-Agent identificável; as envs permitem trocar o provedor/endpoint.
+  geocoderProvider: (process.env.GEOCODER_PROVIDER ?? 'nominatim').trim().toLowerCase(),
+  nominatimUrl: optionalUrl(process.env.NOMINATIM_URL) || 'https://nominatim.openstreetmap.org',
+  geocoderUserAgent: process.env.GEOCODER_USER_AGENT?.trim() || 'rede-guti-territorial/1.0 (+https://redeguti.ddnsfree.com)',
+  geocoderEmail: optionalValue(process.env.GEOCODER_EMAIL),
+  geocoderDefaultCity: process.env.GEOCODER_DEFAULT_CITY?.trim() || 'Guarulhos',
+  geocoderDefaultState: process.env.GEOCODER_DEFAULT_STATE?.trim() || 'SP',
 };

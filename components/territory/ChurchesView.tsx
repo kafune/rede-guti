@@ -5,6 +5,7 @@ import {
   ChurchInput,
   createTerritoryChurch,
   fetchTerritoryChurches,
+  geocodeRun,
   importChurches,
 } from '../../territoryApi';
 import { getApiErrorMessage } from '../../api';
@@ -49,6 +50,9 @@ const ChurchesView: React.FC<Props> = ({ zones, teams, canEdit, onOpenChurch, on
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<ChurchInput>({ name: '' });
   const [importReport, setImportReport] = useState<string | null>(null);
+  const [geoRunning, setGeoRunning] = useState(false);
+  const [geoMsg, setGeoMsg] = useState<string | null>(null);
+  const stopGeo = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -147,6 +151,34 @@ const ChurchesView: React.FC<Props> = ({ zones, teams, canEdit, onOpenChurch, on
     }
   };
 
+  const runGeocode = async () => {
+    if (geoRunning) {
+      stopGeo.current = true;
+      setGeoMsg('Parando…');
+      return;
+    }
+    stopGeo.current = false;
+    setGeoRunning(true);
+    let totalNew = 0;
+    try {
+      // Laço bounded: cada lote respeita ~1 req/s do Nominatim no servidor.
+      for (let i = 0; i < 400 && !stopGeo.current; i++) {
+        const res = await geocodeRun(5);
+        totalNew += res.updated;
+        setGeoMsg(`Geocodificando… ${totalNew} localizadas · faltam ${res.remaining} sem coordenada`);
+        if (res.remaining === 0 || res.processed === 0) break;
+        if (i % 4 === 3) await load();
+      }
+      setGeoMsg(`Geocodificação ${stopGeo.current ? 'interrompida' : 'concluída'}: ${totalNew} igrejas localizadas.`);
+    } catch (e) {
+      setGeoMsg(getApiErrorMessage(e, 'Falha na geocodificação.'));
+    } finally {
+      setGeoRunning(false);
+      await load();
+      onDataChanged();
+    }
+  };
+
   const filteredForMap = useMemo(() => churches, [churches]);
 
   return (
@@ -178,10 +210,14 @@ const ChurchesView: React.FC<Props> = ({ zones, teams, canEdit, onOpenChurch, on
             <button onClick={() => setShowCreate(true)} className="px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold"><i className="fa-solid fa-plus mr-1"></i>Nova</button>
             <button onClick={() => fileRef.current?.click()} className={`${inputCls} font-bold`}><i className="fa-solid fa-file-import mr-1"></i>Importar</button>
             <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={onImportFile} />
+            <button onClick={runGeocode} className={`${inputCls} font-bold ${geoRunning ? 'bg-amber-500/20 text-amber-600 border-amber-500/40' : ''}`}>
+              <i className={`fa-solid ${geoRunning ? 'fa-stop' : 'fa-location-crosshairs'} mr-1`}></i>{geoRunning ? 'Parar' : 'Geocodificar'}
+            </button>
           </>
         )}
       </div>
 
+      {geoMsg && <div className="text-sm px-3 py-2 rounded-xl bg-indigo-500/10 text-indigo-600">{geoMsg}</div>}
       {importReport && <div className="text-sm px-3 py-2 rounded-xl bg-blue-500/10 text-blue-600">{importReport}</div>}
       {error && <div className="text-sm px-3 py-2 rounded-xl bg-red-500/10 text-red-600">{error}</div>}
 

@@ -8,6 +8,7 @@ import { newVisitToken } from '../lib/visitToken.js';
 import { recordAudit } from '../lib/audit.js';
 import { SENTINEL_CHURCH_NAME } from '../lib/church.js';
 import { getTerritorySettings } from '../lib/territorySettings.js';
+import { geocodeAddress } from '../lib/geocoding.js';
 
 // ── Vocabulário de status da visita (String, não enum: configurável no futuro) ─
 export const VISIT_STATUS = {
@@ -331,6 +332,15 @@ export async function territoryRoutes(app: FastifyInstance) {
       data.zoneValidatedAt = null;
     }
 
+    // Se o endereço mudou e a igreja está sem coordenada, limpa o marcador
+    // "nao_encontrado" para o próximo lote de geocodificação tentar de novo.
+    const addressTouched = ['street', 'number', 'district', 'city', 'postalCode'].some(
+      (k) => (d as any)[k] !== undefined
+    );
+    if (addressTouched && before.latitude == null && before.geocodingProvider === 'nao_encontrado') {
+      data.geocodingProvider = null;
+    }
+
     const church = await prisma.church.update({ where: { id }, data, select: churchListSelect });
 
     const addrChanged = ['street', 'number', 'district', 'latitude', 'longitude'].some(
@@ -432,6 +442,93 @@ export async function territoryRoutes(app: FastifyInstance) {
       }
     }
     return { created, skipped, errors };
+  });
+
+  // ── GEOCODING ─────────────────────────────────────────────────────────────────
+  // Um endereço → lat/lng, com cache. Coordenadas alimentam o mapa e o geofence.
+  const geocodeChurchRecord = async (church: any) => {
+    const result = await geocodeAddress({
+      street: church.street,
+      number: church.number,
+      district: church.district,
+      city: church.city,
+      state: church.state,
+      postalCode: church.postalCode,
+    });
+    if (!result) return false;
+    await prisma.church.update({
+      where: { id: church.id },
+      data: {
+        latitude: result.latitude,
+        longitude: result.longitude,
+        geocodingProvider: result.provider,
+        geocodingConfidence: result.confidence,
+        formattedAddress: church.formattedAddress ?? result.formattedAddress,
+      },
+    });
+    return true;
+  };
+
+  // Geocodifica um lote de igrejas sem coordenada. Bounded por request (o
+  // Nominatim exige ~1 req/s); o frontend chama em laço até remaining = 0.
+  const geocodeRunSchema = z.object({ limit: z.number().int().min(1).max(12).optional() });
+  app.post('/territory/geocode/run', { preHandler: app.authenticate }, async (request, reply) => {
+    if (!requireCoordinator(request, reply)) return;
+    const body = geocodeRunSchema.safeParse(request.body ?? {});
+    const limit = body.success ? body.data.limit ?? 6 : 6;
+
+    // Exclui já-marcadas como não encontradas para o lote sempre progredir
+    // (evita laço infinito no frontend quando o endereço é irresolvível).
+    const missingWhere = {
+      latitude: null,
+      geocodingProvider: null,
+      name: { not: SENTINEL_CHURCH_NAME },
+      OR: [{ street: { not: null } }, { district: { not: null } }],
+    } as any;
+
+    const batch = await prisma.church.findMany({
+      where: missingWhere,
+      select: { id: true, street: true, number: true, district: true, city: true, state: true, postalCode: true, formattedAddress: true },
+      take: limit,
+    });
+
+    let updated = 0;
+    let failed = 0;
+    for (const church of batch) {
+      try {
+        if (await geocodeChurchRecord(church)) {
+          updated++;
+        } else {
+          // Marca como não encontrada para não reprocessar (coordenação corrige
+          // o endereço e re-geocodifica pontualmente depois).
+          await prisma.church.update({ where: { id: church.id }, data: { geocodingProvider: 'nao_encontrado' } });
+          failed++;
+        }
+      } catch (err) {
+        console.error('[geocode] falhou:', church.id, err);
+        failed++;
+      }
+    }
+
+    const remaining = await prisma.church.count({ where: missingWhere });
+    return { processed: batch.length, updated, failed, remaining };
+  });
+
+  // Geocodifica uma igreja específica (ou re-geocodifica).
+  app.post('/territory/churches/:id/geocode', { preHandler: app.authenticate }, async (request, reply) => {
+    if (!requireCoordinator(request, reply)) return;
+    const id = (request.params as any).id as string;
+    const church = await prisma.church.findUnique({ where: { id }, select: churchListSelect });
+    if (!church) return reply.code(404).send({ error: 'Igreja não encontrada.' });
+    try {
+      const ok = await geocodeChurchRecord(church);
+      if (!ok) return reply.code(422).send({ error: 'Endereço não encontrado pelo geocodificador.' });
+    } catch (err: any) {
+      return reply.code(502).send({ error: 'Falha no geocodificador. Tente novamente.' });
+    }
+    const updated = await prisma.church.findUnique({ where: { id }, select: churchListSelect });
+    recordAudit({ action: 'church.geocode', entityType: 'church', entityId: id, request });
+    return { church: serializeChurch(updated) };
   });
 
   // ── VISITS: generate the N default visits for a church ──────────────────────────

@@ -86,6 +86,16 @@ export const importChurches = async (churches: ChurchInput[]) =>
     { method: 'POST', body: JSON.stringify({ churches }) }
   );
 
+// ── Geocodificação ──────────────────────────────────────────────────────────────
+export const geocodeRun = async (limit = 5) =>
+  await apiRequest<{ processed: number; updated: number; failed: number; remaining: number }>(
+    '/territory/geocode/run',
+    { method: 'POST', body: JSON.stringify({ limit }) }
+  );
+
+export const geocodeChurch = async (id: string) =>
+  (await apiRequest<{ church: TerritoryChurch }>(`/territory/churches/${id}/geocode`, { method: 'POST' })).church;
+
 export const generateVisits = async (churchId: string) =>
   await apiRequest<{ visits: Visit[]; createdCount: number }>(
     `/territory/churches/${churchId}/visits/generate`,

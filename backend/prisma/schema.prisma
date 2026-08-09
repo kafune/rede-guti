@@ -51,6 +51,7 @@ model Tenant {
   visitCheckins         VisitCheckin[]
   auditLogs             AuditLog[]
   territorySettings     TerritorySettings?
+  geocodeCache          GeocodeCache[]
 
   @@map("tenants")
 }
@@ -439,6 +440,27 @@ model TerritorySettings {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@map("territory_settings")
+}
+
+// Cache de geocodificação: evita reconsultar o mesmo endereço no provedor
+// (Nominatim tem limite de ~1 req/s). Guarda também negativos (found=false).
+model GeocodeCache {
+  id               String   @id @default(cuid())
+  tenantId         String   @map("tenant_id")
+  addressKey       String   @map("address_key")
+  latitude         Float?
+  longitude        Float?
+  provider         String?
+  confidence       String?
+  formattedAddress String?  @map("formatted_address")
+  found            Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, addressKey])
+  @@index([tenantId])
+  @@map("geocode_cache")
 }
 
 model Municipality {

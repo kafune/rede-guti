@@ -46,6 +46,33 @@ territoriais opcionais e o restante são tabelas novas. Nada existente é altera
 | `TERRITORY_SEED` | backend `.env` | `true` | `false` não semeia zonas (instâncias fora de Guarulhos) |
 | `VITE_TERRITORY_ENABLED` | build frontend | `true` | `false` esconde a aba Território |
 
+## Geocodificação (endereço → lat/lng)
+
+Mapa e geofence dependem de coordenada por igreja. A importação já aceita colunas
+`lat`/`lng`; quando faltam, use o **geocodificador em lote** (aba Igrejas → botão
+**Geocodificar**, coordenação). Provedor padrão: **Nominatim/OSM** (grátis).
+
+- Respeita ~1 req/s no servidor; o frontend chama em lotes (5) até acabar.
+- `geocode_cache` evita reconsultar o mesmo endereço (guarda inclusive negativos).
+- Igreja sem resultado fica marcada `geocodingProvider = nao_encontrado` e sai do
+  lote; ao corrigir o endereço na tela da igreja, o marcador é limpo e ela volta.
+- Abstração `GeocodingProvider` (`backend/src/lib/geocoding.ts`) isola o provedor
+  — trocar por Google/Mapbox depois não afeta o resto.
+
+Env (backend, todas opcionais):
+
+| Env | Default | Uso |
+|---|---|---|
+| `GEOCODER_PROVIDER` | `nominatim` | provedor |
+| `NOMINATIM_URL` | `https://nominatim.openstreetmap.org` | endpoint |
+| `GEOCODER_USER_AGENT` | `rede-guti-territorial/1.0 …` | exigido pela política do OSM |
+| `GEOCODER_EMAIL` | — | identificação (recomendado pelo Nominatim) |
+| `GEOCODER_DEFAULT_CITY` / `_STATE` | `Guarulhos` / `SP` | completa endereços sem cidade |
+
+> Para geocodificar as ~858 igrejas de uma vez, deixe o botão rodando (leva
+> alguns minutos pela cota de 1 req/s). Endereços não encontrados aparecem no
+> filtro por revisão para correção manual.
+
 ## Configuração operacional (`territory_settings`, uma linha por tenant)
 
 - `checkin_radius_meters` (100) — raio ideal do geofence.

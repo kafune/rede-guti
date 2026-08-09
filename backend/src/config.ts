@@ -24,4 +24,13 @@ export const config = {
   // 'default' é o tenant que a migração cria para adotar os dados existentes,
   // então instâncias sem a env nova continuam funcionando como antes.
   tenantSlug: (process.env.TENANT_SLUG ?? 'default').trim().toLowerCase(),
+  // Geocodificação do módulo territorial. Nominatim (OSM) é gratuito e exige
+  // ~1 req/s + User-Agent identificável; a env permite trocar de provedor/URL.
+  geocoderProvider: (process.env.GEOCODER_PROVIDER ?? 'nominatim').trim().toLowerCase(),
+  nominatimUrl: (process.env.NOMINATIM_URL?.trim().replace(/\/+$/, '')) || 'https://nominatim.openstreetmap.org',
+  geocoderUserAgent: process.env.GEOCODER_USER_AGENT?.trim() || 'rede-guti-territorial/1.0 (+https://redeguti.ddnsfree.com)',
+  geocoderEmail: process.env.GEOCODER_EMAIL?.trim() || null,
+  // Cidade/UF padrão usadas para completar endereços sem cidade no geocoder.
+  geocoderDefaultCity: process.env.GEOCODER_DEFAULT_CITY?.trim() || 'Guarulhos',
+  geocoderDefaultState: process.env.GEOCODER_DEFAULT_STATE?.trim() || 'SP',
 };

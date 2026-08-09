@@ -445,6 +445,9 @@ model IgrejaCadastro {
   membrosEstimados Int?           @map("membros_estimados")
   zonaEleitoral    Int?           @map("zona_eleitoral")
   origem           String         @default("admin")
+  // Rótulo livre da liderança de origem (ex.: importação em massa quando não há
+  // usuário correspondente). Preserva o vínculo declarado no cadastro.
+  liderancaLabel   String?        @map("lideranca_label")
   createdById      String?        @map("created_by")
   createdAt        DateTime       @default(now()) @map("created_at")
   tenant           Tenant         @relation(fields: [tenantId], references: [id])

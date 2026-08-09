@@ -69,6 +69,7 @@ const serializeIgreja = (i: IgrejaRecord) => ({
   membrosEstimados: i.membrosEstimados,
   zonaEleitoral: i.zonaEleitoral,
   origem: i.origem,
+  liderancaLabel: i.liderancaLabel,
   createdById: i.createdById,
   createdByNome: i.createdBy ? i.createdBy.name ?? i.createdBy.email : null,
   equipes: i.equipes.map((a) => ({

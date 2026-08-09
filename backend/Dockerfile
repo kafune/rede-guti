@@ -26,5 +26,8 @@ COPY --from=build /app/dist /app/dist
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 COPY --from=build /app/src ./src
+# scripts/ roda via tsx em runtime (seed, import:igrejas, create:*), então
+# precisa estar na imagem final junto com os dados de importação.
+COPY scripts ./scripts
 
 CMD ["node", "dist/server.js"]

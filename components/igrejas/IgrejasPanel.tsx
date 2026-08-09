@@ -308,6 +308,12 @@ const IgrejasPanel: React.FC<Props> = ({ currentUser }) => {
                       {igreja.equipes.map((e) => e.equipeNome).join(', ')}
                     </p>
                   )}
+                  {(igreja.liderancaLabel || igreja.createdByNome) && (
+                    <p className="pt-0.5">
+                      <i className="fa-solid fa-user-tie mr-1 opacity-50"></i>
+                      Liderança: {igreja.liderancaLabel || igreja.createdByNome}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}

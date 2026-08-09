@@ -3,8 +3,44 @@ import type { Role as RoleType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/db.ts';
 import { resolveTenantFromEnv } from '../src/lib/tenant.ts';
+import { GUARULHOS_ZONES, GUARULHOS_ZONE_SOURCE, buildBairroZonaRows } from '../src/lib/territory.ts';
 
 const { Role } = prismaClient;
+
+// Semeia Zonas Eleitorais + dicionário bairro→zona de Guarulhos (idempotente).
+// Gate: TERRITORY_SEED=false desliga (instâncias que não são Guarulhos).
+async function seedTerritory(tenantId: string) {
+  if ((process.env.TERRITORY_SEED ?? 'true').toLowerCase() === 'false') return;
+
+  for (const zone of GUARULHOS_ZONES) {
+    await prisma.electoralZone.upsert({
+      where: { tenantId_number: { tenantId, number: zone.number } },
+      update: { color: zone.color, eleitores: zone.eleitores },
+      create: { tenantId, number: zone.number, color: zone.color, eleitores: zone.eleitores },
+    });
+  }
+
+  const rows = buildBairroZonaRows();
+  for (const row of rows) {
+    await prisma.bairroZona.upsert({
+      where: {
+        tenantId_bairroNormalized_zoneNumber: {
+          tenantId,
+          bairroNormalized: row.bairroNormalized,
+          zoneNumber: row.zoneNumber,
+        },
+      },
+      update: { bairroLabel: row.bairroLabel, source: GUARULHOS_ZONE_SOURCE },
+      create: { tenantId, ...row },
+    });
+  }
+
+  // Configurações territoriais padrão (raio de geofence etc.).
+  const settings = await prisma.territorySettings.findUnique({ where: { tenantId } });
+  if (!settings) await prisma.territorySettings.create({ data: { tenantId } });
+
+  console.log(`[seed] Território: ${GUARULHOS_ZONES.length} zonas, ${rows.length} bairros mapeados.`);
+}
 
 async function upsertUser(
   tenantId: string,
@@ -40,6 +76,8 @@ async function main() {
   if (regionalEmail && regionalPassword) {
     await upsertUser(tenant.id, regionalEmail, regionalPassword, Role.LIDER_REGIONAL, coordinator.id);
   }
+
+  await seedTerritory(tenant.id);
 }
 
 main()

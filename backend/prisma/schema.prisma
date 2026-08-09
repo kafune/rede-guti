@@ -42,6 +42,15 @@ model Tenant {
   pointsLedger    LeaderPointsLedger[]
   metasCidade     MetaCidade[]
   appConfig       AppConfig?
+  electoralZones        ElectoralZone[]
+  bairroZonas           BairroZona[]
+  teams                 Team[]
+  teamMembers           TeamMember[]
+  teamChurchAssignments TeamChurchAssignment[]
+  visits                Visit[]
+  visitCheckins         VisitCheckin[]
+  auditLogs             AuditLog[]
+  territorySettings     TerritorySettings?
 
   @@map("tenants")
 }
@@ -65,6 +74,10 @@ model User {
   atividades         Atividade[]        @relation("LiderAtividades")
   leaderStats        LeaderStats?
   pointsLedger       LeaderPointsLedger[]
+  teamsLed           Team[]             @relation("TeamLeader")
+  teamsDriving       Team[]             @relation("TeamDriver")
+  teamMemberships    TeamMember[]
+  visitsDriving      Visit[]            @relation("VisitDriver")
 
   @@unique([tenantId, email])
   @@index([role])
@@ -136,12 +149,296 @@ model Church {
   tenantId    String       @map("tenant_id")
   name        String
   createdAt   DateTime     @default(now()) @map("created_at")
-  tenant      Tenant       @relation(fields: [tenantId], references: [id])
-  indications Indication[]
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  // ── Cadastro territorial (opcional; preenchido no módulo de Igrejas) ────────
+  // Campos nulos por padrão: o registro-sentinela e igrejas herdadas do fluxo
+  // de apoiadores continuam válidos sem nenhum destes preenchidos.
+  denomination     String?
+  pastorName       String? @map("pastor_name")
+  phone            String?
+  whatsapp         String?
+  email            String?
+
+  street           String?
+  number           String?
+  complement       String?
+  district         String? // bairro — chave da resolução de zona eleitoral
+  city             String?
+  state            String?
+  postalCode       String? @map("postal_code")
+  formattedAddress String? @map("formatted_address")
+
+  latitude            Float?
+  longitude           Float?
+  geocodingProvider   String? @map("geocoding_provider")
+  geocodingConfidence String? @map("geocoding_confidence")
+
+  // Associação à Zona Eleitoral + metadados de auditoria da classificação.
+  electoralZoneId          String?   @map("electoral_zone_id")
+  zoneClassificationMethod String?   @map("zone_classification_method")
+  zoneConfidenceScore      Float?    @map("zone_confidence_score")
+  zoneSource               String?   @map("zone_source")
+  zoneRequiresReview       Boolean   @default(false) @map("zone_requires_review")
+  zoneValidatedById        String?   @map("zone_validated_by_id")
+  zoneValidatedAt          DateTime? @map("zone_validated_at")
+
+  currentTeamId String? @map("current_team_id")
+
+  status             String  @default("ativa")
+  priority           String?
+  verificationStatus String  @default("nao_verificada") @map("verification_status")
+  notes              String?
+
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id])
+  indications   Indication[]
+  electoralZone ElectoralZone?         @relation(fields: [electoralZoneId], references: [id], onDelete: SetNull)
+  currentTeam   Team?                  @relation("ChurchCurrentTeam", fields: [currentTeamId], references: [id], onDelete: SetNull)
+  visits        Visit[]
+  assignments   TeamChurchAssignment[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
+  @@index([electoralZoneId])
+  @@index([currentTeamId])
+  @@index([district])
   @@map("churches")
+}
+
+// ── Módulo Territorial (Igrejas × Zona Eleitoral × Equipes × Visitas) ─────────
+
+// Zona Eleitoral (unidade territorial de trabalho). Guarulhos: 176, 185, 278,
+// 279, 393, 394, 395. Semeada a partir do "Mapa Político de Guarulhos".
+model ElectoralZone {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  number    String // "176", "185", ...
+  name      String?
+  color     String?
+  eleitores Int?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  churches Church[]
+  teams    Team[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+  @@map("electoral_zones")
+}
+
+// Dicionário bairro → zona (fonte "Nível A/B" do prompt). Um bairro pode mapear
+// para mais de uma zona (sobreposições no mapa) — nesse caso a resolução marca
+// a igreja como "requer validação".
+model BairroZona {
+  id               String   @id @default(cuid())
+  tenantId         String   @map("tenant_id")
+  bairroNormalized String   @map("bairro_normalized")
+  bairroLabel      String   @map("bairro_label")
+  zoneNumber       String   @map("zone_number")
+  source           String   @default("Mapa Político de Guarulhos")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, bairroNormalized, zoneNumber])
+  @@index([tenantId, bairroNormalized])
+  @@map("bairro_zonas")
+}
+
+model Team {
+  id              String   @id @default(cuid())
+  tenantId        String   @map("tenant_id")
+  name            String
+  electoralZoneId String?  @map("electoral_zone_id")
+  leaderUserId    String?  @map("leader_user_id")
+  driverUserId    String?  @map("driver_user_id")
+  vehicle         String?
+  status          String   @default("ativa")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id])
+  electoralZone ElectoralZone?         @relation(fields: [electoralZoneId], references: [id], onDelete: SetNull)
+  leader        User?                  @relation("TeamLeader", fields: [leaderUserId], references: [id], onDelete: SetNull)
+  driver        User?                  @relation("TeamDriver", fields: [driverUserId], references: [id], onDelete: SetNull)
+  members       TeamMember[]
+  churches      Church[]               @relation("ChurchCurrentTeam")
+  assignments   TeamChurchAssignment[]
+  visits        Visit[]
+
+  @@index([tenantId])
+  @@index([electoralZoneId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  teamId    String   @map("team_id")
+  userId    String   @map("user_id")
+  role      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([tenantId])
+  @@map("team_members")
+}
+
+// Histórico de atribuições igreja → equipe (o ponteiro "equipe atual" fica em
+// Church.currentTeamId; esta tabela é o log auditável de quem atribuiu quando).
+model TeamChurchAssignment {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  teamId       String   @map("team_id")
+  churchId     String   @map("church_id")
+  assignedById String?  @map("assigned_by_id")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([churchId])
+  @@index([teamId])
+  @@map("team_church_assignments")
+}
+
+// Visita programada. Cada igreja tem, por padrão, 2 visitas (visit_number 1 e 2).
+// Entidade própria (não colunas na igreja) para manter histórico e reagendamento.
+model Visit {
+  id           String @id @default(cuid())
+  tenantId     String @map("tenant_id")
+  churchId     String @map("church_id")
+  teamId       String? @map("team_id")
+  driverUserId String? @map("driver_user_id")
+  visitNumber  Int     @map("visit_number")
+
+  scheduledDate      DateTime? @map("scheduled_date")
+  scheduledStartTime String?   @map("scheduled_start_time")
+  scheduledEndTime   String?   @map("scheduled_end_time")
+
+  status String @default("aguardando_agendamento")
+
+  // Link individual da visita (token aleatório, não sequencial, revogável).
+  publicToken  String  @unique @map("public_token")
+  tokenRevoked Boolean @default(false) @map("token_revoked")
+
+  // Check-in "autoritativo" (último válido) — o histórico completo fica em
+  // VisitCheckin (append-only). Facilita as queries de listagem/dashboard.
+  checkinAt              DateTime? @map("checkin_at")
+  checkinLatitude        Float?    @map("checkin_latitude")
+  checkinLongitude       Float?    @map("checkin_longitude")
+  checkinAccuracy        Float?    @map("checkin_accuracy")
+  checkinDeviceTimestamp DateTime? @map("checkin_device_timestamp")
+  distanceFromChurch     Float?    @map("distance_from_church")
+  geofenceStatus         String?   @map("geofence_status")
+  justification          String?
+
+  checkoutAt DateTime? @map("checkout_at")
+
+  // Prestação de contas (resultado da visita).
+  outcome              String?
+  outcomeHappened      String?   @map("outcome_happened")
+  responsibleContacted String?   @map("responsible_contacted")
+  nextAction           String?   @map("next_action")
+  followUpDate         DateTime? @map("follow_up_date")
+  notes                String?
+
+  // Foto comprobatória (MVP: data URL base64 no banco; upgrade → object storage).
+  // O original nunca é alterado; o "carimbo" é sobreposto na UI a partir dos
+  // metadados de check-in (não bakeia um segundo arquivo).
+  photoUrl        String?   @map("photo_url")
+  photoHash       String?   @map("photo_hash")
+  photoUploadedAt DateTime? @map("photo_uploaded_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id])
+  church   Church         @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  team     Team?          @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  driver   User?          @relation("VisitDriver", fields: [driverUserId], references: [id], onDelete: SetNull)
+  checkins VisitCheckin[]
+
+  @@unique([churchId, visitNumber])
+  @@index([tenantId])
+  @@index([churchId])
+  @@index([teamId])
+  @@index([status])
+  @@index([scheduledDate])
+  @@map("visits")
+}
+
+// Append-only: uma linha por tentativa de check-in. O check-in original nunca é
+// sobrescrito silenciosamente (requisito do prompt).
+model VisitCheckin {
+  id                 String    @id @default(cuid())
+  tenantId           String    @map("tenant_id")
+  visitId            String    @map("visit_id")
+  latitude           Float?
+  longitude          Float?
+  accuracy           Float?
+  deviceTimestamp    DateTime? @map("device_timestamp")
+  serverTimestamp    DateTime  @default(now()) @map("server_timestamp")
+  distanceFromChurch Float?    @map("distance_from_church")
+  geofenceStatus     String?   @map("geofence_status")
+  withinGeofence     Boolean?  @map("within_geofence")
+  justification      String?
+  photoUrl           String?   @map("photo_url")
+  photoHash          String?   @map("photo_hash")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  visit  Visit  @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([visitId])
+  @@map("visit_checkins")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id")
+  userId     String?  @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  before     Json?
+  after      Json?
+  ip         String?
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Configurações operacionais do módulo territorial (uma linha por tenant).
+model TerritorySettings {
+  id                  String   @id @default(cuid())
+  tenantId            String   @unique @map("tenant_id")
+  checkinRadiusMeters Int      @default(100) @map("checkin_radius_meters")
+  checkinWarnMeters   Int      @default(200) @map("checkin_warn_meters")
+  requirePhoto        Boolean  @default(true) @map("require_photo")
+  visitsPerChurch     Int      @default(2) @map("visits_per_church")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("territory_settings")
 }
 
 model Municipality {

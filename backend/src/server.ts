@@ -19,6 +19,8 @@ import { atividadeRoutes } from './routes/atividades.js';
 import { metaRoutes } from './routes/metas.js';
 import { engagementRoutes } from './routes/engagement.js';
 import { automationRoutes } from './routes/automation.js';
+import { territoryRoutes } from './routes/territory.js';
+import { territoryPublicRoutes } from './routes/territoryPublic.js';
 
 const app = Fastify({
   logger: true
@@ -45,6 +47,8 @@ await app.register(atividadeRoutes);
 await app.register(metaRoutes);
 await app.register(engagementRoutes);
 await app.register(automationRoutes);
+await app.register(territoryRoutes);
+await app.register(territoryPublicRoutes);
 
 const start = async () => {
   try {

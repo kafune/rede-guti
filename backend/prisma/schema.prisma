@@ -86,6 +86,8 @@ model Tenant {
   equipes              Equipe[]
   equipeMembros        EquipeMembro[]
   equipeVisitas        EquipeVisita[]
+  membroCadastros      MembroCadastro[]
+  membroCadastroDocs   MembroCadastroDocumento[]
   igrejas              IgrejaCadastro[]
   equipeIgrejas        EquipeIgreja[]
   appConfig            AppConfig?
@@ -694,6 +696,7 @@ model Equipe {
   membros                EquipeMembro[]
   visitas                EquipeVisita[]
   igrejas                EquipeIgreja[]
+  cadastros              MembroCadastro[]
 
   @@index([liderId])
   @@index([tenantId])
@@ -740,6 +743,70 @@ model EquipeVisita {
   @@index([equipeId])
   @@index([tenantId])
   @@map("equipe_visitas")
+}
+
+// Autocadastro individual de cada pessoa da equipe (motorista ou apoiador),
+// preenchido pela própria pessoa por um link público (sem login). Guarda os
+// dados pessoais, o aceite do trabalho e as fotos de documentos anexadas.
+//
+// Identidade por "slot" estável, e não pelo id do EquipeMembro: a edição da
+// equipe recria os membros (deleteMany + create), o que trocaria os ids. Assim,
+// o motorista é sempre pessoaTipo=MOTORISTA (slot nulo) e cada apoiador é
+// pessoaTipo=APOIADOR + slot = ordem (0..3). Os dados enviados ficam guardados
+// aqui, então mesmo que a equipe seja reeditada nada se perde.
+model MembroCadastro {
+  id              String                     @id @default(cuid())
+  tenantId        String                     @map("tenant_id")
+  equipeId        String                     @map("equipe_id")
+  // 'MOTORISTA' | 'APOIADOR'
+  pessoaTipo      String                     @map("pessoa_tipo")
+  // Posição do apoiador (ordem 0..3); nulo para o motorista.
+  slot            Int?
+  // Referência informativa ao membro no momento do envio (não é a chave: pode
+  // ficar defasada após uma reedição da equipe).
+  membroId        String?                    @map("membro_id")
+  nomeCompleto    String                     @map("nome_completo")
+  cpf             String?
+  rg              String?
+  dataNascimento  String?                    @map("data_nascimento")
+  telefone        String?
+  email           String?
+  cep             String?
+  endereco        String?
+  bairro          String?
+  cidade          String?
+  observacoes     String?
+  consentimento   Boolean                    @default(false)
+  consentimentoEm DateTime?                  @map("consentimento_em")
+  createdAt       DateTime                   @default(now()) @map("created_at")
+  updatedAt       DateTime                   @updatedAt @map("updated_at")
+  tenant          Tenant                     @relation(fields: [tenantId], references: [id])
+  equipe          Equipe                     @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+  documentos      MembroCadastroDocumento[]
+
+  @@index([equipeId])
+  @@index([tenantId])
+  @@index([membroId])
+  @@map("membro_cadastros")
+}
+
+// Foto de documento anexada a um autocadastro (RG/CNH, comprovante etc.).
+// Guardada como data URL base64 (mesma abordagem das fotos de visita),
+// redimensionada no cliente antes do envio.
+model MembroCadastroDocumento {
+  id         String         @id @default(cuid())
+  tenantId   String         @map("tenant_id")
+  cadastroId String         @map("cadastro_id")
+  // Rótulo livre: "RG (frente)", "CNH", "Comprovante de residência"...
+  tipo       String         @default("Documento")
+  imagemUrl  String         @map("imagem_url")
+  createdAt  DateTime       @default(now()) @map("created_at")
+  tenant     Tenant         @relation(fields: [tenantId], references: [id])
+  cadastro   MembroCadastro @relation(fields: [cadastroId], references: [id], onDelete: Cascade)
+
+  @@index([cadastroId])
+  @@index([tenantId])
+  @@map("membro_cadastro_documentos")
 }
 
 // Cadastro de igrejas (módulo independente). Registro rico com dados de

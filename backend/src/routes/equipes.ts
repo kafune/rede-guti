@@ -113,12 +113,42 @@ const equipeInclude = {
   lider: { select: { id: true, name: true, email: true } },
   membros: { orderBy: { ordem: 'asc' as const } },
   _count: { select: { visitas: true } },
-  visitas: { orderBy: { dataHora: 'desc' as const }, take: 1, select: { dataHora: true } }
+  visitas: { orderBy: { dataHora: 'desc' as const }, take: 1, select: { dataHora: true } },
+  // Resumo do autocadastro de cada pessoa (sem as imagens dos documentos, que só
+  // vêm no endpoint dedicado). Casa por slot: motorista (slot nulo) e apoiadores
+  // por ordem.
+  cadastros: {
+    select: {
+      id: true,
+      pessoaTipo: true,
+      slot: true,
+      nomeCompleto: true,
+      consentimento: true,
+      updatedAt: true,
+      _count: { select: { documentos: true } }
+    }
+  }
 } as const;
 
 type EquipeRecord = Prisma.EquipeGetPayload<{ include: typeof equipeInclude }>;
 
-const serializeEquipe = (e: EquipeRecord, includeValores: boolean) => ({
+type CadastroResumoRecord = EquipeRecord['cadastros'][number];
+
+const cadastroResumo = (c: CadastroResumoRecord) => ({
+  id: c.id,
+  preenchido: true,
+  nomeCompleto: c.nomeCompleto,
+  consentimento: c.consentimento,
+  documentosCount: c._count.documentos,
+  atualizadoEm: c.updatedAt.toISOString()
+});
+
+const serializeEquipe = (e: EquipeRecord, includeValores: boolean) => {
+  const motoristaCadastro = e.cadastros.find((c) => c.pessoaTipo === 'MOTORISTA') ?? null;
+  const apoiadorCadastro = (ordem: number) =>
+    e.cadastros.find((c) => c.pessoaTipo === 'APOIADOR' && c.slot === ordem) ?? null;
+
+  return {
   id: e.id,
   liderId: e.liderId,
   liderNome: e.lider.name ?? e.lider.email,
@@ -128,19 +158,24 @@ const serializeEquipe = (e: EquipeRecord, includeValores: boolean) => ({
   motoristaTelefone: e.motoristaTelefone,
   motoristaTituloEleitor: e.motoristaTituloEleitor,
   motoristaSecao: e.motoristaSecao,
+  motoristaCadastro: motoristaCadastro ? cadastroResumo(motoristaCadastro) : null,
   carroPlaca: e.carroPlaca,
   carroModelo: e.carroModelo,
   carroCor: e.carroCor,
   status: e.status,
   origem: e.origem,
-  membros: e.membros.map((m) => ({
-    id: m.id,
-    nome: m.nome,
-    telefone: m.telefone,
-    tituloEleitor: m.tituloEleitor,
-    secao: m.secao,
-    ordem: m.ordem
-  })),
+  membros: e.membros.map((m) => {
+    const cad = apoiadorCadastro(m.ordem);
+    return {
+      id: m.id,
+      nome: m.nome,
+      telefone: m.telefone,
+      tituloEleitor: m.tituloEleitor,
+      secao: m.secao,
+      ordem: m.ordem,
+      cadastro: cad ? cadastroResumo(cad) : null
+    };
+  }),
   visitasCount: e._count.visitas,
   ultimaVisitaEm: e.visitas[0]?.dataHora.toISOString() ?? null,
   createdAt: e.createdAt.toISOString(),
@@ -152,7 +187,8 @@ const serializeEquipe = (e: EquipeRecord, includeValores: boolean) => ({
         valorObservacoes: e.valorObservacoes
       }
     : {})
-});
+  };
+};
 
 const serializeVisita = (v: {
   id: string;
@@ -176,6 +212,122 @@ const serializeVisita = (v: {
   longitude: v.longitude,
   registradoPor: v.registradoPor,
   createdAt: v.createdAt.toISOString()
+});
+
+// ── Autocadastro individual (motorista / apoiador) ──────────────────────────
+
+const MAX_DOCUMENTOS = 6;
+
+// A pessoa é identificada por um "slot" estável no link público: 'motorista'
+// (o motorista, embutido na equipe) ou 'a{ordem}' (apoiador na posição 0..3).
+// Não usamos o id do EquipeMembro porque a edição da equipe o recria.
+type PessoaRef = { pessoaTipo: 'MOTORISTA' | 'APOIADOR'; slot: number | null };
+
+const parsePessoaRef = (raw: string): PessoaRef | null => {
+  if (raw === 'motorista') return { pessoaTipo: 'MOTORISTA', slot: null };
+  const match = /^a(\d+)$/.exec(raw);
+  if (match) {
+    const slot = Number(match[1]);
+    if (Number.isInteger(slot) && slot >= 0 && slot < 4) {
+      return { pessoaTipo: 'APOIADOR', slot };
+    }
+  }
+  return null;
+};
+
+const optionalText = (max: number) =>
+  z.string().trim().max(max).optional().nullable().transform((v) => v || null);
+
+const documentoSchema = z.object({
+  tipo: z.string().trim().max(60).optional(),
+  imagemUrl: z
+    .string()
+    .trim()
+    .max(2_000_000, 'Documento muito grande.')
+    .refine((v) => v.startsWith('data:image/'), 'Arquivo de documento inválido.')
+});
+
+const cadastroSchema = z.object({
+  nomeCompleto: z.string().trim().min(2, 'Informe o nome completo.').max(160),
+  cpf: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/\D/g, ''))
+    .refine((v) => v.length === 0 || v.length === 11, 'CPF deve ter 11 dígitos.')
+    .optional(),
+  rg: optionalText(30),
+  dataNascimento: optionalText(20),
+  telefone: optionalText(30),
+  email: optionalText(160),
+  cep: optionalText(12),
+  endereco: optionalText(200),
+  bairro: optionalText(120),
+  cidade: optionalText(120),
+  observacoes: optionalText(2000),
+  consentimento: z
+    .boolean()
+    .refine((v) => v === true, 'É necessário aceitar o termo para concluir o cadastro.'),
+  documentos: z.array(documentoSchema).max(MAX_DOCUMENTOS).default([])
+});
+
+const documentosCreateData = (
+  documentos: { tipo?: string; imagemUrl?: string }[]
+) =>
+  documentos
+    .filter((d) => d.imagemUrl)
+    .map((d) => ({
+      tipo: d.tipo?.trim() || 'Documento',
+      imagemUrl: d.imagemUrl as string,
+      tenantId: getTenantId()
+    }));
+
+const cadastroFullInclude = {
+  documentos: { orderBy: { createdAt: 'asc' as const } }
+} as const;
+
+type CadastroFullRecord = Prisma.MembroCadastroGetPayload<{ include: typeof cadastroFullInclude }>;
+
+const cadastroDadosPessoais = (c: CadastroFullRecord) => ({
+  nomeCompleto: c.nomeCompleto,
+  cpf: c.cpf,
+  rg: c.rg,
+  dataNascimento: c.dataNascimento,
+  telefone: c.telefone,
+  email: c.email,
+  cep: c.cep,
+  endereco: c.endereco,
+  bairro: c.bairro,
+  cidade: c.cidade,
+  observacoes: c.observacoes,
+  consentimento: c.consentimento,
+  consentimentoEm: c.consentimentoEm?.toISOString() ?? null,
+  atualizadoEm: c.updatedAt.toISOString()
+});
+
+// Versão pública/prefill: dados pessoais + metadados dos documentos, SEM as
+// imagens (base64) — o link público nunca devolve os arquivos.
+const serializeCadastroPublic = (c: CadastroFullRecord) => ({
+  ...cadastroDadosPessoais(c),
+  documentosCount: c.documentos.length,
+  documentos: c.documentos.map((d) => ({
+    id: d.id,
+    tipo: d.tipo,
+    createdAt: d.createdAt.toISOString()
+  }))
+});
+
+// Versão para a coordenação (autenticada): inclui as imagens dos documentos.
+const serializeCadastroFull = (c: CadastroFullRecord, tipo: string, slot: number | null) => ({
+  id: c.id,
+  pessoaTipo: tipo,
+  slot,
+  ...cadastroDadosPessoais(c),
+  documentos: c.documentos.map((d) => ({
+    id: d.id,
+    tipo: d.tipo,
+    imagemUrl: d.imagemUrl,
+    createdAt: d.createdAt.toISOString()
+  }))
 });
 
 // Assinatura tolerante a campos opcionais: o tsconfig da raiz (sem strict)
@@ -388,6 +540,153 @@ export async function equipeRoutes(app: FastifyInstance) {
     }
   );
 
+  // ── PUBLIC: INFO DA PESSOA (motorista/apoiador) PARA O LINK DE AUTOCADASTRO ──
+  app.get('/public/equipes/:equipeId/pessoas/:pessoa', async (request, reply) => {
+    const equipeId = z.string().min(1).safeParse((request.params as any).equipeId);
+    if (!equipeId.success) return reply.code(400).send({ error: 'ID inválido.' });
+
+    const ref = parsePessoaRef(String((request.params as any).pessoa));
+    if (!ref) return reply.code(400).send({ error: 'Pessoa inválida.' });
+
+    const equipe = await prisma.equipe.findUnique({
+      where: { id: equipeId.data },
+      include: {
+        lider: { select: { name: true, email: true } },
+        membros: { orderBy: { ordem: 'asc' } }
+      }
+    });
+    if (!equipe) return reply.code(404).send({ error: 'Equipe não encontrada.' });
+
+    let nomeIndicado: string;
+    let telefone: string;
+    if (ref.pessoaTipo === 'MOTORISTA') {
+      nomeIndicado = equipe.motoristaNome;
+      telefone = equipe.motoristaTelefone;
+    } else {
+      const membro =
+        equipe.membros.find((m) => m.ordem === ref.slot) ?? equipe.membros[ref.slot ?? -1];
+      if (!membro) return reply.code(404).send({ error: 'Apoiador não encontrado.' });
+      nomeIndicado = membro.nome;
+      telefone = membro.telefone;
+    }
+
+    const cadastro = await prisma.membroCadastro.findFirst({
+      where: { equipeId: equipe.id, pessoaTipo: ref.pessoaTipo, slot: ref.slot },
+      include: cadastroFullInclude
+    });
+
+    return {
+      pessoa: {
+        equipeId: equipe.id,
+        equipeNome: equipe.nome,
+        liderNome: equipe.lider.name ?? equipe.lider.email,
+        tipo: ref.pessoaTipo,
+        slot: ref.slot,
+        nomeIndicado,
+        telefone,
+        cadastro: cadastro ? serializeCadastroPublic(cadastro) : null
+      }
+    };
+  });
+
+  // ── PUBLIC: ENVIAR AUTOCADASTRO DA PESSOA (dados + documentos) ───────────────
+  app.post(
+    '/public/equipes/:equipeId/pessoas/:pessoa/cadastro',
+    {
+      // Vários documentos base64 podem passar do bodyLimit padrão; elevamos com folga.
+      bodyLimit: 14 * 1024 * 1024,
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
+    },
+    async (request, reply) => {
+      const equipeId = z.string().min(1).safeParse((request.params as any).equipeId);
+      if (!equipeId.success) return reply.code(400).send({ error: 'ID inválido.' });
+
+      const ref = parsePessoaRef(String((request.params as any).pessoa));
+      if (!ref) return reply.code(400).send({ error: 'Pessoa inválida.' });
+
+      const body = cadastroSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.code(400).send({ error: body.error.issues[0]?.message ?? 'Dados inválidos.' });
+      }
+
+      const equipe = await prisma.equipe.findUnique({
+        where: { id: equipeId.data },
+        include: { membros: { orderBy: { ordem: 'asc' } } }
+      });
+      if (!equipe) return reply.code(404).send({ error: 'Equipe não encontrada.' });
+
+      // Confirma que a pessoa existe na equipe e guarda o id do membro (só como
+      // referência informativa — a chave é o slot).
+      let membroId: string | null = null;
+      if (ref.pessoaTipo === 'APOIADOR') {
+        const membro =
+          equipe.membros.find((m) => m.ordem === ref.slot) ?? equipe.membros[ref.slot ?? -1];
+        if (!membro) return reply.code(404).send({ error: 'Apoiador não encontrado.' });
+        membroId = membro.id;
+      }
+
+      const novosDocumentos = documentosCreateData(body.data.documentos ?? []);
+
+      const dadosPessoais = {
+        nomeCompleto: body.data.nomeCompleto,
+        cpf: body.data.cpf || null,
+        rg: body.data.rg ?? null,
+        dataNascimento: body.data.dataNascimento ?? null,
+        telefone: body.data.telefone ?? null,
+        email: body.data.email ?? null,
+        cep: body.data.cep ?? null,
+        endereco: body.data.endereco ?? null,
+        bairro: body.data.bairro ?? null,
+        cidade: body.data.cidade ?? null,
+        observacoes: body.data.observacoes ?? null,
+        consentimento: body.data.consentimento,
+        consentimentoEm: new Date(),
+        membroId
+      };
+
+      const existing = await prisma.membroCadastro.findFirst({
+        where: { equipeId: equipe.id, pessoaTipo: ref.pessoaTipo, slot: ref.slot },
+        select: { id: true, _count: { select: { documentos: true } } }
+      });
+
+      let cadastro: CadastroFullRecord;
+      if (existing) {
+        if (existing._count.documentos + novosDocumentos.length > MAX_DOCUMENTOS) {
+          return reply
+            .code(400)
+            .send({ error: `Máximo de ${MAX_DOCUMENTOS} documentos por pessoa.` });
+        }
+        cadastro = await prisma.membroCadastro.update({
+          where: { id: existing.id },
+          data: {
+            ...dadosPessoais,
+            ...(novosDocumentos.length ? { documentos: { create: novosDocumentos } } : {})
+          },
+          include: cadastroFullInclude
+        });
+      } else {
+        if (novosDocumentos.length > MAX_DOCUMENTOS) {
+          return reply
+            .code(400)
+            .send({ error: `Máximo de ${MAX_DOCUMENTOS} documentos por pessoa.` });
+        }
+        cadastro = await prisma.membroCadastro.create({
+          data: {
+            equipeId: equipe.id,
+            tenantId: getTenantId(),
+            pessoaTipo: ref.pessoaTipo,
+            slot: ref.slot,
+            ...dadosPessoais,
+            ...(novosDocumentos.length ? { documentos: { create: novosDocumentos } } : {})
+          },
+          include: cadastroFullInclude
+        });
+      }
+
+      return reply.code(201).send({ cadastro: serializeCadastroPublic(cadastro) });
+    }
+  );
+
   // ── LIST ──────────────────────────────────────────────────────────────────
   app.get('/equipes', { preHandler: app.authenticate }, async (request, reply) => {
     const where = visibleEquipesWhere(request.user);
@@ -430,6 +729,67 @@ export async function equipeRoutes(app: FastifyInstance) {
 
     return { visitas: visitas.map(serializeVisita) };
   });
+
+  // ── AUTOCADASTROS DE UMA EQUIPE (autenticado: dados pessoais + documentos) ───
+  app.get('/equipes/:id/cadastros', { preHandler: app.authenticate }, async (request, reply) => {
+    const params = paramsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'ID inválido.' });
+
+    if (!canAccessEquipes(request.user.role)) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+
+    const equipe = await prisma.equipe.findUnique({
+      where: { id: params.data.id },
+      select: { id: true, liderId: true }
+    });
+    if (!equipe) return reply.code(404).send({ error: 'Equipe não encontrada.' });
+
+    const role = normalizeRole(request.user.role);
+    if (role === 'LIDER_REGIONAL' && equipe.liderId !== request.user.sub) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+
+    const cadastros = await prisma.membroCadastro.findMany({
+      where: { equipeId: params.data.id },
+      include: cadastroFullInclude,
+      orderBy: [{ pessoaTipo: 'asc' }, { slot: 'asc' }]
+    });
+
+    return {
+      cadastros: cadastros.map((c) => serializeCadastroFull(c, c.pessoaTipo, c.slot))
+    };
+  });
+
+  // ── DELETE DOCUMENTO DE AUTOCADASTRO (autenticado: dono ou coordenador) ──────
+  app.delete(
+    '/equipes/cadastros/documentos/:id',
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const params = paramsSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: 'ID inválido.' });
+
+      if (!canAccessEquipes(request.user.role)) {
+        return reply.code(403).send({ error: 'Forbidden' });
+      }
+
+      const documento = await prisma.membroCadastroDocumento.findUnique({
+        where: { id: params.data.id },
+        select: { id: true, cadastro: { select: { equipe: { select: { liderId: true } } } } }
+      });
+      if (!documento) return reply.code(404).send({ error: 'Documento não encontrado.' });
+
+      const role = normalizeRole(request.user.role);
+      if (role === 'LIDER_REGIONAL' && documento.cadastro.equipe.liderId !== request.user.sub) {
+        return reply
+          .code(403)
+          .send({ error: 'Apenas a liderança dona ou o coordenador pode excluir.' });
+      }
+
+      await prisma.membroCadastroDocumento.delete({ where: { id: params.data.id } });
+      return reply.code(204).send();
+    }
+  );
 
   // ── DELETE VISITA (autenticado: dono ou coordenador) ────────────────────────
   app.delete('/equipes/visitas/:id', { preHandler: app.authenticate }, async (request, reply) => {

@@ -19,8 +19,12 @@ import {
   EventoIndicadoStatus,
   EventoPublicInfo,
   HierarchyPathItem,
+  MembroCadastro,
+  MembroCadastroPayload,
   MetaCidade,
   Municipality,
+  PessoaCadastroPublic,
+  PessoaPublica,
   SupportStatus,
   UserRole,
   UserSummary
@@ -661,6 +665,40 @@ export const createPublicEquipeVisita = async (
     body: JSON.stringify(payload)
   });
   return data.visita;
+};
+
+// ── AUTOCADASTRO INDIVIDUAL DA PESSOA (motorista/apoiador) ───────────────────
+
+// Autenticado: dados completos (com imagens dos documentos) para a coordenação.
+export const fetchEquipeCadastros = async (equipeId: string) => {
+  const data = await request<{ cadastros: MembroCadastro[] }>(
+    `/equipes/${equipeId}/cadastros`
+  );
+  return data.cadastros;
+};
+
+export const deleteEquipeCadastroDocumento = async (documentoId: string) => {
+  await request<void>(`/equipes/cadastros/documentos/${documentoId}`, { method: 'DELETE' });
+};
+
+// Público (sem login): info da pessoa + prefill do que já foi enviado.
+export const fetchPublicPessoa = async (equipeId: string, pessoa: string) => {
+  const data = await request<{ pessoa: PessoaPublica }>(
+    `/public/equipes/${equipeId}/pessoas/${pessoa}`
+  );
+  return data.pessoa;
+};
+
+export const submitPublicPessoaCadastro = async (
+  equipeId: string,
+  pessoa: string,
+  payload: MembroCadastroPayload
+) => {
+  const data = await request<{ cadastro: PessoaCadastroPublic }>(
+    `/public/equipes/${equipeId}/pessoas/${pessoa}/cadastro`,
+    { method: 'POST', body: JSON.stringify(payload) }
+  );
+  return data.cadastro;
 };
 
 // ── MÓDULO DE IGREJAS ────────────────────────────────────────────────────────

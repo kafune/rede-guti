@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Equipe, EquipeVisita } from '../../types';
+import { Equipe, EquipeVisita, MembroCadastro, PessoaTipo } from '../../types';
 import {
   deleteEquipeVisita,
+  fetchEquipeCadastros,
   fetchEquipeVisitas,
   getApiErrorMessage,
   updateEquipeValor
 } from '../../api';
 import { formatTituloEleitor } from './equipeShared';
+import { buildWhatsappUrl, pessoaParam } from './pessoaShared';
+import PessoaCadastroControls from './PessoaCadastroControls';
 import ShareLinkQrCode from '../ShareLinkQrCode';
 
 interface Props {
@@ -50,6 +53,25 @@ const eleitoralLabel = (titulo?: string | null, secao?: string | null) => {
   return parts.join(' · ');
 };
 
+// Ícone-link que abre direto uma conversa no WhatsApp com o número da pessoa.
+const WhatsAppIconLink: React.FC<{ telefone: string }> = ({ telefone }) => {
+  const url = buildWhatsappUrl(telefone);
+  if (!url) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      title="Abrir conversa no WhatsApp"
+      aria-label="Abrir conversa no WhatsApp"
+      onClick={(e) => e.stopPropagation()}
+      className="ml-1.5 text-green-600 hover:text-green-500"
+    >
+      <i className="fa-brands fa-whatsapp"></i>
+    </a>
+  );
+};
+
 const EquipeCard: React.FC<Props> = ({ equipe, canEditValores, onEdit, onDelete, onValorSaved }) => {
   const [valorDraft, setValorDraft] = useState(equipe.valor ?? '');
   const [obsDraft, setObsDraft] = useState(equipe.valorObservacoes ?? '');
@@ -62,7 +84,36 @@ const EquipeCard: React.FC<Props> = ({ equipe, canEditValores, onEdit, onDelete,
   const [showLink, setShowLink] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Autocadastros individuais (dados + documentos) — carregados sob demanda ao
+  // expandir "Ver dados" de qualquer pessoa da equipe.
+  const [cadastros, setCadastros] = useState<MembroCadastro[] | null>(null);
+  const [loadingCadastros, setLoadingCadastros] = useState(false);
+  const [expandedPessoa, setExpandedPessoa] = useState<string | null>(null);
+
   const totalPessoas = 1 + equipe.membros.length;
+
+  const ensureCadastros = async () => {
+    if (cadastros !== null || loadingCadastros) return;
+    setLoadingCadastros(true);
+    try {
+      setCadastros(await fetchEquipeCadastros(equipe.id));
+    } catch {
+      // Evita novas tentativas em loop; a UI mostra o aviso de falha ao abrir.
+      setCadastros([]);
+    } finally {
+      setLoadingCadastros(false);
+    }
+  };
+
+  const findFullCadastro = (tipo: PessoaTipo, ordem: number | null): MembroCadastro | null =>
+    cadastros?.find(
+      (c) => c.pessoaTipo === tipo && (tipo === 'MOTORISTA' || c.slot === ordem)
+    ) ?? null;
+
+  const togglePessoa = (key: string) => {
+    setExpandedPessoa((prev) => (prev === key ? null : key));
+    void ensureCadastros();
+  };
 
   const commitValores = async () => {
     const draft = valorDraft.trim();
@@ -173,6 +224,7 @@ const EquipeCard: React.FC<Props> = ({ equipe, canEditValores, onEdit, onDelete,
           <p className="font-bold truncate">{equipe.motoristaNome}</p>
           <p className="text-xs opacity-60 font-semibold">
             CNH {equipe.motoristaCnh} · {equipe.motoristaTelefone}
+            <WhatsAppIconLink telefone={equipe.motoristaTelefone} />
           </p>
           {eleitoralLabel(equipe.motoristaTituloEleitor, equipe.motoristaSecao) && (
             <p className="text-[11px] opacity-50 font-semibold mt-0.5">
@@ -180,6 +232,18 @@ const EquipeCard: React.FC<Props> = ({ equipe, canEditValores, onEdit, onDelete,
               {eleitoralLabel(equipe.motoristaTituloEleitor, equipe.motoristaSecao)}
             </p>
           )}
+          <PessoaCadastroControls
+            equipeId={equipe.id}
+            equipeNome={equipe.nome}
+            tipo="MOTORISTA"
+            nomeIndicado={equipe.motoristaNome}
+            telefone={equipe.motoristaTelefone}
+            resumo={equipe.motoristaCadastro ?? null}
+            full={findFullCadastro('MOTORISTA', null)}
+            loadingFull={loadingCadastros}
+            expanded={expandedPessoa === 'motorista'}
+            onToggleExpand={() => togglePessoa('motorista')}
+          />
         </div>
         <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-3">
           <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">
@@ -201,21 +265,39 @@ const EquipeCard: React.FC<Props> = ({ equipe, canEditValores, onEdit, onDelete,
           <p className="text-xs opacity-50 font-semibold">Nenhum apoiador cadastrado ainda.</p>
         ) : (
           <div className="space-y-1.5">
-            {equipe.membros.map((m) => (
-              <div
-                key={m.id ?? `${m.nome}-${m.telefone}`}
-                className="rounded-xl bg-blue-50/70 dark:bg-blue-900/20 px-3 py-2"
-              >
-                <p className="text-xs font-bold text-blue-800 dark:text-blue-200">
-                  {m.nome} <span className="opacity-60 font-semibold">· {m.telefone}</span>
-                </p>
-                {eleitoralLabel(m.tituloEleitor, m.secao) && (
-                  <p className="text-[10px] opacity-60 font-semibold text-blue-700 dark:text-blue-300">
-                    {eleitoralLabel(m.tituloEleitor, m.secao)}
+            {equipe.membros.map((m, index) => {
+              const ordem = m.ordem ?? index;
+              const key = pessoaParam('APOIADOR', ordem);
+              return (
+                <div
+                  key={m.id ?? `${m.nome}-${m.telefone}`}
+                  className="rounded-xl bg-blue-50/70 dark:bg-blue-900/20 px-3 py-2"
+                >
+                  <p className="text-xs font-bold text-blue-800 dark:text-blue-200">
+                    {m.nome} <span className="opacity-60 font-semibold">· {m.telefone}</span>
+                    <WhatsAppIconLink telefone={m.telefone} />
                   </p>
-                )}
-              </div>
-            ))}
+                  {eleitoralLabel(m.tituloEleitor, m.secao) && (
+                    <p className="text-[10px] opacity-60 font-semibold text-blue-700 dark:text-blue-300">
+                      {eleitoralLabel(m.tituloEleitor, m.secao)}
+                    </p>
+                  )}
+                  <PessoaCadastroControls
+                    equipeId={equipe.id}
+                    equipeNome={equipe.nome}
+                    tipo="APOIADOR"
+                    ordem={ordem}
+                    nomeIndicado={m.nome}
+                    telefone={m.telefone}
+                    resumo={m.cadastro ?? null}
+                    full={findFullCadastro('APOIADOR', ordem)}
+                    loadingFull={loadingCadastros}
+                    expanded={expandedPessoa === key}
+                    onToggleExpand={() => togglePessoa(key)}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

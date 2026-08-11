@@ -47,6 +47,7 @@ import PublicEventoConfirmacao from './components/PublicEventoConfirmacao';
 import PublicAtividadeCadastro from './components/PublicAtividadeCadastro';
 import PublicEquipeCadastro from './components/PublicEquipeCadastro';
 import PublicEquipeVisita from './components/PublicEquipeVisita';
+import PublicPessoaCadastro from './components/PublicPessoaCadastro';
 import PublicIgrejaCadastro from './components/PublicIgrejaCadastro';
 import IgrejasPanel from './components/igrejas/IgrejasPanel';
 import AtividadesList from './components/atividades/AtividadesList';
@@ -124,6 +125,8 @@ const App: React.FC = () => {
 
   const isPublicEquipeVisita = (hash: string) => hash.startsWith('#/equipes/visita');
 
+  const isPublicPessoaCadastro = (hash: string) => hash.startsWith('#/pessoa/cadastro');
+
   const isPublicIgrejaCadastro = (hash: string) => hash.startsWith('#/igrejas/cadastro');
 
   const [isPublicRoute, setIsPublicRoute] = useState(() =>
@@ -146,6 +149,9 @@ const App: React.FC = () => {
   );
   const [isPublicEquipeVisitaRoute, setIsPublicEquipeVisitaRoute] = useState(() =>
     isPublicEquipeVisita(window.location.hash)
+  );
+  const [isPublicPessoaCadastroRoute, setIsPublicPessoaCadastroRoute] = useState(() =>
+    isPublicPessoaCadastro(window.location.hash)
   );
   const [isPublicIgrejaCadastroRoute, setIsPublicIgrejaCadastroRoute] = useState(() =>
     isPublicIgrejaCadastro(window.location.hash)
@@ -173,6 +179,7 @@ const App: React.FC = () => {
       setIsPublicAtividadeRoute(isPublicAtividadeCadastro(hash));
       setIsPublicEquipeCadastroRoute(isPublicEquipeCadastro(hash));
       setIsPublicEquipeVisitaRoute(isPublicEquipeVisita(hash));
+      setIsPublicPessoaCadastroRoute(isPublicPessoaCadastro(hash));
       setIsPublicIgrejaCadastroRoute(isPublicIgrejaCadastro(hash));
       setIsPublicVisitRoute(hash.startsWith('#/v/'));
     };
@@ -545,6 +552,10 @@ const App: React.FC = () => {
 
   if (isPublicEquipeCadastroRoute) {
     return <PublicEquipeCadastro />;
+  }
+
+  if (isPublicPessoaCadastroRoute) {
+    return <PublicPessoaCadastro />;
   }
 
   if (isPublicIgrejaCadastroRoute) {

@@ -220,6 +220,9 @@ export interface EquipeMembro {
   tituloEleitor?: string | null;
   secao?: string | null;
   ordem?: number;
+  // Resumo do autocadastro individual do apoiador (preenchido pela pessoa via
+  // link público). Ausente ao criar; nulo enquanto a pessoa não se cadastrou.
+  cadastro?: MembroCadastroResumo | null;
 }
 
 // Equipe de campanha (porta de igreja): motorista com carro próprio + até 4
@@ -234,6 +237,8 @@ export interface Equipe {
   motoristaTelefone: string;
   motoristaTituloEleitor?: string | null;
   motoristaSecao?: string | null;
+  // Resumo do autocadastro individual do motorista (via link público).
+  motoristaCadastro?: MembroCadastroResumo | null;
   carroPlaca: string;
   carroModelo: string;
   carroCor: string;
@@ -268,6 +273,99 @@ export interface EquipePayload {
   status?: EquipeStatus;
   membros: EquipeMembroPayload[];
   liderId?: string; // só usado pelo coordenador ao cadastrar por uma liderança
+}
+
+// ── Autocadastro individual das pessoas da equipe (motorista/apoiador) ────────
+
+export type PessoaTipo = 'MOTORISTA' | 'APOIADOR';
+
+// Resumo do autocadastro anexado a cada pessoa (sem os dados sensíveis nem as
+// imagens dos documentos — só o suficiente para o status no card).
+export interface MembroCadastroResumo {
+  id: string;
+  preenchido: boolean;
+  nomeCompleto: string;
+  consentimento: boolean;
+  documentosCount: number;
+  atualizadoEm: string;
+}
+
+export interface MembroCadastroDocumento {
+  id: string;
+  tipo: string;
+  imagemUrl: string;
+  createdAt: string;
+}
+
+// Autocadastro completo — visão da coordenação, com as imagens dos documentos.
+export interface MembroCadastro {
+  id: string;
+  pessoaTipo: PessoaTipo;
+  slot: number | null;
+  nomeCompleto: string;
+  cpf?: string | null;
+  rg?: string | null;
+  dataNascimento?: string | null;
+  telefone?: string | null;
+  email?: string | null;
+  cep?: string | null;
+  endereco?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  observacoes?: string | null;
+  consentimento: boolean;
+  consentimentoEm?: string | null;
+  atualizadoEm: string;
+  documentos: MembroCadastroDocumento[];
+}
+
+// Payload enviado pela própria pessoa no link público (sem login).
+export interface MembroCadastroPayload {
+  nomeCompleto: string;
+  cpf?: string;
+  rg?: string;
+  dataNascimento?: string;
+  telefone?: string;
+  email?: string;
+  cep?: string;
+  endereco?: string;
+  bairro?: string;
+  cidade?: string;
+  observacoes?: string;
+  consentimento: boolean;
+  documentos: { tipo: string; imagemUrl: string }[];
+}
+
+// Estado do autocadastro devolvido pelo link público (prefill; sem as imagens).
+export interface PessoaCadastroPublic {
+  nomeCompleto: string;
+  cpf?: string | null;
+  rg?: string | null;
+  dataNascimento?: string | null;
+  telefone?: string | null;
+  email?: string | null;
+  cep?: string | null;
+  endereco?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  observacoes?: string | null;
+  consentimento: boolean;
+  consentimentoEm?: string | null;
+  atualizadoEm: string;
+  documentosCount: number;
+  documentos: { id: string; tipo: string; createdAt: string }[];
+}
+
+// Info pública da pessoa indicada (motorista/apoiador), carregada pelo link.
+export interface PessoaPublica {
+  equipeId: string;
+  equipeNome: string;
+  liderNome: string;
+  tipo: PessoaTipo;
+  slot: number | null;
+  nomeIndicado: string;
+  telefone: string;
+  cadastro: PessoaCadastroPublic | null;
 }
 
 // ── Prestação de contas: visitas das equipes ──────────────────────────────────
